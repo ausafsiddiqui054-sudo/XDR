@@ -15,6 +15,27 @@
         <MudIconButton Icon="@(_isDark ? Icons.Material.Rounded.LightMode : Icons.Material.Rounded.DarkMode)"
                        Color="Color.Inherit" aria-label="Toggle dark mode"
                        OnClick="@(() => _isDark = !_isDark)" />
+        <AuthorizeView>
+            <Authorized>
+                <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="ml-2" aria-label="Account">
+                    <ActivatorContent>
+                        <MudAvatar Color="Color.Primary" Size="Size.Small" Style="cursor:pointer">@Initials(context.User)</MudAvatar>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <div class="px-4 pt-3 pb-2" style="min-width:240px">
+                            <MudText Typo="Typo.body2" Style="font-weight:600">@(context.User.DisplayName() ?? "Signed in")</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">@context.User.SignInName()</MudText>
+                            @if (context.User.PortalRole() is { } role)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Class="ml-0 mt-2">@Pages.Users.RoleLabel(role)</MudChip>
+                            }
+                        </div>
+                        <MudDivider />
+                        <div class="px-2 py-2"><SignOutButton FullWidth="true" /></div>
+                    </ChildContent>
+                </MudMenu>
+            </Authorized>
+        </AuthorizeView>
     </MudAppBar>
 
     <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="0" Variant="@DrawerVariant.Responsive">
@@ -35,6 +56,13 @@
 </div>
 
 @code {
+    private static string Initials(System.Security.Claims.ClaimsPrincipal user)
+    {
+        var name = user.DisplayName() ?? user.SignInName() ?? "?";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return string.Concat(parts.Take(2).Select(p => char.ToUpperInvariant(p[0])));
+    }
+
     private bool _drawerOpen = true;
     private bool _isDark;
 }

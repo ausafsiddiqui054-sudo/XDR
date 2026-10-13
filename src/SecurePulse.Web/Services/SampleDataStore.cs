@@ -9,8 +9,9 @@ namespace SecurePulse.Web.Services;
 /// portal can be designed and demoed before real scans exist. Replace with EF Core
 /// repositories once the Worker starts writing real scan results.
 /// </summary>
-public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDeviceRepository, IOnboardingRepository
+public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDeviceRepository, IOnboardingRepository, IPortalUserRepository
 {
+    private readonly List<PortalUser> _users = [];
     private readonly Lock _gate = new();
     private readonly Dictionary<Guid, (OnboardingRequest Request, string StateHash)> _onboarding = [];
     private readonly List<Tenant> _tenants;
@@ -433,6 +434,83 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
         {
             if (_onboarding.TryGetValue(id, out var e))
                 _onboarding[id] = (change(e.Request), e.StateHash);
+        }
+    }
+
+    // --- Portal users (in memory; mirrors EfPortalUserRepository) -----------------------------
+
+    Task<IReadOnlyList<PortalUser>> IPortalUserRepository.GetAllAsync(CancellationToken ct)
+    {
+        lock (_gate) return Task.FromResult<IReadOnlyList<PortalUser>>(_users.OrderBy(u => u.Role).ThenBy(u => u.UserPrincipalName).ToList());
+    }
+
+    Task<PortalUser?> IPortalUserRepository.GetAsync(Guid id, CancellationToken ct)
+    {
+        lock (_gate) return Task.FromResult(_users.FirstOrDefault(u => u.Id == id));
+    }
+
+    public Task<PortalUser?> FindByObjectIdAsync(Guid entraTenantId, Guid objectId, CancellationToken ct = default)
+    {
+        lock (_gate) return Task.FromResult(_users.FirstOrDefault(u => u.EntraTenantId == entraTenantId && u.ObjectId == objectId));
+    }
+
+    public Task<PortalUser?> SignInAsync(Guid entraTenantId, Guid objectId, string? userPrincipalName, string? displayName,
+        DateTimeOffset at, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            var upn = userPrincipalName?.Trim().ToLowerInvariant();
+            var index = _users.FindIndex(u => u.EntraTenantId == entraTenantId && u.ObjectId == objectId);
+            if (index < 0 && !string.IsNullOrEmpty(upn))
+                index = _users.FindIndex(u => u.EntraTenantId == entraTenantId && u.UserPrincipalName == upn && u.ObjectId is null);
+            if (index < 0) return Task.FromResult<PortalUser?>(null);
+
+            var user = _users[index] with
+            {
+                ObjectId = objectId,
+                LastSignInAt = at,
+                DisplayName = string.IsNullOrWhiteSpace(displayName) ? _users[index].DisplayName : displayName.Trim()
+            };
+            _users[index] = user;
+            return Task.FromResult<PortalUser?>(user);
+        }
+    }
+
+    Task IPortalUserRepository.AddAsync(PortalUser user, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            var upn = user.UserPrincipalName.Trim().ToLowerInvariant();
+            if (_users.Any(u => u.EntraTenantId == user.EntraTenantId && u.UserPrincipalName == upn))
+                throw new DuplicatePortalUserException();
+            _users.Add(user with { UserPrincipalName = upn });
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task UpdateRoleAsync(Guid id, PortalRole role, Guid? clientTenantId, CancellationToken ct = default)
+    {
+        ChangeUsers(id, (list, i) => list[i] = list[i] with { Role = role, ClientTenantId = role == PortalRole.ClientViewer ? clientTenantId : null });
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveAsync(Guid id, CancellationToken ct = default)
+    {
+        ChangeUsers(id, (list, i) => list.RemoveAt(i));
+        return Task.CompletedTask;
+    }
+
+    private void ChangeUsers(Guid id, Action<List<PortalUser>, int> change)
+    {
+        lock (_gate)
+        {
+            var index = _users.FindIndex(u => u.Id == id);
+            if (index < 0) return;
+            var copy = _users.ToList();
+            change(copy, index);
+            if (!copy.Any(u => u.Role == PortalRole.Owner && u.ObjectId is not null)) throw new LastOwnerException();
+            _users.Clear();
+            _users.AddRange(copy);
         }
     }
 

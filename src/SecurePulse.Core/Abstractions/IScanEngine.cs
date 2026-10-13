@@ -85,3 +85,28 @@ public interface IOnboardingRepository
 
     Task CancelAsync(Guid id, CancellationToken ct = default);
 }
+
+public interface IPortalUserRepository
+{
+    Task<IReadOnlyList<PortalUser>> GetAllAsync(CancellationToken ct = default);
+    Task<PortalUser?> GetAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>The user bound to this Entra identity, or null. Read-only; used on every request.</summary>
+    Task<PortalUser?> FindByObjectIdAsync(Guid entraTenantId, Guid objectId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Called once per sign-in. Returns the user bound to (tenant, object ID); otherwise binds an
+    /// unclaimed invitation for (tenant, sign-in name) to the object ID. Null if neither exists.
+    /// </summary>
+    Task<PortalUser?> SignInAsync(Guid entraTenantId, Guid objectId, string? userPrincipalName, string? displayName,
+        DateTimeOffset at, CancellationToken ct = default);
+
+    /// <exception cref="DuplicatePortalUserException">Same tenant and sign-in name already present.</exception>
+    Task AddAsync(PortalUser user, CancellationToken ct = default);
+
+    /// <exception cref="LastOwnerException">The change would remove the last signed-in Owner.</exception>
+    Task UpdateRoleAsync(Guid id, PortalRole role, Guid? clientTenantId, CancellationToken ct = default);
+
+    /// <exception cref="LastOwnerException">The change would remove the last signed-in Owner.</exception>
+    Task RemoveAsync(Guid id, CancellationToken ct = default);
+}

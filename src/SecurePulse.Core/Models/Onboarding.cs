@@ -38,6 +38,10 @@ public sealed record OnboardingRequest
     public Guid? TenantId { get; init; }
 
     public string? LastError { get; init; }
+
+    /// <summary>Portal user who created the consent link (audit).</summary>
+    public string? StartedBy { get; init; }
+
     public IReadOnlyList<string> GrantedPermissions { get; init; } = [];
     public int VerificationAttempts { get; init; }
 

@@ -1,6 +1,31 @@
-﻿<Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+<Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
-        <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+            <NotAuthorized>
+                @if (context.User.Identity?.IsAuthenticated != true)
+                {
+                    <RedirectToLogin />
+                }
+                else if (context.User.PortalRole() is null)
+                {
+                    <RedirectTo Url="access-pending" />
+                }
+                else
+                {
+                    <MudPaper Class="sp-card pa-8" Elevation="0" Outlined="true">
+                        <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                            <span class="sp-icon-badge sp-icon-badge-lg"><MudIcon Icon="@Icons.Material.Rounded.Lock" Size="Size.Large" /></span>
+                            <MudText Typo="Typo.h6">You don't have access to this page</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Ask an Owner if you need it.</MudText>
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" Href="">Go to overview</MudButton>
+                        </MudStack>
+                    </MudPaper>
+                }
+            </NotAuthorized>
+            <Authorizing>
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+            </Authorizing>
+        </AuthorizeRouteView>
         <FocusOnNavigate RouteData="routeData" Selector="h1" />
     </Found>
 </Router>

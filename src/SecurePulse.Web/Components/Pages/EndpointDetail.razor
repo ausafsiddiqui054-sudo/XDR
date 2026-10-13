@@ -3,6 +3,7 @@
 @inject NavigationManager Nav
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
+@inject IUserContextAccessor Current
 
 <PageTitle>@(_detail?.Device.DeviceName ?? "Device") · SecurePulse</PageTitle>
 
@@ -44,6 +45,9 @@ else
             </div>
         </MudStack>
 
+        @* Client viewers are read-only: no remote actions at all. *@
+        @if (_isOperator)
+        {
         <MudStack Row="true" Spacing="2">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@DeviceActions.Icon(DeviceAction.Sync)"
                        Disabled="!CanRemediate" OnClick="@(() => RequestAsync(DeviceAction.Sync))">Sync</MudButton>
@@ -57,9 +61,10 @@ else
                 }
             </MudMenu>
         </MudStack>
+        }
     </MudStack>
 
-    @if (!CanRemediate)
+    @if (_isOperator && !CanRemediate)
     {
         <MudAlert Severity="MudBlazor.Severity.Info" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px"
                   Icon="@Icons.Material.Rounded.Lock">
@@ -212,10 +217,13 @@ else
     private bool _loaded;
     private List<BreadcrumbItem> _breadcrumbs = [];
 
-    private bool CanRemediate => _detail?.Tenant.ConsentState == TenantConsentState.RemediationGranted;
+    private bool _isOperator;
+
+    private bool CanRemediate => _isOperator && _detail?.Tenant.ConsentState == TenantConsentState.RemediationGranted;
 
     protected override async Task OnParametersSetAsync()
     {
+        _isOperator = (await Current.GetAsync()).IsOperator;
         _detail = await EndpointData.GetDeviceAsync(TenantId, DeviceId);
         _breadcrumbs =
         [

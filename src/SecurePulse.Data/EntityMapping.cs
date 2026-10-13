@@ -140,8 +140,23 @@ internal static class EntityMapping
         CompletedAt = e.CompletedAt,
         TenantId = e.TenantId,
         LastError = e.LastError,
+        StartedBy = e.StartedBy,
         GrantedPermissions = e.GrantedPermissions,
         VerificationAttempts = e.VerificationAttempts,
         ProtectedState = e.ProtectedState
+    };
+
+    public static PortalUser ToModel(this PortalUserEntity e) => new()
+    {
+        Id = e.Id,
+        Role = e.Role,
+        EntraTenantId = e.EntraTenantId,
+        UserPrincipalName = e.UserPrincipalName,
+        ObjectId = e.ObjectId,
+        DisplayName = e.DisplayName,
+        ClientTenantId = e.ClientTenantId,
+        CreatedAt = e.CreatedAt,
+        CreatedBy = e.CreatedBy,
+        LastSignInAt = e.LastSignInAt
     };
 }

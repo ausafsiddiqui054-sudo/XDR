@@ -1,4 +1,5 @@
 @page "/tenants/connect/{Id:guid}"
+@attribute [Authorize(Policy = Policies.Operator)]
 @using SecurePulse.Core.Abstractions
 @using SecurePulse.Web.Services.Onboarding
 @implements IAsyncDisposable

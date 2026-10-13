@@ -234,6 +234,10 @@ namespace SecurePulse.Data.Migrations
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)");
 
+                    b.Property<string>("StartedBy")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
                     b.Property<string>("StateHash")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -260,6 +264,59 @@ namespace SecurePulse.Data.Migrations
                     b.HasIndex("Status", "CreatedAt");
 
                     b.ToTable("onboarding_requests", (string)null);
+                });
+
+            modelBuilder.Entity("SecurePulse.Data.Entities.PortalUserEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ClientTenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<Guid>("EntraTenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("LastSignInAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ObjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("UserPrincipalName")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientTenantId");
+
+                    b.HasIndex("EntraTenantId", "ObjectId")
+                        .IsUnique()
+                        .HasFilter("\"ObjectId\" IS NOT NULL");
+
+                    b.HasIndex("EntraTenantId", "UserPrincipalName")
+                        .IsUnique();
+
+                    b.ToTable("portal_users", (string)null);
                 });
 
             modelBuilder.Entity("SecurePulse.Data.Entities.TenantEntity", b =>
@@ -376,6 +433,14 @@ namespace SecurePulse.Data.Migrations
                         .WithMany()
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("SecurePulse.Data.Entities.PortalUserEntity", b =>
+                {
+                    b.HasOne("SecurePulse.Data.Entities.TenantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ClientTenantId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 #pragma warning restore 612, 618
         }

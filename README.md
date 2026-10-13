@@ -35,7 +35,10 @@ dotnet test
 ```
 
 Without a connection string the portal runs on **in-memory sample data** (five fictional
-tenants), so you can design and demo the UI with nothing else installed. Pages: Overview (`/`),
+tenants), so you can design and demo the UI with nothing else installed. Without
+`AzureAd:ClientId`, Development offers a **development sign-in** page to pick a persona
+(Owner, MSP admin, a client viewer, or someone without access); outside Development the portal
+refuses to start without Entra sign-in. Pages: Overview (`/`),
 Findings (`/findings`), Endpoints (`/endpoints`, device detail at `/endpoints/{tenant}/{device}`),
 Tenants (`/tenants`). Dark mode toggle is in the top bar.
 
@@ -105,8 +108,43 @@ App registration setup (one multi-tenant app):
   the Worker. Portal: `Onboarding:AppClientId`. Worker: `Intune:AppClientId` and
   `Onboarding:CertificateThumbprint`.
 
-The portal has no sign-in yet (next step), so don't expose it publicly. The consent result
-page uses a layout without navigation, but every other page is open.
+The consent callback and result page are the only portal pages that work without signing in;
+the result page shows no tenant data.
+
+## Sign-in and roles
+
+The portal signs people in with Microsoft Entra ID (Microsoft.Identity.Web, multi-tenant).
+**Access is decided by SecurePulse, not by Entra app roles:** a client tenant's admin could
+assign our app's roles in their own tenant, so role claims in tokens are stripped at sign-in and
+never trusted. Roles live in the `portal_users` table:
+
+| Role | Sees | Can |
+|---|---|---|
+| Owner | All tenants | Everything, including inviting and removing anyone |
+| MSP admin | All tenants | Onboard tenants, invite and remove client viewers |
+| Client viewer | Their own tenant only | Read-only; no onboarding, remote actions or people management |
+
+- **Invitations** name a sign-in name and the Entra tenant the person must sign in from (your own
+  tenant for Owners and MSP admins, the client's tenant for viewers). The first matching
+  sign-in binds the invitation to the person's immutable object ID; after that only
+  (tenant, object ID) counts, so a renamed account keeps access and a new account reusing the
+  name doesn't get it.
+- **Scoping** happens in the data services, so a viewer can't reach another tenant's data by
+  URL; other tenants' devices read as "not found".
+- **Every page and endpoint** requires a portal role by default (fallback policy plus a default
+  `[Authorize]` on pages). Public: the consent callback and result page, sign-in, static assets.
+- **Changes reach open sessions** within a minute: Blazor circuits re-check the database.
+- **At least one signed-in Owner** must always remain (enforced in a serializable transaction).
+
+Setup:
+
+1. Register an app for portal sign-in (separate from the assessment app is cleanest):
+   multi-tenant, Web redirect URI `https://<portal>/signin-oidc`, front-channel logout
+   `https://<portal>/signout-callback-oidc`, **ID tokens** enabled. It needs no API permissions
+   and no secret or certificate: the portal only signs people in.
+2. Set `AzureAd:ClientId`, `Auth:OperatorTenantId` (your own Entra tenant ID) and
+   `Auth:BootstrapOwners` (sign-in names in your tenant invited as Owner at startup).
+3. Sign in as a bootstrap Owner and invite everyone else under **People**.
 
 ## How scoring works
 
@@ -126,7 +164,7 @@ checks are excluded. Any open **Critical** caps the grade at C.
 | Worker: Intune device sync | Built and tested against stubbed Graph; needs a real tenant + certificate to exercise |
 | Tenant onboarding (admin consent, verification, first sync) | Built; tested with stubbed Entra; needs the app registration to exercise |
 | Worker: scheduled engine scans | Next |
-| Portal sign-in with roles | Next |
+| Portal sign-in with roles (Entra ID, Owner / MSP admin / Client viewer) | Built; tested with development sign-in and the real Entra redirect |
 | ScubaGear adapter, PDF report | Next |
 
 ## Security notes
@@ -136,4 +174,5 @@ checks are excluded. Any open **Critical** caps the grade at C.
 - Engines run **out of process** with arguments passed via `ArgumentList`, so tenant data
   can't inject PowerShell and a hung scan can't crash the portal.
 - Request **read-only** Graph permissions for assessment; remediation is a separate consent.
+- Portal access comes from SecurePulse's own user table, never from token role claims.
 - Check each engine's license before redistributing modified versions (Wazuh is GPLv2).

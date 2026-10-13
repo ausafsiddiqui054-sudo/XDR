@@ -5,6 +5,7 @@ using SecurePulse.Web.Components;
 using SecurePulse.Web.Services;
 using SecurePulse.Web.Services.Onboarding;
 using Microsoft.AspNetCore.DataProtection;
+using SecurePulse.Web.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +13,9 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 builder.Services.AddMudServices();
+
+// Entra ID sign-in with SecurePulse-managed roles (development sign-in when not configured).
+var useEntra = builder.AddPortalAuthentication();
 
 // With a connection string the portal reads PostgreSQL (written by the Worker). Without one it
 // runs on in-memory sample data, so the UI can be designed and demoed with no database.
@@ -28,10 +32,12 @@ else
     builder.Services.AddSingleton<IFindingRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IDeviceRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IOnboardingRepository>(sp => sp.GetRequiredService<SampleDataStore>());
+    builder.Services.AddSingleton<IPortalUserRepository>(sp => sp.GetRequiredService<SampleDataStore>());
 }
 builder.Services.AddSingleton(new PortalMode(useDatabase));
 builder.Services.AddScoped<PostureService>();
 builder.Services.AddScoped<EndpointService>();
+builder.Services.AddScoped<PortalUserService>();
 
 // Tenant onboarding. Consent-link state is encrypted with data protection; in production,
 // persist the key ring somewhere shared (PersistKeysTo...) so links survive restarts and scale-out.
@@ -63,9 +69,11 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseAntiforgery();
 
-app.MapStaticAssets();
+app.MapStaticAssets().AllowAnonymous();
 
 // Entra redirects here after the admin-consent prompt. Handle it once, then redirect to a
 // result page so a refresh or a shared URL can't replay it.
@@ -74,7 +82,9 @@ app.MapGet("/" + OnboardingService.CallbackPath, async (HttpRequest request, Onb
     var q = request.Query;
     var outcome = await onboarding.HandleCallbackAsync(q["state"], q["tenant"], q["admin_consent"], q["error"], q["error_description"], ct);
     return Results.LocalRedirect($"~/onboarding/consent-result?outcome={outcome}");
-});
+}).AllowAnonymous(); // the client's admin isn't a portal user
+
+app.MapPortalAuthEndpoints(useEntra);
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

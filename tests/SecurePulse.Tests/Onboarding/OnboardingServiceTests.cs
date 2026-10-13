@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging.Abstractions;
 using SecurePulse.Core.Abstractions;
 using SecurePulse.Core.Models;
+using SecurePulse.Web.Security;
 using SecurePulse.Web.Services;
 using SecurePulse.Web.Services.Onboarding;
 
@@ -32,8 +33,9 @@ public class OnboardingServiceTests
         public Resolver Resolver { get; init; } = new(_ => ClientTenant);
         public OnboardingOptions Options { get; } = new() { AppClientId = AppClientId };
         public IDataProtectionProvider Protection { get; init; } = new EphemeralDataProtectionProvider();
+        public FixedUser User { get; } = FixedUser.MspAdmin();
 
-        public OnboardingService Service => new(Store, Store, Resolver, Protection, Options, Time, NullLogger<OnboardingService>.Instance);
+        public OnboardingService Service => new(Store, Store, Resolver, Protection, Options, Time, User, NullLogger<OnboardingService>.Instance);
         public IOnboardingRepository Requests => Store;
     }
 
@@ -62,6 +64,7 @@ public class OnboardingServiceTests
 
         Assert.Equal(OnboardingStatus.AwaitingConsent, request.Status);
         Assert.Equal(ClientTenant, request.EntraTenantId);
+        Assert.Equal("Adam Admin <adam@msp.example>", request.StartedBy);
         Assert.Equal("contoso.com", request.PrimaryDomain);
         Assert.Equal(h.Time.Now.AddDays(7), request.ExpiresAt);
 
@@ -219,6 +222,30 @@ public class OnboardingServiceTests
         Assert.NotEqual(first.Id, again.Request!.Id);
     }
 
+    [Fact]
+    public async Task ClientViewersCannotOnboard()
+    {
+        var h = new Harness();
+        var (request, _) = await StartAsync(h);
+        h.User.User = FixedUser.Viewer(Guid.NewGuid()).User;
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => h.Service.StartAsync(Form("other.example")));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => h.Service.GetAsync(request.Id));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => h.Service.CancelAsync(request.Id));
+        Assert.Empty(await h.Service.GetOpenAsync());
+        Assert.DoesNotContain("other.example", h.Resolver.Calls);
+    }
+
+    [Fact]
+    public async Task ConsentCallbackNeedsNoSignedInUser()
+    {
+        var h = new Harness();
+        var (_, state) = await StartAsync(h);
+        h.User.User = UserContext.Anonymous;
+
+        Assert.Equal(ConsentCallbackOutcome.Received, await h.Service.HandleCallbackAsync(state, ClientTenant.ToString(), "True", null, null));
+    }
+
     // --- Consent callback ----------------------------------------------------------------
 
     [Fact]
@@ -360,6 +387,6 @@ public class OnboardingServiceTests
         public IDataProtectionProvider Protection { get; init; } = new EphemeralDataProtectionProvider();
 
         public OnboardingService Service => new(store, store, resolver, Protection, new OnboardingOptions { AppClientId = AppClientId },
-            new FakeTime(DateTimeOffset.UtcNow), NullLogger<OnboardingService>.Instance);
+            new FakeTime(DateTimeOffset.UtcNow), FixedUser.Owner(), NullLogger<OnboardingService>.Instance);
     }
 }

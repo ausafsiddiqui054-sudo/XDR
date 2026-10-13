@@ -1,0 +1,11 @@
+@* A real form POST with an antiforgery token: works from static and interactive pages alike. *@
+<form method="post" action="authentication/logout" class="d-inline">
+    <AntiforgeryToken />
+    <MudButton ButtonType="ButtonType.Submit" Variant="@Variant" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Logout"
+               FullWidth="@FullWidth">Sign out</MudButton>
+</form>
+
+@code {
+    [Parameter] public Variant Variant { get; set; } = Variant.Text;
+    [Parameter] public bool FullWidth { get; set; }
+}

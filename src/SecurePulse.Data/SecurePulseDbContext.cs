@@ -10,6 +10,7 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
     public DbSet<ManagedDeviceEntity> Devices => Set<ManagedDeviceEntity>();
     public DbSet<DeviceSyncStatusEntity> DeviceSyncStatuses => Set<DeviceSyncStatusEntity>();
     public DbSet<OnboardingRequestEntity> OnboardingRequests => Set<OnboardingRequestEntity>();
+    public DbSet<PortalUserEntity> PortalUsers => Set<PortalUserEntity>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder builder)
     {
@@ -74,9 +75,24 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
             e.Property(x => x.StateHash).HasMaxLength(64);
             e.Property(x => x.ProtectedState).HasMaxLength(1024);
             e.Property(x => x.LastError).HasMaxLength(2000);
+            e.Property(x => x.StartedBy).HasMaxLength(512);
             e.HasIndex(x => x.StateHash).IsUnique();
             e.HasIndex(x => new { x.Status, x.CreatedAt });
             e.HasOne<TenantEntity>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.SetNull);
+        });
+    
+        b.Entity<PortalUserEntity>(e =>
+        {
+            e.ToTable("portal_users");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.UserPrincipalName).HasMaxLength(320);
+            e.Property(x => x.DisplayName).HasMaxLength(256);
+            e.Property(x => x.CreatedBy).HasMaxLength(512);
+            // One invitation per sign-in name per tenant; one portal user per Entra identity.
+            e.HasIndex(x => new { x.EntraTenantId, x.UserPrincipalName }).IsUnique();
+            e.HasIndex(x => new { x.EntraTenantId, x.ObjectId }).IsUnique().HasFilter("\"ObjectId\" IS NOT NULL");
+            // Removing a client tenant removes its viewers' access with it.
+            e.HasOne<TenantEntity>().WithMany().HasForeignKey(x => x.ClientTenantId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

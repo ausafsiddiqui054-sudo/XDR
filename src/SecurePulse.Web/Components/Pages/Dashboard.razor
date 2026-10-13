@@ -2,16 +2,21 @@
 @inject PostureService Posture
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject IUserContextAccessor Current
 
 <PageTitle>Overview · SecurePulse</PageTitle>
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
     <div>
         <MudText Typo="Typo.h4">Security posture</MudText>
-        <MudText Typo="Typo.body2" Color="Color.Secondary">Across all connected Microsoft 365 tenants</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            @(_isViewer && _portfolio?.Tenants.FirstOrDefault() is { } own ? $"{own.Tenant.DisplayName} · Microsoft 365" : "Across all connected Microsoft 365 tenants")
+        </MudText>
     </div>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Refresh"
-               OnClick="RunScan">Run scan</MudButton>
+    <AuthorizeView Policy="@Policies.Operator">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Refresh"
+                   OnClick="RunScan">Run scan</MudButton>
+    </AuthorizeView>
 </MudStack>
 
 @if (_portfolio is null)
@@ -23,10 +28,10 @@ else
     <MudGrid Spacing="4">
         <MudItem xs="12" md="4">
             <MudPaper Class="sp-card pa-6" Elevation="0" Outlined="true">
-                <MudText Typo="Typo.subtitle1" Class="mb-4">Portfolio score</MudText>
+                <MudText Typo="Typo.subtitle1" Class="mb-4">@(_isViewer ? "Security score" : "Portfolio score")</MudText>
                 <ScoreRing Score="_portfolio.AverageScore" Grade="@GradeOf(_portfolio.AverageScore)" />
                 <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Class="mt-4">
-                    Average of @_portfolio.Scanned.Count() scanned tenants
+                    @(_isViewer ? "Updated after each scan" : $"Average of {_portfolio.Scanned.Count()} scanned tenants")
                 </MudText>
             </MudPaper>
         </MudItem>
@@ -115,7 +120,13 @@ else
 @code {
     private PortfolioPosture? _portfolio;
 
-    protected override async Task OnInitializedAsync() => _portfolio = await Posture.GetPortfolioAsync();
+    private bool _isViewer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isViewer = (await Current.GetAsync()).Role == PortalRole.ClientViewer;
+        _portfolio = await Posture.GetPortfolioAsync();
+    }
 
     private void OpenTenant(TenantPosture t) => Nav.NavigateTo($"findings?tenant={t.Tenant.Id}");
 

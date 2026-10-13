@@ -3,4 +3,7 @@
     <MudNavLink Href="findings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Rounded.ReportProblem">Findings</MudNavLink>
     <MudNavLink Href="endpoints" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Rounded.Devices">Endpoints</MudNavLink>
     <MudNavLink Href="tenants" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Rounded.Apartment">Tenants</MudNavLink>
+    <AuthorizeView Policy="@Policies.Operator">
+        <MudNavLink Href="settings/users" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Rounded.Group">People</MudNavLink>
+    </AuthorizeView>
 </MudNavMenu>

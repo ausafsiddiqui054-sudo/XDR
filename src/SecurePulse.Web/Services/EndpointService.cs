@@ -1,5 +1,6 @@
 using SecurePulse.Core.Abstractions;
 using SecurePulse.Core.Models;
+using SecurePulse.Web.Security;
 
 namespace SecurePulse.Web.Services;
 
@@ -55,7 +56,8 @@ public sealed record EndpointFleet(IReadOnlyList<DeviceRow> Devices, DateTimeOff
 public sealed record DeviceDetail(Tenant Tenant, ManagedDevice Device, IReadOnlyList<Finding> RelatedFindings);
 
 /// <summary>Assembles Intune device inventory across tenants for the Endpoints screens.</summary>
-public sealed class EndpointService(ITenantRepository tenants, IDeviceRepository devices, IFindingRepository findings)
+/// <remarks>Only returns tenants the current user may see (client viewers: their own).</remarks>
+public sealed class EndpointService(ITenantRepository tenants, IDeviceRepository devices, IFindingRepository findings, IUserContextAccessor users)
 {
     public static readonly TimeSpan StaleAfter = TimeSpan.FromDays(30);
 
@@ -63,7 +65,8 @@ public sealed class EndpointService(ITenantRepository tenants, IDeviceRepository
     {
         var rows = new List<DeviceRow>();
         var syncs = new List<(Tenant, DeviceSyncStatus)>();
-        foreach (var tenant in await tenants.GetAllAsync(ct))
+        var user = await users.GetAsync();
+        foreach (var tenant in (await tenants.GetAllAsync(ct)).Where(t => user.CanSee(t.Id)))
         {
             rows.AddRange((await devices.GetForTenantAsync(tenant.Id, ct)).Select(d => new DeviceRow(tenant, d)));
             if (await devices.GetSyncStatusAsync(tenant.Id, ct) is { } status)
@@ -74,6 +77,8 @@ public sealed class EndpointService(ITenantRepository tenants, IDeviceRepository
 
     public async Task<DeviceDetail?> GetDeviceAsync(Guid tenantId, string deviceId, CancellationToken ct = default)
     {
+        // Not found rather than forbidden, so IDs of other clients' tenants don't leak.
+        if (!(await users.GetAsync()).CanSee(tenantId)) return null;
         if (await tenants.GetAsync(tenantId, ct) is not { } tenant) return null;
         if (await devices.GetAsync(tenantId, deviceId, ct) is not { } device) return null;
 

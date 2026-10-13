@@ -11,9 +11,11 @@
         <MudText Typo="Typo.h4">Tenants</MudText>
         <MudText Typo="Typo.body2" Color="Color.Secondary">Client Microsoft 365 tenants and their consent status</MudText>
     </div>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add" Href="tenants/connect">
-        Connect tenant
-    </MudButton>
+    <AuthorizeView Policy="@Policies.Operator">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add" Href="tenants/connect">
+            Connect tenant
+        </MudButton>
+    </AuthorizeView>
 </MudStack>
 
 @if (_portfolio is null)

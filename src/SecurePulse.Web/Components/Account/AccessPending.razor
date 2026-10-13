@@ -1,0 +1,50 @@
+@page "/access-pending"
+@attribute [Authorize(Policy = Policies.SignedIn)]
+@attribute [ExcludeFromInteractiveRouting]
+@layout PublicLayout
+
+<PageTitle>Access pending · SecurePulse</PageTitle>
+
+<MudPaper Class="sp-card pa-8" Elevation="0" Outlined="true">
+    <MudStack Spacing="3">
+        @if (_user?.PortalRole() is not null)
+        {
+            @* Also the cookie handler's access-denied page: signed in with a role, but not one this page allows. *@
+            <span class="sp-icon-badge sp-icon-badge-lg"><MudIcon Icon="@Icons.Material.Rounded.Lock" Color="Color.Primary" Size="Size.Large" /></span>
+            <MudText Typo="Typo.h5">You don't have access to that page</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary">Ask an Owner if you need it.</MudText>
+            <div><MudButton Variant="Variant.Filled" Color="Color.Primary" Href="">Go to overview</MudButton></div>
+        }
+        else
+        {
+            <span class="sp-icon-badge sp-icon-badge-lg"><MudIcon Icon="@Icons.Material.Rounded.HourglassTop" Color="Color.Primary" Size="Size.Large" /></span>
+            <MudText Typo="Typo.h5">You're signed in, but don't have access yet</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary">
+                Ask a SecurePulse Owner to invite you. They'll need these details exactly as shown:
+            </MudText>
+            <dl class="sp-props">
+                <dt>Sign-in name</dt>
+                <dd>@(_user?.SignInName() ?? "Not provided by your organization")</dd>
+                <dt>Organization (tenant) ID</dt>
+                <dd style="font-family:ui-monospace,SFMono-Regular,Consolas,monospace">@(_ids?.TenantId.ToString() ?? "Unknown")</dd>
+            </dl>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Signed in to the wrong account? Sign out and choose another.
+            </MudText>
+        }
+        <div><SignOutButton Variant="Variant.Outlined" /></div>
+    </MudStack>
+</MudPaper>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private System.Security.Claims.ClaimsPrincipal? _user;
+    private (Guid TenantId, Guid ObjectId)? _ids;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = AuthState is null ? null : (await AuthState).User;
+        _ids = _user?.EntraIdentity();
+    }
+}

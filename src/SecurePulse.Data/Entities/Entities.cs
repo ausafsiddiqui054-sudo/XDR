@@ -95,6 +95,7 @@ public sealed class OnboardingRequestEntity
     public DateTimeOffset? CompletedAt { get; set; }
     public Guid? TenantId { get; set; }
     public string? LastError { get; set; }
+    public string? StartedBy { get; set; }
     public string[] GrantedPermissions { get; set; } = [];
     public int VerificationAttempts { get; set; }
 
@@ -103,4 +104,18 @@ public sealed class OnboardingRequestEntity
 
     /// <summary>State encrypted with the portal's data-protection keys, for re-showing the link.</summary>
     public string? ProtectedState { get; set; }
+}
+
+public sealed class PortalUserEntity
+{
+    public Guid Id { get; set; }
+    public PortalRole Role { get; set; }
+    public Guid EntraTenantId { get; set; }
+    public string UserPrincipalName { get; set; } = "";
+    public Guid? ObjectId { get; set; }
+    public string? DisplayName { get; set; }
+    public Guid? ClientTenantId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
+    public DateTimeOffset? LastSignInAt { get; set; }
 }

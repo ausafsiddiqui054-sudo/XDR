@@ -25,7 +25,8 @@ public sealed class EfOnboardingRepository(IDbContextFactory<SecurePulseDbContex
             CreatedAt = request.CreatedAt,
             ExpiresAt = request.ExpiresAt,
             StateHash = stateHash,
-            ProtectedState = request.ProtectedState
+            ProtectedState = request.ProtectedState,
+            StartedBy = request.StartedBy
         });
         await db.SaveChangesAsync(ct);
     }

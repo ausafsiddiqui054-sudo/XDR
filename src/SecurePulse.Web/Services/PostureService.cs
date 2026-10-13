@@ -1,6 +1,7 @@
 using SecurePulse.Core.Abstractions;
 using SecurePulse.Core.Models;
 using SecurePulse.Reporting;
+using SecurePulse.Web.Security;
 
 namespace SecurePulse.Web.Services;
 
@@ -37,12 +38,14 @@ public sealed record PortfolioPosture(IReadOnlyList<TenantPosture> Tenants)
 }
 
 /// <summary>Assembles tenants, findings and scores for the UI.</summary>
-public sealed class PostureService(ITenantRepository tenants, IFindingRepository findings)
+/// <remarks>Only returns tenants the current user may see (client viewers: their own).</remarks>
+public sealed class PostureService(ITenantRepository tenants, IFindingRepository findings, IUserContextAccessor users)
 {
     public async Task<PortfolioPosture> GetPortfolioAsync(CancellationToken ct = default)
     {
+        var user = await users.GetAsync();
         var list = new List<TenantPosture>();
-        foreach (var tenant in await tenants.GetAllAsync(ct))
+        foreach (var tenant in (await tenants.GetAllAsync(ct)).Where(t => user.CanSee(t.Id)))
         {
             var f = await findings.GetForTenantAsync(tenant.Id, ct);
             list.Add(new TenantPosture(tenant, f.Count > 0 ? RiskScoreCalculator.Calculate(f) : null, f));

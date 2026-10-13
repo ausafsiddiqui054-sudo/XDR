@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.WebUtilities;
 using SecurePulse.Core.Abstractions;
 using SecurePulse.Core.Models;
+using SecurePulse.Web.Security;
 
 namespace SecurePulse.Web.Services.Onboarding;
 
@@ -41,6 +42,7 @@ public sealed partial class OnboardingService(
     IDataProtectionProvider protection,
     OnboardingOptions options,
     TimeProvider time,
+    IUserContextAccessor users,
     ILogger<OnboardingService> logger)
 {
     public const string CallbackPath = "onboarding/consent-callback";
@@ -52,14 +54,33 @@ public sealed partial class OnboardingService(
 
     public bool IsConfigured => Guid.TryParse(options.AppClientId, out var id) && id != Guid.Empty;
 
-    public Task<OnboardingRequest?> GetAsync(Guid id, CancellationToken ct = default) => requests.GetAsync(id, ct);
+    // Onboarding is for operators only. Pages enforce that with a policy; these checks keep
+    // the service safe if it's ever called from somewhere else.
 
-    public Task<IReadOnlyList<OnboardingRequest>> GetOpenAsync(CancellationToken ct = default) => requests.GetOpenAsync(ct);
+    public async Task<OnboardingRequest?> GetAsync(Guid id, CancellationToken ct = default)
+    {
+        await RequireOperatorAsync();
+        return await requests.GetAsync(id, ct);
+    }
 
-    public Task CancelAsync(Guid id, CancellationToken ct = default) => requests.CancelAsync(id, ct);
+    public async Task<IReadOnlyList<OnboardingRequest>> GetOpenAsync(CancellationToken ct = default) =>
+        (await users.GetAsync()).IsOperator ? await requests.GetOpenAsync(ct) : [];
+
+    public async Task CancelAsync(Guid id, CancellationToken ct = default)
+    {
+        await RequireOperatorAsync();
+        await requests.CancelAsync(id, ct);
+    }
+
+    private async Task<UserContext> RequireOperatorAsync()
+    {
+        var user = await users.GetAsync();
+        return user.IsOperator ? user : throw new UnauthorizedAccessException("Only Owners and MSP admins can onboard tenants.");
+    }
 
     public async Task<StartOnboardingResult> StartAsync(ConnectTenantForm form, CancellationToken ct = default)
     {
+        var actor = await RequireOperatorAsync();
         if (!IsConfigured)
             return new(null, "Onboarding:AppClientId isn't set, so a consent link can't be created.");
 
@@ -110,10 +131,11 @@ public sealed partial class OnboardingService(
             Status = OnboardingStatus.AwaitingConsent,
             CreatedAt = now,
             ExpiresAt = now + options.LinkLifetime,
-            ProtectedState = Protector.Protect(state)
+            ProtectedState = Protector.Protect(state),
+            StartedBy = actor.Name
         };
         await requests.AddAsync(request, HashState(state), ct);
-        logger.LogInformation("Onboarding {RequestId} started for {Domain} ({EntraTenantId})", request.Id, domain, tid);
+        logger.LogInformation("Onboarding {RequestId} started for {Domain} ({EntraTenantId}) by {User}", request.Id, domain, tid, actor.Name);
         return new(request, null);
     }
 
