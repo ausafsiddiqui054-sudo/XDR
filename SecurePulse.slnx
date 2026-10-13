@@ -5,4 +5,7 @@
     <Project Path="src/SecurePulse.Reporting/SecurePulse.Reporting.csproj" />
     <Project Path="src/SecurePulse.Web/SecurePulse.Web.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SecurePulse.Tests/SecurePulse.Tests.csproj" />
+  </Folder>
 </Solution>

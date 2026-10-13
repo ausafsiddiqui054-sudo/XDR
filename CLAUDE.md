@@ -35,15 +35,13 @@ snackbars. Do the same alias in any .cs file that imports both namespaces.
 ```bash
 dotnet build SecurePulse.slnx
 dotnet run --project src/SecurePulse.Web
+dotnet test SecurePulse.slnx
 ```
 
 ## Next steps (in order)
-1. First local build of SecurePulse.Web — fix any MudBlazor 8 API mismatches.
-2. Add `SecurePulse.Tests` (xUnit): parser tests using `samples/`, scoring tests
-   (critical caps grade, Investigate = half credit, NotEvaluated excluded).
-3. `SecurePulse.Data`: EF Core + PostgreSQL repositories replacing `SampleDataStore`.
-4. `SecurePulse.Worker`: scheduled scans (Hangfire or Quartz.NET) calling `IScanEngine`.
-5. Multi-tenant Entra app + admin-consent onboarding flow (Microsoft.Identity.Web),
+1. `SecurePulse.Data`: EF Core + PostgreSQL repositories replacing `SampleDataStore`.
+2. `SecurePulse.Worker`: scheduled scans (Hangfire or Quartz.NET) calling `IScanEngine`.
+3. Multi-tenant Entra app + admin-consent onboarding flow (Microsoft.Identity.Web),
    portal login with roles (Owner, MSP admin, Client viewer).
-6. ScubaGear adapter (check current OS/PowerShell requirements; may need a Windows worker).
-7. Branded PDF report (QuestPDF; check its license tier).
+4. ScubaGear adapter (check current OS/PowerShell requirements; may need a Windows worker).
+5. Branded PDF report (QuestPDF; check its license tier).

@@ -17,6 +17,8 @@ SecurePulse.slnx
     ├── SecurePulse.Engines     Engine adapters. Maester: out-of-process runner + JSON parser
     ├── SecurePulse.Reporting   RiskScoreCalculator (0–100 score, grade, top risks)
     └── SecurePulse.Web         Blazor Server portal (MudBlazor, M3 Expressive-style theme)
+tests/
+    └── SecurePulse.Tests       xUnit: Maester parser (against samples/) and scoring rules
 ```
 
 ## Run it
@@ -26,6 +28,7 @@ Requirements: .NET 10 SDK.
 ```bash
 dotnet restore
 dotnet run --project src/SecurePulse.Web
+dotnet test
 ```
 
 The portal starts with **sample data** (five fictional tenants) so you can design and demo
@@ -42,15 +45,12 @@ checks are excluded. Any open **Critical** caps the grade at C.
 
 | Area | State |
 |---|---|
-| Core models, scoring, Maester parser | Built and tested against `samples/` |
+| Core models, scoring, Maester parser | Built; covered by `SecurePulse.Tests` |
 | Maester engine runner | Built; needs a real tenant + certificate to exercise |
-| Portal (Overview, Findings, Tenants) | Built on sample data; compile locally (see below) |
+| Portal (Overview, Findings, Tenants) | Built on sample data; builds clean on MudBlazor 8 |
 | Worker service, EF Core persistence | Next |
 | Multi-tenant admin-consent onboarding | Next |
 | ScubaGear adapter, PDF report | Next |
-
-The web project was written against MudBlazor 8 but not compiled in the environment it was
-created in (no NuGet access there). Expect possibly a few small API fixes on first build.
 
 ## Security notes
 
