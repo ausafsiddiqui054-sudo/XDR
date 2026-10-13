@@ -4,6 +4,7 @@
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
 @inject IUserContextAccessor Current
+@inject AuditTrail Audit
 
 <PageTitle>@(_detail?.Device.DeviceName ?? "Device") · SecurePulse</PageTitle>
 
@@ -247,8 +248,14 @@ else
         var dialog = await Dialogs.ShowAsync<RemoteActionDialog>(null, parameters,
             new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
 
-        if ((await dialog.Result) is { Canceled: false })
+        if ((await dialog.Result) is { Canceled: false, Data: string reason })
         {
+            var label = DeviceActions.Label(action).ToLowerInvariant();
+            await Audit.RecordAsync(AuditActions.DeviceActionRequested, AuditOutcome.Failure,
+                $"Requested {label} of {_detail.Device.DeviceName}; not sent (approval workflow not built yet)",
+                _detail.Tenant.Id, "ManagedDevice", _detail.Device.Id,
+                new Dictionary<string, string> { ["action"] = action.ToString(), ["device"] = _detail.Device.DeviceName, ["reason"] = reason });
+
             // No approval queue or Graph write path exists yet, so be explicit that nothing happened.
             Snackbar.Add($"The approval workflow isn't built yet, so the {DeviceActions.Label(action).ToLowerInvariant()} request " +
                          $"for {_detail.Device.DeviceName} wasn't sent.", MudBlazor.Severity.Info);

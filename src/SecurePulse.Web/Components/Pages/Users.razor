@@ -207,12 +207,7 @@ else
         await LoadAsync();
     }
 
-    internal static string RoleLabel(PortalRole role) => role switch
-    {
-        PortalRole.Owner => "Owner",
-        PortalRole.MspAdmin => "MSP admin",
-        _ => "Client viewer"
-    };
+    internal static string RoleLabel(PortalRole role) => AuthSetup.RoleLabel(role);
 
     private static Color RoleColor(PortalRole role) => role switch
     {

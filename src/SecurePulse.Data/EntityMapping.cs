@@ -159,4 +159,20 @@ internal static class EntityMapping
         CreatedBy = e.CreatedBy,
         LastSignInAt = e.LastSignInAt
     };
+
+    public static AuditEvent ToModel(this AuditEventEntity e) => new()
+    {
+        Id = e.Id,
+        OccurredAt = e.OccurredAt,
+        Action = e.Action,
+        Outcome = e.Outcome,
+        ActorUserId = e.ActorUserId,
+        ActorName = e.ActorName,
+        TenantId = e.TenantId,
+        TargetType = e.TargetType,
+        TargetId = e.TargetId,
+        Summary = e.Summary,
+        Details = e.Details,
+        IpAddress = e.IpAddress
+    };
 }

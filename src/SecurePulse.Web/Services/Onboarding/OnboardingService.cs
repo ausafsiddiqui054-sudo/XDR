@@ -43,6 +43,7 @@ public sealed partial class OnboardingService(
     OnboardingOptions options,
     TimeProvider time,
     IUserContextAccessor users,
+    AuditTrail audit,
     ILogger<OnboardingService> logger)
 {
     public const string CallbackPath = "onboarding/consent-callback";
@@ -68,9 +69,19 @@ public sealed partial class OnboardingService(
 
     public async Task CancelAsync(Guid id, CancellationToken ct = default)
     {
-        await RequireOperatorAsync();
+        var actor = await RequireOperatorAsync();
+        if (await requests.GetAsync(id, ct) is not { Status: OnboardingStatus.AwaitingConsent or OnboardingStatus.Failed } request) return;
         await requests.CancelAsync(id, ct);
+        await audit.RecordAsync(AuditActions.LinkCancelled, AuditOutcome.Success, $"Cancelled the connection for {request.PrimaryDomain}",
+            targetType: "OnboardingRequest", targetId: id.ToString(), details: Details(request), actor: actor);
     }
+
+    private static Dictionary<string, string> Details(OnboardingRequest r) => new()
+    {
+        ["domain"] = r.PrimaryDomain,
+        ["entraTenantId"] = r.EntraTenantId.ToString(),
+        ["clientName"] = r.DisplayName
+    };
 
     private async Task<UserContext> RequireOperatorAsync()
     {
@@ -136,6 +147,9 @@ public sealed partial class OnboardingService(
         };
         await requests.AddAsync(request, HashState(state), ct);
         logger.LogInformation("Onboarding {RequestId} started for {Domain} ({EntraTenantId}) by {User}", request.Id, domain, tid, actor.Name);
+        await audit.RecordAsync(AuditActions.LinkCreated, AuditOutcome.Success, $"Created a consent link for {name} ({domain})",
+            targetType: "OnboardingRequest", targetId: request.Id.ToString(),
+            details: new Dictionary<string, string>(Details(request)) { ["expiresAt"] = request.ExpiresAt.ToString("O") }, actor: actor);
         return new(request, null);
     }
 
@@ -173,8 +187,13 @@ public sealed partial class OnboardingService(
     /// browser, so it is matched against a stored, unexpired, single-use request and the
     /// tenant it was created for. Success only means "consent reported"; the Worker verifies it.
     /// </summary>
+    /// <remarks>
+    /// Audited only when the state matches a real request: the endpoint is public, so unknown
+    /// states go to the application log instead of letting anyone fill the audit table.
+    /// </remarks>
     public async Task<ConsentCallbackOutcome> HandleCallbackAsync(
-        string? state, string? tenant, string? adminConsent, string? error, string? errorDescription, CancellationToken ct = default)
+        string? state, string? tenant, string? adminConsent, string? error, string? errorDescription, CancellationToken ct = default,
+        string? ipAddress = null)
     {
         if (string.IsNullOrEmpty(state) || state.Length > 128)
             return ConsentCallbackOutcome.Invalid;
@@ -186,13 +205,28 @@ public sealed partial class OnboardingService(
             return ConsentCallbackOutcome.Invalid;
         }
 
+        Task Audit(string action, AuditOutcome outcome, string summary, Dictionary<string, string>? extra = null)
+        {
+            var details = Details(request);
+            foreach (var (k, v) in extra ?? []) details[k] = v;
+            return audit.RecordAsync(action, outcome, summary, request.TenantId, "OnboardingRequest", request.Id.ToString(), details,
+                AuditTrail.ConsentingAdmin, ipAddress);
+        }
+
         var now = time.GetUtcNow();
         if (request.Status != OnboardingStatus.AwaitingConsent || request.IsExpired(now))
+        {
+            await Audit(AuditActions.ConsentLinkUnusable, AuditOutcome.Failure,
+                $"Consent link for {request.PrimaryDomain} used after it expired or was already used");
             return ConsentCallbackOutcome.ExpiredOrUsed;
+        }
 
         if (!string.IsNullOrEmpty(error))
         {
-            await requests.SetErrorAsync(request.Id, $"The admin didn't grant consent: {FirstLine(errorDescription) ?? FirstLine(error)}", ct);
+            var reason = FirstLine(errorDescription) ?? FirstLine(error);
+            await requests.SetErrorAsync(request.Id, $"The admin didn't grant consent: {reason}", ct);
+            await Audit(AuditActions.ConsentDeclined, AuditOutcome.Failure, $"Admin didn't grant consent for {request.PrimaryDomain}",
+                new() { ["reason"] = reason ?? "" });
             return ConsentCallbackOutcome.Declined;
         }
 
@@ -205,11 +239,21 @@ public sealed partial class OnboardingService(
                 $"Consent came from a different Microsoft 365 tenant ({consentedTenant}) than {request.PrimaryDomain}. " +
                 $"The admin needs to sign in with an account from {request.PrimaryDomain}.", ct);
             logger.LogWarning("Onboarding {RequestId}: consent from {Actual}, expected {Expected}", request.Id, consentedTenant, request.EntraTenantId);
+            await Audit(AuditActions.ConsentWrongTenant, AuditOutcome.Denied,
+                $"Consent for {request.PrimaryDomain} came from a different tenant and was rejected",
+                new() { ["consentedTenantId"] = consentedTenant.ToString() });
             return ConsentCallbackOutcome.WrongTenant;
         }
 
         if (!await requests.MarkConsentReceivedAsync(request.Id, now, ct))
+        {
+            await Audit(AuditActions.ConsentLinkUnusable, AuditOutcome.Failure,
+                $"Consent link for {request.PrimaryDomain} used after it expired or was already used");
             return ConsentCallbackOutcome.ExpiredOrUsed;
+        }
+
+        await Audit(AuditActions.ConsentReceived, AuditOutcome.Success,
+            $"Admin granted consent for {request.PrimaryDomain}; waiting for verification");
 
         logger.LogInformation("Onboarding {RequestId}: consent reported for {EntraTenantId}; waiting for Worker verification", request.Id, consentedTenant);
         return ConsentCallbackOutcome.Received;

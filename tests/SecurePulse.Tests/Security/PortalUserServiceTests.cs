@@ -15,7 +15,14 @@ public class PortalUserServiceTests
         public SampleDataStore Store { get; } = new();
         public AuthOptions Auth { get; } = new() { OperatorTenantId = OperatorTenant };
         public FixedUser Actor { get; set; } = FixedUser.Owner();
-        public PortalUserService Service => new(Store, Store, Auth, Actor, new FakeTime(DateTimeOffset.UtcNow));
+        public PortalUserService Service
+        {
+            get
+            {
+                var time = new FakeTime(DateTimeOffset.UtcNow);
+                return new(Store, Store, Auth, Actor, time, new AuditTrail(Store, Actor, time, Microsoft.Extensions.Logging.Abstractions.NullLogger<AuditTrail>.Instance));
+            }
+        }
         public IPortalUserRepository Users => Store;
 
         public async Task<Tenant> ConnectedTenantAsync() =>

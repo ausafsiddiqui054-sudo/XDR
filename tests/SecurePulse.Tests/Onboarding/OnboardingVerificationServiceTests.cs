@@ -51,7 +51,7 @@ public class OnboardingVerificationServiceTests
 
         public OnboardingVerificationService Service => new(Store, Tokens,
             new DeviceSyncService(Store, Store, Source, Microsoft.Extensions.Options.Options.Create(new DeviceSyncOptions()), NullLogger<DeviceSyncService>.Instance),
-            Microsoft.Extensions.Options.Options.Create(Options), Time, NullLogger<OnboardingVerificationService>.Instance);
+            Store, Microsoft.Extensions.Options.Options.Create(Options), Time, NullLogger<OnboardingVerificationService>.Instance);
 
         public async Task<OnboardingRequest> ConsentedRequestAsync(Guid entraTenantId)
         {
@@ -99,6 +99,51 @@ public class OnboardingVerificationServiceTests
 
         Assert.Equal(tenant.Id, h.Source.Synced.Single().Id);
         Assert.True((await h.Store.GetSyncStatusAsync(tenant.Id))!.Succeeded);
+    }
+
+    [Fact]
+    public async Task ConnectedTenantIsAuditedByTheWorker()
+    {
+        var h = new Harness { Tokens = new Tokens(t => Jwt.With(t.EntraTenantId, Required)) };
+        var request = await h.ConsentedRequestAsync(Guid.NewGuid());
+
+        await h.Service.VerifyAsync(request);
+
+        var e = await Audit.AuditAssert.SingleAsync(h.Store, AuditActions.TenantConnected, AuditOutcome.Success);
+        Assert.Equal("SecurePulse Worker", e.ActorName);
+        Assert.Null(e.ActorUserId);
+        Assert.Equal((await h.ReloadAsync(request))!.TenantId, e.TenantId);
+        Assert.Equal(string.Join(", ", Required.Order(StringComparer.OrdinalIgnoreCase)), e.Details["permissions"]);
+        Assert.Equal("contoso.com", e.Details["domain"]);
+    }
+
+    [Fact]
+    public async Task OnlyTheFinalVerificationFailureIsAudited()
+    {
+        var h = new Harness { Tokens = new Tokens(t => Jwt.With(t.EntraTenantId, Required[0])) };
+        var request = await h.ConsentedRequestAsync(Guid.NewGuid());
+
+        await h.Service.VerifyAsync(request);
+        await h.Service.VerifyAsync((await h.ReloadAsync(request))!);
+        Assert.Empty(await Audit.AuditAssert.AllAsync(h.Store));
+
+        h.Time.Advance(h.Options.VerificationWindow + TimeSpan.FromSeconds(1));
+        await h.Service.VerifyAsync((await h.ReloadAsync(request))!);
+
+        var e = await Audit.AuditAssert.SingleAsync(h.Store, AuditActions.VerificationFailed, AuditOutcome.Failure);
+        Assert.Contains(Required[1], e.Summary);
+    }
+
+    [Fact]
+    public async Task NonReadOnlyGrantIsAuditedAsDenied()
+    {
+        var h = new Harness { Tokens = new Tokens(t => Jwt.With(t.EntraTenantId, [.. Required, "Mail.Send"])) };
+        var request = await h.ConsentedRequestAsync(Guid.NewGuid());
+
+        await h.Service.VerifyAsync(request);
+
+        var e = await Audit.AuditAssert.SingleAsync(h.Store, AuditActions.VerificationFailed, AuditOutcome.Denied);
+        Assert.Contains("Mail.Send", e.Summary);
     }
 
     [Fact]

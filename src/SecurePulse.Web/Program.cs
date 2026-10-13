@@ -33,11 +33,13 @@ else
     builder.Services.AddSingleton<IDeviceRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IOnboardingRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IPortalUserRepository>(sp => sp.GetRequiredService<SampleDataStore>());
+    builder.Services.AddSingleton<IAuditLog>(sp => sp.GetRequiredService<SampleDataStore>());
 }
 builder.Services.AddSingleton(new PortalMode(useDatabase));
 builder.Services.AddScoped<PostureService>();
 builder.Services.AddScoped<EndpointService>();
 builder.Services.AddScoped<PortalUserService>();
+builder.Services.AddScoped<AuditTrail>();
 
 // Tenant onboarding. Consent-link state is encrypted with data protection; in production,
 // persist the key ring somewhere shared (PersistKeysTo...) so links survive restarts and scale-out.
@@ -80,11 +82,13 @@ app.MapStaticAssets().AllowAnonymous();
 app.MapGet("/" + OnboardingService.CallbackPath, async (HttpRequest request, OnboardingService onboarding, CancellationToken ct) =>
 {
     var q = request.Query;
-    var outcome = await onboarding.HandleCallbackAsync(q["state"], q["tenant"], q["admin_consent"], q["error"], q["error_description"], ct);
+    var outcome = await onboarding.HandleCallbackAsync(q["state"], q["tenant"], q["admin_consent"], q["error"], q["error_description"], ct,
+        request.HttpContext.Connection.RemoteIpAddress?.ToString());
     return Results.LocalRedirect($"~/onboarding/consent-result?outcome={outcome}");
 }).AllowAnonymous(); // the client's admin isn't a portal user
 
 app.MapPortalAuthEndpoints(useEntra);
+app.MapAuditExport();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

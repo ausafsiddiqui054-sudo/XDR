@@ -97,14 +97,43 @@ public static class AuthSetup
 
         if (principal.EntraIdentity() is not { } id) return;
         var users = http.RequestServices.GetRequiredService<IPortalUserRepository>();
+        var wasBound = await users.FindByObjectIdAsync(id.TenantId, id.ObjectId) is not null;
         var user = await users.SignInAsync(id.TenantId, id.ObjectId, principal.SignInName(), principal.DisplayName(), DateTimeOffset.UtcNow);
 
         var log = http.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("SecurePulse.SignIn");
+        var audit = http.RequestServices.GetRequiredService<Services.AuditTrail>();
+        var ip = http.Connection.RemoteIpAddress?.ToString();
+        var name = UserContext.NameFor(principal.DisplayName(), principal.SignInName());
+        var entraIds = new Dictionary<string, string> { ["entraTenantId"] = id.TenantId.ToString(), ["objectId"] = id.ObjectId.ToString() };
+
         if (user is null)
+        {
             log.LogWarning("Sign-in by {SignInName} ({TenantId}/{ObjectId}) has no portal access", principal.SignInName(), id.TenantId, id.ObjectId);
-        else
-            log.LogInformation("{SignInName} signed in as {Role}", principal.SignInName(), user.Role);
+            await audit.RecordAsync(AuditActions.SignIn, AuditOutcome.Denied, $"{name} signed in but has no access",
+                details: entraIds, actor: new UserContext(null, null, null, name), ipAddress: ip);
+            return;
+        }
+
+        log.LogInformation("{SignInName} signed in as {Role}", principal.SignInName(), user.Role);
+        var actor = new UserContext(user.Id, user.Role, user.ClientTenantId, name);
+        if (!wasBound)
+        {
+            await audit.RecordAsync(AuditActions.InvitationAccepted, AuditOutcome.Success,
+                $"{name} accepted the invitation as {RoleLabel(user.Role)}", user.ClientTenantId, "PortalUser", user.Id.ToString(),
+                new Dictionary<string, string>(entraIds) { ["role"] = user.Role.ToString(), ["invitedBy"] = user.CreatedBy ?? "" },
+                actor, ip);
+        }
+        await audit.RecordAsync(AuditActions.SignIn, AuditOutcome.Success, $"{name} signed in as {RoleLabel(user.Role)}",
+            user.ClientTenantId, "PortalUser", user.Id.ToString(),
+            new Dictionary<string, string>(entraIds) { ["role"] = user.Role.ToString() }, actor, ip);
     }
+
+    public static string RoleLabel(PortalRole role) => role switch
+    {
+        PortalRole.Owner => "Owner",
+        PortalRole.MspAdmin => "MSP admin",
+        _ => "Client viewer"
+    };
 }
 
 /// <summary>Whether sign-in goes through Microsoft Entra ID or the development persona page.</summary>

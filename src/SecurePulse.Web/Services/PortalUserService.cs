@@ -23,7 +23,8 @@ public sealed class PortalUserService(
     ITenantRepository tenants,
     AuthOptions auth,
     IUserContextAccessor current,
-    TimeProvider time)
+    TimeProvider time,
+    AuditTrail audit)
 {
     public Guid OperatorTenantId => auth.OperatorTenantId;
 
@@ -40,7 +41,11 @@ public sealed class PortalUserService(
     {
         var actor = await current.GetAsync();
         if (!CanManage(actor, form.Role))
+        {
+            await audit.RecordAsync(AuditActions.Invited, AuditOutcome.Denied,
+                $"{actor.Name} tried to invite {form.SignInName?.Trim()} as {AuthSetup.RoleLabel(form.Role)} without permission", actor: actor);
             return new(null, actor.IsOperator ? "Only Owners can invite Owners and MSP admins." : "You can't invite people.");
+        }
 
         var upn = form.SignInName?.Trim().ToLowerInvariant();
         if (string.IsNullOrEmpty(upn) || upn.Length > 320 || upn.Any(char.IsWhiteSpace) || upn.Count(c => c == '@') != 1 || upn[0] == '@' || upn[^1] == '@')
@@ -48,10 +53,12 @@ public sealed class PortalUserService(
 
         Guid entraTenantId;
         Guid? clientTenantId = null;
+        var scope = "all tenants";
         if (form.Role == PortalRole.ClientViewer)
         {
             if (form.ClientTenantId is not { } id || await tenants.GetAsync(id, ct) is not { } tenant)
                 return new(null, "Choose which client tenant they can see.");
+            scope = tenant.DisplayName;
             if (tenant.ConsentState is not (TenantConsentState.ReadOnlyGranted or TenantConsentState.RemediationGranted))
                 return new(null, $"{tenant.DisplayName} isn't connected yet.");
             entraTenantId = tenant.EntraTenantId;
@@ -77,6 +84,10 @@ public sealed class PortalUserService(
         try
         {
             await users.AddAsync(user, ct);
+            await audit.RecordAsync(AuditActions.Invited, AuditOutcome.Success,
+                $"Invited {upn} as {AuthSetup.RoleLabel(form.Role)} ({scope})", clientTenantId, "PortalUser", user.Id.ToString(),
+                new Dictionary<string, string> { ["signInName"] = upn, ["role"] = form.Role.ToString(), ["entraTenantId"] = entraTenantId.ToString() },
+                actor);
             return new(user, null);
         }
         catch (DuplicatePortalUserException ex)
@@ -90,18 +101,40 @@ public sealed class PortalUserService(
     {
         var actor = await current.GetAsync();
         if (await users.GetAsync(userId, ct) is not { } user) return "That person no longer has access.";
-        if (!actor.IsOwner) return "Only Owners can change roles.";
+        var change = $"{user.UserPrincipalName} from {AuthSetup.RoleLabel(user.Role)} to {AuthSetup.RoleLabel(role)}";
+        var details = new Dictionary<string, string> { ["from"] = user.Role.ToString(), ["to"] = role.ToString() };
+        if (!actor.IsOwner)
+        {
+            await audit.RecordAsync(AuditActions.RoleChanged, AuditOutcome.Denied, $"{actor.Name} tried to change {change} without permission",
+                user.ClientTenantId, "PortalUser", user.Id.ToString(), details, actor);
+            return "Only Owners can change roles.";
+        }
         if (user.Role == PortalRole.ClientViewer || role == PortalRole.ClientViewer)
             return "Client viewers sign in from their own organization; remove and invite them again instead.";
-        return await GuardLastOwnerAsync(() => users.UpdateRoleAsync(userId, role, null, ct));
+
+        var error = await GuardLastOwnerAsync(() => users.UpdateRoleAsync(userId, role, null, ct));
+        await audit.RecordAsync(AuditActions.RoleChanged, error is null ? AuditOutcome.Success : AuditOutcome.Failure,
+            error is null ? $"Changed {change}" : $"Refused to change {change}: {error}", user.ClientTenantId, "PortalUser", user.Id.ToString(), details, actor);
+        return error;
     }
 
     public async Task<string?> RemoveAsync(Guid userId, CancellationToken ct = default)
     {
         var actor = await current.GetAsync();
         if (await users.GetAsync(userId, ct) is not { } user) return null;
-        if (!CanManage(actor, user.Role)) return "You can't remove this person.";
-        return await GuardLastOwnerAsync(() => users.RemoveAsync(userId, ct));
+        var who = $"{user.UserPrincipalName} ({AuthSetup.RoleLabel(user.Role)})";
+        var details = new Dictionary<string, string> { ["signInName"] = user.UserPrincipalName, ["role"] = user.Role.ToString() };
+        if (!CanManage(actor, user.Role))
+        {
+            await audit.RecordAsync(AuditActions.Removed, AuditOutcome.Denied, $"{actor.Name} tried to remove {who} without permission",
+                user.ClientTenantId, "PortalUser", user.Id.ToString(), details, actor);
+            return "You can't remove this person.";
+        }
+
+        var error = await GuardLastOwnerAsync(() => users.RemoveAsync(userId, ct));
+        await audit.RecordAsync(AuditActions.Removed, error is null ? AuditOutcome.Success : AuditOutcome.Failure,
+            error is null ? $"Removed access for {who}" : $"Refused to remove {who}: {error}", user.ClientTenantId, "PortalUser", user.Id.ToString(), details, actor);
+        return error;
     }
 
     private static async Task<string?> GuardLastOwnerAsync(Func<Task> change)

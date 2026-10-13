@@ -9,8 +9,9 @@ namespace SecurePulse.Web.Services;
 /// portal can be designed and demoed before real scans exist. Replace with EF Core
 /// repositories once the Worker starts writing real scan results.
 /// </summary>
-public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDeviceRepository, IOnboardingRepository, IPortalUserRepository
+public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDeviceRepository, IOnboardingRepository, IPortalUserRepository, IAuditLog
 {
+    private readonly List<AuditEvent> _audit = [];
     private readonly List<PortalUser> _users = [];
     private readonly Lock _gate = new();
     private readonly Dictionary<Guid, (OnboardingRequest Request, string StateHash)> _onboarding = [];
@@ -511,6 +512,38 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
             if (!copy.Any(u => u.Role == PortalRole.Owner && u.ObjectId is not null)) throw new LastOwnerException();
             _users.Clear();
             _users.AddRange(copy);
+        }
+    }
+
+    // --- Audit log (in memory, append-only; mirrors EfAuditLog) -------------------------------
+
+    public Task RecordAsync(AuditEvent auditEvent, CancellationToken ct = default)
+    {
+        lock (_gate) _audit.Add(auditEvent);
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<AuditEvent>> QueryAsync(AuditQuery q, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            IEnumerable<AuditEvent> rows = _audit;
+            if (q.From is { } from) rows = rows.Where(e => e.OccurredAt >= from);
+            if (q.To is { } to) rows = rows.Where(e => e.OccurredAt < to);
+            if (!string.IsNullOrEmpty(q.Category)) rows = rows.Where(e => e.Category == q.Category);
+            if (q.Outcome is { } outcome) rows = rows.Where(e => e.Outcome == outcome);
+            if (q.TenantId is { } tenantId) rows = rows.Where(e => e.TenantId == tenantId);
+            if (!string.IsNullOrWhiteSpace(q.Search))
+            {
+                var term = q.Search.Trim();
+                rows = rows.Where(e => e.ActorName.Contains(term, StringComparison.OrdinalIgnoreCase)
+                                       || e.Summary.Contains(term, StringComparison.OrdinalIgnoreCase));
+            }
+            if (q.Before is { } before)
+                rows = rows.Where(e => e.OccurredAt < before.OccurredAt || (e.OccurredAt == before.OccurredAt && e.Id.CompareTo(before.Id) < 0));
+
+            return Task.FromResult<IReadOnlyList<AuditEvent>>(rows.OrderByDescending(e => e.OccurredAt).ThenByDescending(e => e.Id)
+                .Take(Math.Clamp(q.Limit, 1, 1000)).ToList());
         }
     }
 

@@ -110,3 +110,12 @@ public interface IPortalUserRepository
     /// <exception cref="LastOwnerException">The change would remove the last signed-in Owner.</exception>
     Task RemoveAsync(Guid id, CancellationToken ct = default);
 }
+
+/// <summary>Append-only record of security events. There is deliberately no update or delete.</summary>
+public interface IAuditLog
+{
+    Task RecordAsync(AuditEvent auditEvent, CancellationToken ct = default);
+
+    /// <summary>Newest first.</summary>
+    Task<IReadOnlyList<AuditEvent>> QueryAsync(AuditQuery query, CancellationToken ct = default);
+}

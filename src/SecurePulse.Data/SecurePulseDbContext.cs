@@ -1,4 +1,6 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using SecurePulse.Data.Entities;
 
 namespace SecurePulse.Data;
@@ -11,6 +13,7 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
     public DbSet<DeviceSyncStatusEntity> DeviceSyncStatuses => Set<DeviceSyncStatusEntity>();
     public DbSet<OnboardingRequestEntity> OnboardingRequests => Set<OnboardingRequestEntity>();
     public DbSet<PortalUserEntity> PortalUsers => Set<PortalUserEntity>();
+    public DbSet<AuditEventEntity> AuditEvents => Set<AuditEventEntity>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder builder)
     {
@@ -93,6 +96,33 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
             e.HasIndex(x => new { x.EntraTenantId, x.ObjectId }).IsUnique().HasFilter("\"ObjectId\" IS NOT NULL");
             // Removing a client tenant removes its viewers' access with it.
             e.HasOne<TenantEntity>().WithMany().HasForeignKey(x => x.ClientTenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+    
+        b.Entity<AuditEventEntity>(e =>
+        {
+            e.ToTable("audit_events");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Action).HasMaxLength(64);
+            e.Property(x => x.Category).HasMaxLength(32);
+            e.Property(x => x.ActorName).HasMaxLength(512);
+            e.Property(x => x.TargetType).HasMaxLength(64);
+            e.Property(x => x.TargetId).HasMaxLength(128);
+            e.Property(x => x.Summary).HasMaxLength(1000);
+            e.Property(x => x.IpAddress).HasMaxLength(64);
+            e.Property(x => x.Details)
+                .HasColumnType("jsonb")
+                .HasConversion(
+                    v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                    v => JsonSerializer.Deserialize<Dictionary<string, string>>(v, (JsonSerializerOptions?)null) ?? new Dictionary<string, string>(),
+                    new ValueComparer<Dictionary<string, string>>(
+                        (a, c) => JsonSerializer.Serialize(a, (JsonSerializerOptions?)null) == JsonSerializer.Serialize(c, (JsonSerializerOptions?)null),
+                        v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null).GetHashCode(),
+                        v => new Dictionary<string, string>(v)));
+            // Newest-first listing and keyset paging, plus the page's filters.
+            e.HasIndex(x => new { x.OccurredAt, x.Id }).IsDescending();
+            e.HasIndex(x => new { x.Category, x.OccurredAt });
+            e.HasIndex(x => new { x.TenantId, x.OccurredAt });
+            // No foreign keys: the record must survive deleted tenants and users.
         });
     }
 }

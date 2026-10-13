@@ -60,6 +60,15 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
 - New pages are protected by `Pages/_Imports.razor`; public ones need `[AllowAnonymous]` and
   `[ExcludeFromInteractiveRouting]` (anonymous users have no circuit).
 
+## Audit invariants
+- Security-relevant actions record an `AuditEvent` (portal: `AuditTrail`; Worker: `IAuditLog`).
+  Add new actions to `AuditActions` with a label and a category; never rename stored action strings.
+- `audit_events` is append-only (DB trigger). Don't add update/delete paths or foreign keys.
+- Don't audit unauthenticated input that isn't tied to a real record (public endpoints would let
+  anyone flood the table).
+- Portal events record after the action and log Critical if the write fails. Remote/write
+  actions must be fail-closed: write the audit entry first and abort if it fails.
+
 ## Next steps (in order)
 1. Worker: scheduled engine scans calling `IScanEngine` and `IFindingRepository.SaveScanAsync`
    (add Quartz.NET when per-tenant schedules are needed; device sync uses a PeriodicTimer).
@@ -71,5 +80,5 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
 5. Defender health per device via the Defender for Endpoint API (not in Graph v1.0 managedDevice).
 6. Persist the data-protection key ring (shared store) before running more than one portal
    instance: it protects consent-link state and the sign-in cookie.
-7. Audit log table for security events (sign-ins, invitations, role changes, onboarding); today
-   they go to the application log only.
+7. Audit retention: a maintenance role allowed to purge `audit_events` older than a configured
+   period (the trigger blocks the app). Optionally ship events to a SIEM (Sentinel) as well.

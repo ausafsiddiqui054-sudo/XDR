@@ -146,6 +146,35 @@ Setup:
    `Auth:BootstrapOwners` (sign-in names in your tenant invited as Owner at startup).
 3. Sign in as a bootstrap Owner and invite everyone else under **People**.
 
+## Audit log
+
+Security events go to an append-only `audit_events` table, shown under **Audit log** to Owners
+and MSP admins (filters by period, area, outcome, tenant and text; **Export CSV** with the same
+filters).
+
+| Area | Events |
+|---|---|
+| Sign-in | Sign-ins (incl. people without access, as *Denied*), invitation accepted, sign-outs |
+| People | Invited, role changed, access removed, including refused attempts (*Denied*) and last-Owner refusals (*Failure*) |
+| Onboarding | Consent link created or cancelled; consent received, declined, from the wrong tenant, or on an expired/used link; tenant connected or verification failed (Worker) |
+| Devices | Remote action requests (currently recorded as not sent) |
+| Audit log | Each CSV export |
+
+- **Append-only in the database:** a trigger rejects `UPDATE`, `DELETE` and `TRUNCATE` on
+  `audit_events`, so entries can't be changed through the app or with its credentials. No
+  foreign keys, so entries outlive the tenants and people they mention.
+- **Not recorded on purpose:** consent callbacks with an unknown `state` (the endpoint is public,
+  so they go to the application log rather than letting anyone fill the table) and the Worker's
+  verification retries (only the final result).
+- **Actors** are stored as shown at the time ("Name <sign-in name>", "SecurePulse Worker",
+  "Client admin (not signed in to SecurePulse)") plus the portal user ID.
+- **IP addresses** are recorded for sign-in, sign-out, export and the consent callback (HTTP
+  requests). Behind a reverse proxy, enable forwarded headers so this is the client's address.
+  Actions inside an open Blazor session don't carry one.
+- If writing an audit entry fails, the action stands and the failure is logged at Critical
+  level. CSV cells that start with `=`, `+`, `-`, `@` or a tab are prefixed with `'` so
+  spreadsheets don't run them as formulas.
+
 ## How scoring works
 
 Each evaluated check is weighted by severity (Critical 10, High 6, Medium 3, Low 1, Info 0).
@@ -165,6 +194,7 @@ checks are excluded. Any open **Critical** caps the grade at C.
 | Tenant onboarding (admin consent, verification, first sync) | Built; tested with stubbed Entra; needs the app registration to exercise |
 | Worker: scheduled engine scans | Next |
 | Portal sign-in with roles (Entra ID, Owner / MSP admin / Client viewer) | Built; tested with development sign-in and the real Entra redirect |
+| Security audit log (append-only, page + CSV export) | Built; tested against PostgreSQL 16 |
 | ScubaGear adapter, PDF report | Next |
 
 ## Security notes
@@ -175,4 +205,5 @@ checks are excluded. Any open **Critical** caps the grade at C.
   can't inject PowerShell and a hung scan can't crash the portal.
 - Request **read-only** Graph permissions for assessment; remediation is a separate consent.
 - Portal access comes from SecurePulse's own user table, never from token role claims.
+- Security events are kept in an append-only audit table the app can't modify.
 - Check each engine's license before redistributing modified versions (Wazuh is GPLv2).

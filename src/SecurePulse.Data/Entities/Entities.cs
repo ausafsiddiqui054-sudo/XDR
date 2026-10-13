@@ -119,3 +119,21 @@ public sealed class PortalUserEntity
     public string? CreatedBy { get; set; }
     public DateTimeOffset? LastSignInAt { get; set; }
 }
+
+/// <summary>Append-only; a database trigger rejects UPDATE and DELETE.</summary>
+public sealed class AuditEventEntity
+{
+    public Guid Id { get; set; }
+    public DateTimeOffset OccurredAt { get; set; }
+    public string Action { get; set; } = "";
+    public string Category { get; set; } = "";
+    public AuditOutcome Outcome { get; set; }
+    public Guid? ActorUserId { get; set; }
+    public string ActorName { get; set; } = "";
+    public Guid? TenantId { get; set; }
+    public string? TargetType { get; set; }
+    public string? TargetId { get; set; }
+    public string Summary { get; set; } = "";
+    public Dictionary<string, string> Details { get; set; } = [];
+    public string? IpAddress { get; set; }
+}

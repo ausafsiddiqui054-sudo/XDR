@@ -24,6 +24,9 @@ public static class AuthEndpoints
         auth.MapPost("/logout", async (HttpContext http, IAntiforgery antiforgery) =>
         {
             if (!await antiforgery.IsRequestValidAsync(http)) return Results.BadRequest();
+            var actor = UserContext.From(http.User);
+            await http.RequestServices.GetRequiredService<Services.AuditTrail>().RecordAsync(AuditActions.SignOut, AuditOutcome.Success,
+                $"{actor.Name} signed out", actor.ClientTenantId, actor: actor, ipAddress: http.Connection.RemoteIpAddress?.ToString());
             var props = new AuthenticationProperties { RedirectUri = "/" };
             return useEntra
                 ? Results.SignOut(props, [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme])

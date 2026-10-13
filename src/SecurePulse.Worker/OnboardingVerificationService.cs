@@ -14,6 +14,7 @@ public sealed class OnboardingVerificationService(
     IOnboardingRepository requests,
     IGraphTokenProvider tokens,
     DeviceSyncService deviceSync,
+    IAuditLog audit,
     IOptions<OnboardingVerificationOptions> options,
     TimeProvider time,
     ILogger<OnboardingVerificationService> logger)
@@ -69,14 +70,14 @@ public sealed class OnboardingVerificationService(
         }
 
         if (claims.TenantId != request.EntraTenantId)
-            return await FailAsync(request, $"The token was issued for tenant {claims.TenantId}, not {request.EntraTenantId}.", final: true, ct);
+            return await FailAsync(request, $"The token was issued for tenant {claims.TenantId}, not {request.EntraTenantId}.", final: true, ct, denied: true);
 
         var notReadOnly = claims.Roles.Where(r => !AssessmentPermissions.IsReadOnly(r)).Order().ToList();
         if (notReadOnly.Count > 0)
         {
             return await FailAsync(request,
                 $"The app was granted permissions that aren't read-only ({string.Join(", ", notReadOnly)}). Assessment access must be read-only: " +
-                "remove them from the app registration, revoke them in the tenant, and consent again.", final: true, ct);
+                "remove them from the app registration, revoke them in the tenant, and consent again.", final: true, ct, denied: true);
         }
 
         var missing = AssessmentPermissions.Required.Select(p => p.Name)
@@ -102,19 +103,57 @@ public sealed class OnboardingVerificationService(
 
         logger.LogInformation("Onboarding {RequestId}: verified consent for {Tenant} ({EntraTenantId}); running first device sync",
             request.Id, tenant.DisplayName, tenant.EntraTenantId);
+        await AuditAsync(request, AuditActions.TenantConnected, AuditOutcome.Success,
+            $"Verified read-only consent and connected {tenant.DisplayName} ({request.PrimaryDomain})", tenant.Id,
+            new() { ["permissions"] = string.Join(", ", claims.Roles.Order(StringComparer.OrdinalIgnoreCase)) }, ct);
 
         // The tenant is connected either way; a failed first sync shows on the Endpoints page.
         await deviceSync.SyncTenantAsync(tenant, ct);
         return true;
     }
 
-    private async Task<bool> FailAsync(OnboardingRequest request, string error, bool final, CancellationToken ct)
+    private async Task<bool> FailAsync(OnboardingRequest request, string error, bool final, CancellationToken ct, bool denied = false)
     {
         await requests.RecordVerificationFailureAsync(request.Id, error, final, ct);
         if (final)
+        {
             logger.LogWarning("Onboarding {RequestId} for {Domain} failed: {Error}", request.Id, request.PrimaryDomain, error);
+            // Only the final outcome is audited; retries every few seconds would bury real events.
+            await AuditAsync(request, AuditActions.VerificationFailed, denied ? AuditOutcome.Denied : AuditOutcome.Failure,
+                $"Couldn't verify consent for {request.PrimaryDomain}: {error}", null, new(), ct);
+        }
         else
+        {
             logger.LogInformation("Onboarding {RequestId} for {Domain} not verified yet: {Error}", request.Id, request.PrimaryDomain, error);
+        }
         return false;
+    }
+
+    private async Task AuditAsync(OnboardingRequest request, string action, AuditOutcome outcome, string summary, Guid? tenantId,
+        Dictionary<string, string> details, CancellationToken ct)
+    {
+        details["domain"] = request.PrimaryDomain;
+        details["entraTenantId"] = request.EntraTenantId.ToString();
+        details["startedBy"] = request.StartedBy ?? "";
+        try
+        {
+            await audit.RecordAsync(new AuditEvent
+            {
+                Id = Guid.NewGuid(),
+                OccurredAt = time.GetUtcNow(),
+                Action = action,
+                Outcome = outcome,
+                ActorName = "SecurePulse Worker",
+                TenantId = tenantId,
+                TargetType = "OnboardingRequest",
+                TargetId = request.Id.ToString(),
+                Summary = summary,
+                Details = details
+            }, ct);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            logger.LogCritical(ex, "Audit write failed for {Action} ({Outcome}): {Summary}", action, outcome, summary);
+        }
     }
 }

@@ -15,6 +15,7 @@ public static class DataServiceCollectionExtensions
         services.AddSingleton<IDeviceRepository, EfDeviceRepository>();
         services.AddSingleton<IOnboardingRepository, EfOnboardingRepository>();
         services.AddSingleton<IPortalUserRepository, EfPortalUserRepository>();
+        services.AddSingleton<IAuditLog, EfAuditLog>();
         return services;
     }
 

@@ -35,7 +35,8 @@ public class OnboardingServiceTests
         public IDataProtectionProvider Protection { get; init; } = new EphemeralDataProtectionProvider();
         public FixedUser User { get; } = FixedUser.MspAdmin();
 
-        public OnboardingService Service => new(Store, Store, Resolver, Protection, Options, Time, User, NullLogger<OnboardingService>.Instance);
+        public OnboardingService Service => new(Store, Store, Resolver, Protection, Options, Time, User,
+            new AuditTrail(Store, User, Time, NullLogger<AuditTrail>.Instance), NullLogger<OnboardingService>.Instance);
         public IOnboardingRepository Requests => Store;
     }
 
@@ -386,7 +387,15 @@ public class OnboardingServiceTests
     {
         public IDataProtectionProvider Protection { get; init; } = new EphemeralDataProtectionProvider();
 
-        public OnboardingService Service => new(store, store, resolver, Protection, new OnboardingOptions { AppClientId = AppClientId },
-            new FakeTime(DateTimeOffset.UtcNow), FixedUser.Owner(), NullLogger<OnboardingService>.Instance);
+        public OnboardingService Service
+        {
+            get
+            {
+                var time = new FakeTime(DateTimeOffset.UtcNow);
+                var owner = FixedUser.Owner();
+                return new(store, store, resolver, Protection, new OnboardingOptions { AppClientId = AppClientId }, time, owner,
+                    new AuditTrail(store, owner, time, NullLogger<AuditTrail>.Instance), NullLogger<OnboardingService>.Instance);
+            }
+        }
     }
 }
