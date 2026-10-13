@@ -14,6 +14,7 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
     private readonly List<Tenant> _tenants;
     private readonly ConcurrentDictionary<Guid, IReadOnlyList<Finding>> _findings = new();
     private readonly ConcurrentDictionary<Guid, IReadOnlyList<ManagedDevice>> _devices = new();
+    private readonly ConcurrentDictionary<Guid, DeviceSyncStatus> _syncStatus = new();
 
     private sealed record Check(
         string Id, string Title, string Category, Severity Severity,
@@ -96,7 +97,16 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
         };
 
         _findings[tenant.Id] = tenant.LastScanAt is null ? [] : Generate(tenant, passRate);
-        _devices[tenant.Id] = tenant.LastScanAt is null ? [] : GenerateDevices(tenant, passRate);
+        if (tenant.LastScanAt is not null)
+        {
+            _devices[tenant.Id] = GenerateDevices(tenant, passRate);
+            var syncedAt = DateTimeOffset.UtcNow.AddMinutes(-20);
+            _syncStatus[tenant.Id] = new DeviceSyncStatus
+            {
+                TenantId = tenant.Id, LastAttemptAt = syncedAt, LastSuccessAt = syncedAt,
+                Succeeded = true, DeviceCount = _devices[tenant.Id].Count
+            };
+        }
         return tenant;
     }
 
@@ -287,6 +297,30 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
 
     public Task<ManagedDevice?> GetAsync(Guid tenantId, string deviceId, CancellationToken ct = default) =>
         Task.FromResult(_devices.TryGetValue(tenantId, out var d) ? d.FirstOrDefault(x => x.Id == deviceId) : null);
+
+    public Task SaveSyncAsync(DeviceSyncResult result, CancellationToken ct = default)
+    {
+        if (result.Succeeded)
+            _devices[result.TenantId] = result.Devices;
+        _syncStatus.TryGetValue(result.TenantId, out var previous);
+        _syncStatus[result.TenantId] = new DeviceSyncStatus
+        {
+            TenantId = result.TenantId,
+            LastAttemptAt = result.CompletedAt,
+            LastSuccessAt = result.Succeeded ? result.CompletedAt : previous?.LastSuccessAt,
+            Succeeded = result.Succeeded,
+            Error = result.Error,
+            DeviceCount = _devices.TryGetValue(result.TenantId, out var d) ? d.Count : 0
+        };
+        return Task.CompletedTask;
+    }
+
+    public Task<DeviceSyncStatus?> GetSyncStatusAsync(Guid tenantId, CancellationToken ct = default) =>
+        Task.FromResult(_syncStatus.TryGetValue(tenantId, out var s) ? s : null);
+
+    /// <summary>Everything the store holds, for seeding a real database in development.</summary>
+    public (IReadOnlyList<Tenant> Tenants, IReadOnlyList<Finding> Findings, IReadOnlyList<ManagedDevice> Devices) Snapshot() =>
+        (_tenants, _findings.Values.SelectMany(f => f).ToList(), _devices.Values.SelectMany(d => d).ToList());
 
     public Task SaveScanAsync(ScanResult result, CancellationToken ct = default)
     {

@@ -6,7 +6,8 @@ public enum DevicePlatform
     MacOS,
     iOS,
     Android,
-    Linux
+    Linux,
+    Other
 }
 
 public enum DeviceOwnership
@@ -67,4 +68,33 @@ public sealed record ManagedDevice
     public DateTimeOffset? LastSyncAt { get; init; }
 
     public IReadOnlyList<DeviceComplianceSetting> ComplianceSettings { get; init; } = [];
+}
+
+/// <summary>Output of one device inventory sync against one tenant.</summary>
+public sealed record DeviceSyncResult
+{
+    public required Guid TenantId { get; init; }
+    public required string Source { get; init; }
+    public required DateTimeOffset StartedAt { get; init; }
+    public required DateTimeOffset CompletedAt { get; init; }
+
+    /// <summary>The tenant's full inventory. Replaces what was stored when the sync succeeded.</summary>
+    public required IReadOnlyList<ManagedDevice> Devices { get; init; }
+
+    public bool Succeeded { get; init; } = true;
+    public string? Error { get; init; }
+}
+
+/// <summary>Latest device sync outcome for a tenant.</summary>
+public sealed record DeviceSyncStatus
+{
+    public required Guid TenantId { get; init; }
+    public required DateTimeOffset LastAttemptAt { get; init; }
+
+    /// <summary>When the stored inventory was last refreshed. Null if no sync has succeeded yet.</summary>
+    public DateTimeOffset? LastSuccessAt { get; init; }
+
+    public required bool Succeeded { get; init; }
+    public string? Error { get; init; }
+    public int DeviceCount { get; init; }
 }

@@ -25,8 +25,15 @@ public sealed record ComplianceBreakdown(string Label, int Compliant, int InGrac
     }
 }
 
-public sealed record EndpointFleet(IReadOnlyList<DeviceRow> Devices, DateTimeOffset AsOf)
+/// <param name="AsOf">Reference time for staleness checks.</param>
+/// <param name="Syncs">Latest device sync outcome per tenant that has one.</param>
+public sealed record EndpointFleet(IReadOnlyList<DeviceRow> Devices, DateTimeOffset AsOf, IReadOnlyList<(Tenant Tenant, DeviceSyncStatus Status)> Syncs)
 {
+    /// <summary>Most recent successful sync across tenants, i.e. how fresh the newest inventory is.</summary>
+    public DateTimeOffset? LastSyncedAt => Syncs.Max(s => s.Status.LastSuccessAt);
+
+    public IEnumerable<(Tenant Tenant, DeviceSyncStatus Status)> FailedSyncs => Syncs.Where(s => !s.Status.Succeeded);
+
     public ComplianceBreakdown Overall => ComplianceBreakdown.Of("All devices", Devices.Select(r => r.Device));
 
     public int NotEncrypted => Devices.Count(r => r.Device.IsEncrypted == false);
@@ -55,9 +62,14 @@ public sealed class EndpointService(ITenantRepository tenants, IDeviceRepository
     public async Task<EndpointFleet> GetFleetAsync(CancellationToken ct = default)
     {
         var rows = new List<DeviceRow>();
+        var syncs = new List<(Tenant, DeviceSyncStatus)>();
         foreach (var tenant in await tenants.GetAllAsync(ct))
+        {
             rows.AddRange((await devices.GetForTenantAsync(tenant.Id, ct)).Select(d => new DeviceRow(tenant, d)));
-        return new EndpointFleet(rows, DateTimeOffset.UtcNow);
+            if (await devices.GetSyncStatusAsync(tenant.Id, ct) is { } status)
+                syncs.Add((tenant, status));
+        }
+        return new EndpointFleet(rows, DateTimeOffset.UtcNow, syncs);
     }
 
     public async Task<DeviceDetail?> GetDeviceAsync(Guid tenantId, string deviceId, CancellationToken ct = default)

@@ -11,7 +11,9 @@
     </div>
     @if (_fleet is not null)
     {
-        <MudText Typo="Typo.caption" Color="Color.Secondary">Inventory as of @_fleet.AsOf.ToLocalTime().ToString("d MMM, HH:mm")</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary">
+            @(_fleet.LastSyncedAt is { } synced ? $"Last synced {Dashboard.Ago(synced).ToLowerInvariant()}" : "Not synced yet")
+        </MudText>
     }
 </MudStack>
 
@@ -22,6 +24,30 @@
 else
 {
     var overall = _fleet.Overall;
+
+    @foreach (var (tenant, status) in _fleet.FailedSyncs)
+    {
+        <MudAlert Severity="MudBlazor.Severity.Warning" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px">
+            <b>Device sync failed for @tenant.DisplayName</b> @Dashboard.Ago(status.LastAttemptAt).ToLowerInvariant().
+            @(status.LastSuccessAt is { } ok ? $"Showing the inventory from {Dashboard.Ago(ok).ToLowerInvariant()}." : "No inventory has been read yet.")
+            <MudText Typo="Typo.caption" Class="d-block mt-1">@status.Error</MudText>
+        </MudAlert>
+    }
+
+    @if (_fleet.Devices.Count == 0)
+    {
+        <MudPaper Class="sp-card pa-8" Elevation="0" Outlined="true">
+            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                <span class="sp-icon-badge sp-icon-badge-lg"><MudIcon Icon="@Icons.Material.Rounded.Devices" Size="Size.Large" /></span>
+                <MudText Typo="Typo.h6">No devices yet</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Style="max-width:520px">
+                    The Worker reads Intune devices for every tenant that has granted consent and has a certificate configured.
+                    They appear here after its next sync.
+                </MudText>
+            </MudStack>
+        </MudPaper>
+        return;
+    }
 
     <MudGrid Spacing="4" Class="mb-4">
         <MudItem xs="6" md="3">

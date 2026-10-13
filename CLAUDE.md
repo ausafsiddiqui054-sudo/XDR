@@ -13,10 +13,13 @@ Wazuh, GoPhish, n8n-style remediation (later phases). Read README.md for layout 
 - MudBlazor 8 with the theme in `src/SecurePulse.Web/Theme/SecurePulseTheme.cs`
   (Material 3 Expressive look: tonal surfaces, 16–24px radii, Roboto Flex)
 - PowerShell 7 engines launched out of process from .NET
+- PostgreSQL via EF Core (`SecurePulse.Data`); repositories use `IDbContextFactory`
+- `SecurePulse.Worker` (generic host) runs background jobs; the portal never calls Graph
 
 ## Architecture rules
 1. Every engine implements `IScanEngine` and returns normalized `Finding`s. Never let
-   engine-specific shapes leak past `SecurePulse.Engines`.
+   engine-specific shapes leak past `SecurePulse.Engines`. Likewise Graph shapes stay inside
+   `SecurePulse.Intune`, which returns normalized `ManagedDevice`s via `IDeviceInventorySource`.
 2. Engines run out of process. Pass arguments with `ProcessStartInfo.ArgumentList`,
    never string concatenation. Validate tenant inputs (GUIDs, thumbprints) before use.
 3. No secrets in code, config or the database. Certificates live in a vault/cert store;
@@ -35,16 +38,21 @@ snackbars. Do the same alias in any .cs file that imports both namespaces.
 ```bash
 dotnet build SecurePulse.slnx
 dotnet run --project src/SecurePulse.Web
-dotnet test SecurePulse.slnx
+dotnet run --project src/SecurePulse.Worker   # needs ConnectionStrings:SecurePulse
+dotnet test SecurePulse.slnx                  # set SECUREPULSE_TEST_POSTGRES for DB tests
+dotnet tool restore && dotnet ef migrations add <Name> --project src/SecurePulse.Data
 ```
 
+Never edit an applied migration; add a new one. Enums are stored as strings.
+
 ## Next steps (in order)
-1. `SecurePulse.Data`: EF Core + PostgreSQL repositories replacing `SampleDataStore`.
-2. `SecurePulse.Worker`: scheduled scans (Hangfire or Quartz.NET) calling `IScanEngine`.
-3. Multi-tenant Entra app + admin-consent onboarding flow (Microsoft.Identity.Web),
-   portal login with roles (Owner, MSP admin, Client viewer).
-4. ScubaGear adapter (check current OS/PowerShell requirements; may need a Windows worker).
-5. Branded PDF report (QuestPDF; check its license tier).
-6. Endpoints: Worker syncs Intune devices into `IDeviceRepository` via read-only Graph
-   (`DeviceManagementManagedDevices.Read.All`). Remote actions (sync/restart/retire/wipe)
-   stay disabled until the approval queue and audit log exist; the UI dialog is already built.
+1. Worker: scheduled engine scans calling `IScanEngine` and `IFindingRepository.SaveScanAsync`
+   (add Quartz.NET when per-tenant schedules are needed; device sync uses a PeriodicTimer).
+2. Multi-tenant Entra app + admin-consent onboarding flow (Microsoft.Identity.Web),
+   portal login with roles (Owner, MSP admin, Client viewer). Onboarding writes tenants
+   (`ITenantRepository` is read-only today).
+3. ScubaGear adapter (check current OS/PowerShell requirements; may need a Windows worker).
+4. Branded PDF report (QuestPDF; check its license tier).
+5. Device remote actions (sync/restart/retire/wipe): approval queue + audit log, then a
+   separate write-consent Graph client. The UI dialog is built and disabled until then.
+6. Defender health per device via the Defender for Endpoint API (not in Graph v1.0 managedDevice).

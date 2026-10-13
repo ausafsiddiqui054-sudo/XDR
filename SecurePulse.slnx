@@ -1,9 +1,12 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/SecurePulse.Core/SecurePulse.Core.csproj" />
+    <Project Path="src/SecurePulse.Data/SecurePulse.Data.csproj" />
     <Project Path="src/SecurePulse.Engines/SecurePulse.Engines.csproj" />
+    <Project Path="src/SecurePulse.Intune/SecurePulse.Intune.csproj" />
     <Project Path="src/SecurePulse.Reporting/SecurePulse.Reporting.csproj" />
     <Project Path="src/SecurePulse.Web/SecurePulse.Web.csproj" />
+    <Project Path="src/SecurePulse.Worker/SecurePulse.Worker.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SecurePulse.Tests/SecurePulse.Tests.csproj" />

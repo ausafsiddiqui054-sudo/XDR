@@ -1,0 +1,62 @@
+using System.Text.Json.Serialization;
+
+namespace SecurePulse.Intune;
+
+// Subsets of Microsoft Graph v1.0 resources. Internal: Graph shapes never leave this project.
+
+internal sealed class GraphPage<T>
+{
+    [JsonPropertyName("value")] public List<T> Value { get; set; } = [];
+    [JsonPropertyName("@odata.nextLink")] public string? NextLink { get; set; }
+}
+
+/// <summary>https://learn.microsoft.com/graph/api/resources/intune-devices-manageddevice</summary>
+internal sealed class GraphManagedDevice
+{
+    public string? Id { get; set; }
+    public string? DeviceName { get; set; }
+    public string? UserDisplayName { get; set; }
+    public string? UserPrincipalName { get; set; }
+    public string? OperatingSystem { get; set; }
+    public string? OsVersion { get; set; }
+    public string? Manufacturer { get; set; }
+    public string? Model { get; set; }
+    public string? SerialNumber { get; set; }
+    public string? ManagedDeviceOwnerType { get; set; }
+    public string? ComplianceState { get; set; }
+    public bool? IsEncrypted { get; set; }
+    public DateTimeOffset? EnrolledDateTime { get; set; }
+    public DateTimeOffset? LastSyncDateTime { get; set; }
+
+    /// <summary>The $select list matching the properties above.</summary>
+    public const string Select =
+        "id,deviceName,userDisplayName,userPrincipalName,operatingSystem,osVersion,manufacturer,model," +
+        "serialNumber,managedDeviceOwnerType,complianceState,isEncrypted,enrolledDateTime,lastSyncDateTime";
+}
+
+/// <summary>https://learn.microsoft.com/graph/api/resources/intune-devices-devicecompliancepolicystate</summary>
+internal sealed class GraphCompliancePolicyState
+{
+    public string? DisplayName { get; set; }
+    public string? State { get; set; }
+    public List<GraphCompliancePolicySettingState> SettingStates { get; set; } = [];
+}
+
+internal sealed class GraphCompliancePolicySettingState
+{
+    public string? Setting { get; set; }
+    public string? SettingName { get; set; }
+    public string? State { get; set; }
+    public string? ErrorDescription { get; set; }
+}
+
+internal sealed class GraphErrorResponse
+{
+    public GraphError? Error { get; set; }
+}
+
+internal sealed class GraphError
+{
+    public string? Code { get; set; }
+    public string? Message { get; set; }
+}

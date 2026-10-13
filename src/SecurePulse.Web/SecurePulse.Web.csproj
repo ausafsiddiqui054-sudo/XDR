@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <UserSecretsId>securepulse-web</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -13,6 +14,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SecurePulse.Core\SecurePulse.Core.csproj" />
+    <ProjectReference Include="..\SecurePulse.Data\SecurePulse.Data.csproj" />
     <ProjectReference Include="..\SecurePulse.Reporting\SecurePulse.Reporting.csproj" />
   </ItemGroup>
 
