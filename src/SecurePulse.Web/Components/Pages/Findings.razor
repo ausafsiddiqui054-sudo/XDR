@@ -15,7 +15,7 @@ else
     <MudPaper Class="sp-card pa-4 mb-4" Elevation="0" Outlined="true">
         <MudGrid Spacing="3">
             <MudItem xs="12" md="4">
-                <MudSelect T="Guid?" Label="Tenant" @bind-Value="TenantId" Clearable="true" Variant="Variant.Outlined" Dense="true">
+                <MudSelect T="Guid?" Label="Tenant" @bind-Value="TenantId" Clearable="true" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
                     @foreach (var t in _portfolio.Scanned)
                     {
                         <MudSelectItem T="Guid?" Value="@t.Tenant.Id">@t.Tenant.DisplayName</MudSelectItem>
@@ -23,7 +23,7 @@ else
                 </MudSelect>
             </MudItem>
             <MudItem xs="6" md="2">
-                <MudSelect T="Severity?" Label="Severity" @bind-Value="_severity" Clearable="true" Variant="Variant.Outlined" Dense="true">
+                <MudSelect T="Severity?" Label="Severity" @bind-Value="_severity" Clearable="true" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
                     @foreach (var s in Enum.GetValues<Severity>().Reverse())
                     {
                         <MudSelectItem T="Severity?" Value="@s">@s</MudSelectItem>
@@ -31,7 +31,7 @@ else
                 </MudSelect>
             </MudItem>
             <MudItem xs="6" md="2">
-                <MudSelect T="FindingStatus?" Label="Status" @bind-Value="_status" Clearable="true" Variant="Variant.Outlined" Dense="true">
+                <MudSelect T="FindingStatus?" Label="Status" @bind-Value="_status" Clearable="true" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
                     @foreach (var s in Enum.GetValues<FindingStatus>())
                     {
                         <MudSelectItem T="FindingStatus?" Value="@s">@SecurePulseTheme.Label(s)</MudSelectItem>
@@ -39,7 +39,7 @@ else
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" md="4">
-                <MudTextField T="string" @bind-Value="_search" Label="Search" Variant="Variant.Outlined" Dense="true" Immediate="true"
+                <MudTextField T="string" @bind-Value="_search" Label="Search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true"
                               Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Clearable="true" />
             </MudItem>
         </MudGrid>

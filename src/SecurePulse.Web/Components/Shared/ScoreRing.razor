@@ -1,6 +1,8 @@
 <div class="sp-score-ring" role="img" aria-label="@($"Security score {Score} out of 100, grade {Grade}")">
-    <MudProgressCircular Value="@Score" Min="0" Max="100" StrokeWidth="12" Rounded="true"
-                         Color="@SecurePulseTheme.ColorOfScore(Score)" Style="width:168px;height:168px" />
+    @* MudProgressCircular draws no track, so a full ring sits underneath as one. *@
+    <MudProgressCircular Class="sp-score-track" Value="100" Min="0" Max="100" StrokeWidth="5" />
+    <MudProgressCircular Value="@Score" Min="0" Max="100" StrokeWidth="5" Rounded="true"
+                         Color="@SecurePulseTheme.ColorOfScore(Score)" />
     <div class="sp-score-label">
         <span class="sp-score-value">@Score</span>
         <MudText Typo="Typo.caption" Color="Color.Secondary">Grade @Grade</MudText>

@@ -12,6 +12,17 @@
     margin: 0 auto;
 }
 
+.sp-score-ring .mud-progress-circular {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.sp-score-ring .sp-score-track {
+    color: var(--mud-palette-lines-default);
+}
+
 .sp-score-ring .sp-score-label {
     position: absolute;
     inset: 0;
