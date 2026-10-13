@@ -18,10 +18,10 @@ SecurePulse.slnx
     ├── SecurePulse.Engines     Engine adapters. Maester: out-of-process runner + JSON parser
     ├── SecurePulse.Intune      Intune device inventory over Microsoft Graph (certificate auth)
     ├── SecurePulse.Reporting   RiskScoreCalculator (0–100 score, grade, top risks)
-    ├── SecurePulse.Web         Blazor Server portal (MudBlazor, M3 Expressive-style theme)
-    └── SecurePulse.Worker      Background service: scheduled Intune device sync
+    ├── SecurePulse.Web         Blazor Server portal (MudBlazor, M3 Expressive-style theme), consent links
+    └── SecurePulse.Worker      Background service: consent verification, scheduled Intune device sync
 tests/
-    └── SecurePulse.Tests       xUnit: parser, scoring, Graph client, sync, PostgreSQL repositories
+    └── SecurePulse.Tests       xUnit: parser, scoring, Graph client, onboarding, sync, PostgreSQL repositories
 ```
 
 ## Run it
@@ -74,6 +74,40 @@ To run the PostgreSQL repository tests, point `SECUREPULSE_TEST_POSTGRES` at a s
 (no `Database=`) with a role that can create databases. Each test class creates and drops its
 own database. Without the variable those tests are reported as skipped.
 
+## Connecting a client tenant
+
+Tenants → **Connect tenant** creates an Entra admin-consent link for the client's domain. Send
+it to the client's Global Administrator (or open it yourself if you are one). After they
+approve, Entra redirects to `/onboarding/consent-callback`, and the Worker verifies the consent
+before the tenant counts as connected:
+
+1. The portal resolves the domain to its Entra tenant ID through the public OpenID discovery
+   document, and builds a link bound to that tenant with a random, single-use `state` (stored
+   only as a SHA-256 hash; an encrypted copy lets the link be shown again). Links expire after
+   `Onboarding:LinkLifetime` (7 days).
+2. The callback accepts consent only for a known, unexpired state from the expected tenant.
+   It never connects anything by itself, because its query string comes from a browser.
+3. The Worker gets an app-only token for the tenant with its certificate and reads the granted
+   permissions (`roles`). It requires every permission in `AssessmentPermissions.Required` and
+   rejects anything that isn't read-only. New consent can take minutes to propagate, so it
+   retries for `Onboarding:VerificationWindow` (30 minutes).
+4. On success it creates the tenant (or updates the existing one on re-consent) with the
+   Worker's certificate thumbprint as `CredentialReference`, then runs the first device sync.
+   The Connect page updates live through each step.
+
+App registration setup (one multi-tenant app):
+
+- **Supported account types:** accounts in any organizational directory (multi-tenant).
+- **Redirect URI (Web):** `https://<portal>/onboarding/consent-callback` (shown on the Connect page).
+- **API permissions (Application):** the read-only Graph permissions above. Nothing with Write,
+  Send or FullControl; verification fails if any are granted.
+- **Certificates:** upload the public key; install the certificate with its private key only on
+  the Worker. Portal: `Onboarding:AppClientId`. Worker: `Intune:AppClientId` and
+  `Onboarding:CertificateThumbprint`.
+
+The portal has no sign-in yet (next step), so don't expose it publicly. The consent result
+page uses a layout without navigation, but every other page is open.
+
 ## How scoring works
 
 Each evaluated check is weighted by severity (Critical 10, High 6, Medium 3, Low 1, Info 0).
@@ -90,8 +124,9 @@ checks are excluded. Any open **Critical** caps the grade at C.
 | Endpoints (Intune device inventory, device detail) | Built; remote actions disabled until approval + audit log exist |
 | PostgreSQL persistence (`SecurePulse.Data`) | Built; tested against PostgreSQL 16 |
 | Worker: Intune device sync | Built and tested against stubbed Graph; needs a real tenant + certificate to exercise |
+| Tenant onboarding (admin consent, verification, first sync) | Built; tested with stubbed Entra; needs the app registration to exercise |
 | Worker: scheduled engine scans | Next |
-| Multi-tenant admin-consent onboarding | Next |
+| Portal sign-in with roles | Next |
 | ScubaGear adapter, PDF report | Next |
 
 ## Security notes

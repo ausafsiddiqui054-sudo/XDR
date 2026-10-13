@@ -124,4 +124,24 @@ internal static class EntityMapping
         Error = e.Error,
         DeviceCount = e.DeviceCount
     };
+
+    public static OnboardingRequest ToModel(this OnboardingRequestEntity e) => new()
+    {
+        Id = e.Id,
+        DisplayName = e.DisplayName,
+        PrimaryDomain = e.PrimaryDomain,
+        PartnerName = e.PartnerName,
+        Industry = e.Industry,
+        EntraTenantId = e.EntraTenantId,
+        Status = e.Status,
+        CreatedAt = e.CreatedAt,
+        ExpiresAt = e.ExpiresAt,
+        ConsentReceivedAt = e.ConsentReceivedAt,
+        CompletedAt = e.CompletedAt,
+        TenantId = e.TenantId,
+        LastError = e.LastError,
+        GrantedPermissions = e.GrantedPermissions,
+        VerificationAttempts = e.VerificationAttempts,
+        ProtectedState = e.ProtectedState
+    };
 }

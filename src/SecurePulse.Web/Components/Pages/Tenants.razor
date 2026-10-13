@@ -1,7 +1,8 @@
 @page "/tenants"
 @inject PostureService Posture
 @inject NavigationManager Nav
-@inject ISnackbar Snackbar
+@inject SecurePulse.Web.Services.Onboarding.OnboardingService Onboarding
+@inject TimeProvider Time
 
 <PageTitle>Tenants · SecurePulse</PageTitle>
 
@@ -10,7 +11,7 @@
         <MudText Typo="Typo.h4">Tenants</MudText>
         <MudText Typo="Typo.body2" Color="Color.Secondary">Client Microsoft 365 tenants and their consent status</MudText>
     </div>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add" OnClick="Connect">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add" Href="tenants/connect">
         Connect tenant
     </MudButton>
 </MudStack>
@@ -21,7 +22,42 @@
 }
 else
 {
-    <MudGrid Spacing="4">
+    @if (_pending.Count > 0)
+    {
+        var now = Time.GetUtcNow();
+        <MudText Typo="Typo.overline" Color="Color.Secondary">Connections in progress</MudText>
+        <MudGrid Spacing="4" Class="mb-6 mt-0">
+            @foreach (var r in _pending)
+            {
+                <MudItem xs="12" sm="6" lg="4">
+                    <MudPaper Class="sp-card sp-lift pa-5 sp-clickable-row" Elevation="0" Outlined="true"
+                              @onclick="@(() => Nav.NavigateTo($"tenants/connect/{r.Id}"))">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start">
+                            <div style="min-width:0">
+                                <MudText Typo="Typo.subtitle1" Style="font-weight:600">@r.DisplayName</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@r.PrimaryDomain</MudText>
+                            </div>
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@SecurePulseTheme.ColorOf(r, now)">
+                                @SecurePulseTheme.Label(r, now)
+                            </MudChip>
+                        </MudStack>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-3">
+                            @(r.Status switch
+                            {
+                                _ when r.IsExpired(now) => "Create a new link to try again.",
+                                OnboardingStatus.AwaitingConsent => r.LastError ?? $"Link expires {r.ExpiresAt.ToLocalTime():d MMM}.",
+                                OnboardingStatus.Verifying => "Admin approved; confirming access.",
+                                _ => r.LastError ?? "Verification failed."
+                            })
+                        </MudText>
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+        <MudText Typo="Typo.overline" Color="Color.Secondary">Connected and pending tenants</MudText>
+    }
+
+    <MudGrid Spacing="4" Class="mt-0">
         @foreach (var t in _portfolio.Tenants)
         {
             <MudItem xs="12" sm="6" lg="4">
@@ -69,10 +105,13 @@ else
 @code {
     private PortfolioPosture? _portfolio;
 
-    protected override async Task OnInitializedAsync() => _portfolio = await Posture.GetPortfolioAsync();
+    private IReadOnlyList<OnboardingRequest> _pending = [];
 
-    private void Connect() =>
-        Snackbar.Add("The admin-consent onboarding flow is the next build step.", MudBlazor.Severity.Info);
+    protected override async Task OnInitializedAsync()
+    {
+        _portfolio = await Posture.GetPortfolioAsync();
+        _pending = await Onboarding.GetOpenAsync();
+    }
 
     private static string ConsentLabel(TenantConsentState s) => s switch
     {

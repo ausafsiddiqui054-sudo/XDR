@@ -9,8 +9,10 @@ namespace SecurePulse.Web.Services;
 /// portal can be designed and demoed before real scans exist. Replace with EF Core
 /// repositories once the Worker starts writing real scan results.
 /// </summary>
-public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDeviceRepository
+public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDeviceRepository, IOnboardingRepository
 {
+    private readonly Lock _gate = new();
+    private readonly Dictionary<Guid, (OnboardingRequest Request, string StateHash)> _onboarding = [];
     private readonly List<Tenant> _tenants;
     private readonly ConcurrentDictionary<Guid, IReadOnlyList<Finding>> _findings = new();
     private readonly ConcurrentDictionary<Guid, IReadOnlyList<ManagedDevice>> _devices = new();
@@ -280,11 +282,15 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
         return devices;
     }
 
-    public Task<IReadOnlyList<Tenant>> GetAllAsync(CancellationToken ct = default) =>
-        Task.FromResult<IReadOnlyList<Tenant>>(_tenants);
+    public Task<IReadOnlyList<Tenant>> GetAllAsync(CancellationToken ct = default)
+    {
+        lock (_gate) return Task.FromResult<IReadOnlyList<Tenant>>(_tenants.ToList());
+    }
 
-    public Task<Tenant?> GetAsync(Guid id, CancellationToken ct = default) =>
-        Task.FromResult(_tenants.FirstOrDefault(t => t.Id == id));
+    public Task<Tenant?> GetAsync(Guid id, CancellationToken ct = default)
+    {
+        lock (_gate) return Task.FromResult(_tenants.FirstOrDefault(t => t.Id == id));
+    }
 
     public Task<IReadOnlyList<Finding>> GetForTenantAsync(Guid tenantId, CancellationToken ct = default) =>
         Task.FromResult(_findings.TryGetValue(tenantId, out var f) ? f : (IReadOnlyList<Finding>)[]);
@@ -317,6 +323,118 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
 
     public Task<DeviceSyncStatus?> GetSyncStatusAsync(Guid tenantId, CancellationToken ct = default) =>
         Task.FromResult(_syncStatus.TryGetValue(tenantId, out var s) ? s : null);
+
+    // --- Onboarding (in memory; mirrors EfOnboardingRepository) ------------------------------
+
+    public Task AddAsync(OnboardingRequest request, string stateHash, CancellationToken ct = default)
+    {
+        lock (_gate) _onboarding.Add(request.Id, (request, stateHash));
+        return Task.CompletedTask;
+    }
+
+    Task<OnboardingRequest?> IOnboardingRepository.GetAsync(Guid id, CancellationToken ct)
+    {
+        lock (_gate) return Task.FromResult(_onboarding.TryGetValue(id, out var e) ? e.Request : null);
+    }
+
+    public Task<OnboardingRequest?> FindByStateHashAsync(string stateHash, CancellationToken ct = default)
+    {
+        lock (_gate) return Task.FromResult<OnboardingRequest?>(_onboarding.Values.FirstOrDefault(e => e.StateHash == stateHash).Request);
+    }
+
+    public Task<IReadOnlyList<OnboardingRequest>> GetOpenAsync(CancellationToken ct = default)
+    {
+        lock (_gate)
+            return Task.FromResult<IReadOnlyList<OnboardingRequest>>(_onboarding.Values.Select(e => e.Request)
+                .Where(r => r.Status is OnboardingStatus.AwaitingConsent or OnboardingStatus.Verifying or OnboardingStatus.Failed)
+                .OrderByDescending(r => r.CreatedAt).ToList());
+    }
+
+    public Task<IReadOnlyList<OnboardingRequest>> GetVerifyingAsync(CancellationToken ct = default)
+    {
+        lock (_gate)
+            return Task.FromResult<IReadOnlyList<OnboardingRequest>>(_onboarding.Values.Select(e => e.Request)
+                .Where(r => r.Status == OnboardingStatus.Verifying).ToList());
+    }
+
+    public Task<bool> MarkConsentReceivedAsync(Guid id, DateTimeOffset at, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            if (!_onboarding.TryGetValue(id, out var e) || e.Request.Status != OnboardingStatus.AwaitingConsent || e.Request.ExpiresAt <= at)
+                return Task.FromResult(false);
+            _onboarding[id] = (e.Request with { Status = OnboardingStatus.Verifying, ConsentReceivedAt = at, LastError = null }, e.StateHash);
+            return Task.FromResult(true);
+        }
+    }
+
+    public Task SetErrorAsync(Guid id, string error, CancellationToken ct = default)
+    {
+        Update(id, r => r with { LastError = error });
+        return Task.CompletedTask;
+    }
+
+    public Task RecordVerificationFailureAsync(Guid id, string error, bool final, CancellationToken ct = default)
+    {
+        Update(id, r => r.Status != OnboardingStatus.Verifying ? r : r with
+        {
+            LastError = error,
+            Status = final ? OnboardingStatus.Failed : OnboardingStatus.Verifying,
+            VerificationAttempts = r.VerificationAttempts + 1
+        });
+        return Task.CompletedTask;
+    }
+
+    public Task<Tenant> CompleteAsync(Guid id, Tenant tenant, IReadOnlyList<string> grantedPermissions, DateTimeOffset at, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            if (!_onboarding.TryGetValue(id, out var e) || e.Request.Status != OnboardingStatus.Verifying)
+                throw new InvalidOperationException($"Onboarding request {id} is not verifying.");
+
+            var index = _tenants.FindIndex(t => t.EntraTenantId == tenant.EntraTenantId);
+            Tenant stored;
+            if (index < 0)
+            {
+                stored = tenant;
+                _tenants.Add(stored);
+            }
+            else
+            {
+                var existing = _tenants[index];
+                stored = existing with
+                {
+                    CredentialReference = tenant.CredentialReference,
+                    ConsentState = existing.ConsentState == TenantConsentState.RemediationGranted ? existing.ConsentState : tenant.ConsentState
+                };
+                _tenants[index] = stored;
+            }
+
+            _onboarding[id] = (e.Request with
+            {
+                Status = OnboardingStatus.Completed, CompletedAt = at, TenantId = stored.Id, LastError = null,
+                GrantedPermissions = grantedPermissions, ProtectedState = null
+            }, e.StateHash);
+            return Task.FromResult(stored);
+        }
+    }
+
+    public Task CancelAsync(Guid id, CancellationToken ct = default)
+    {
+        Update(id, r => r.Status is OnboardingStatus.AwaitingConsent or OnboardingStatus.Failed
+            ? r with { Status = OnboardingStatus.Cancelled, ProtectedState = null }
+            : r);
+        return Task.CompletedTask;
+    }
+
+    private void Update(Guid id, Func<OnboardingRequest, OnboardingRequest> change)
+    {
+        lock (_gate)
+        {
+            if (_onboarding.TryGetValue(id, out var e))
+                _onboarding[id] = (change(e.Request), e.StateHash);
+        }
+    }
 
     /// <summary>Everything the store holds, for seeding a real database in development.</summary>
     public (IReadOnlyList<Tenant> Tenants, IReadOnlyList<Finding> Findings, IReadOnlyList<ManagedDevice> Devices) Snapshot() =>

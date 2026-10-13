@@ -45,14 +45,22 @@ dotnet tool restore && dotnet ef migrations add <Name> --project src/SecurePulse
 
 Never edit an applied migration; add a new one. Enums are stored as strings.
 
+## Onboarding invariants
+- A consent callback alone never connects a tenant: the Worker must get a real app-only token
+  and check its `roles` (all of `AssessmentPermissions.Required`, nothing outside
+  `AssessmentPermissions.IsReadOnly`).
+- Consent links are single-use, expiring, bound to the domain's Entra tenant; only a SHA-256
+  of `state` is stored for lookup. The portal holds no certificate and never calls Graph.
+
 ## Next steps (in order)
-1. Worker: scheduled engine scans calling `IScanEngine` and `IFindingRepository.SaveScanAsync`
+1. Portal sign-in (Microsoft.Identity.Web) with roles: Owner, MSP admin, Client viewer. Until
+   then the portal must not be exposed publicly. Record who started each onboarding.
+2. Worker: scheduled engine scans calling `IScanEngine` and `IFindingRepository.SaveScanAsync`
    (add Quartz.NET when per-tenant schedules are needed; device sync uses a PeriodicTimer).
-2. Multi-tenant Entra app + admin-consent onboarding flow (Microsoft.Identity.Web),
-   portal login with roles (Owner, MSP admin, Client viewer). Onboarding writes tenants
-   (`ITenantRepository` is read-only today).
+   Add the Maester permissions to `AssessmentPermissions.Required` when scans go live.
 3. ScubaGear adapter (check current OS/PowerShell requirements; may need a Windows worker).
 4. Branded PDF report (QuestPDF; check its license tier).
 5. Device remote actions (sync/restart/retire/wipe): approval queue + audit log, then a
-   separate write-consent Graph client. The UI dialog is built and disabled until then.
+   separate write-consent app and Graph client. The UI dialog is built and disabled until then.
 6. Defender health per device via the Defender for Endpoint API (not in Graph v1.0 managedDevice).
+7. Persist the data-protection key ring (shared store) before running more than one portal instance.

@@ -6,13 +6,14 @@ namespace SecurePulse.Data;
 
 public static class DataServiceCollectionExtensions
 {
-    /// <summary>Registers the PostgreSQL-backed tenant, finding and device repositories.</summary>
+    /// <summary>Registers the PostgreSQL-backed repositories.</summary>
     public static IServiceCollection AddSecurePulseData(this IServiceCollection services, string connectionString)
     {
         services.AddPooledDbContextFactory<SecurePulseDbContext>(o => o.UseNpgsql(connectionString));
         services.AddSingleton<ITenantRepository, EfTenantRepository>();
         services.AddSingleton<IFindingRepository, EfFindingRepository>();
         services.AddSingleton<IDeviceRepository, EfDeviceRepository>();
+        services.AddSingleton<IOnboardingRepository, EfOnboardingRepository>();
         return services;
     }
 

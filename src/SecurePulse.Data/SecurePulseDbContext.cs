@@ -9,6 +9,7 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
     public DbSet<FindingEntity> Findings => Set<FindingEntity>();
     public DbSet<ManagedDeviceEntity> Devices => Set<ManagedDeviceEntity>();
     public DbSet<DeviceSyncStatusEntity> DeviceSyncStatuses => Set<DeviceSyncStatusEntity>();
+    public DbSet<OnboardingRequestEntity> OnboardingRequests => Set<OnboardingRequestEntity>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder builder)
     {
@@ -60,6 +61,22 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
             e.HasKey(x => x.TenantId);
             e.Property(x => x.Error).HasMaxLength(2000);
             e.HasOne<TenantEntity>().WithOne().HasForeignKey<DeviceSyncStatusEntity>(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<OnboardingRequestEntity>(e =>
+        {
+            e.ToTable("onboarding_requests");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.DisplayName).HasMaxLength(256);
+            e.Property(x => x.PrimaryDomain).HasMaxLength(256);
+            e.Property(x => x.PartnerName).HasMaxLength(256);
+            e.Property(x => x.Industry).HasMaxLength(128);
+            e.Property(x => x.StateHash).HasMaxLength(64);
+            e.Property(x => x.ProtectedState).HasMaxLength(1024);
+            e.Property(x => x.LastError).HasMaxLength(2000);
+            e.HasIndex(x => x.StateHash).IsUnique();
+            e.HasIndex(x => new { x.Status, x.CreatedAt });
+            e.HasOne<TenantEntity>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

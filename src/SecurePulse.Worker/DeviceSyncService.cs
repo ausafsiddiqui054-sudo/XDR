@@ -27,29 +27,7 @@ public sealed class DeviceSyncService(
             new ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, options.Value.MaxParallelTenants), CancellationToken = ct },
             async (tenant, token) =>
             {
-                DeviceSyncResult result;
-                try
-                {
-                    result = await source.GetDevicesAsync(tenant, token);
-                }
-                catch (Exception ex) when (!token.IsCancellationRequested)
-                {
-                    logger.LogError(ex, "{Source} sync for {Tenant} ({TenantId}) threw", source.Name, tenant.DisplayName, tenant.Id);
-                    result = Failure(tenant, $"Unexpected error: {ex.Message}");
-                }
-
-                try
-                {
-                    await devices.SaveSyncAsync(result, token);
-                }
-                catch (Exception ex) when (!token.IsCancellationRequested)
-                {
-                    logger.LogError(ex, "Saving {Source} sync for {Tenant} ({TenantId}) failed", source.Name, tenant.DisplayName, tenant.Id);
-                    Interlocked.Increment(ref failed);
-                    return;
-                }
-
-                if (result.Succeeded) Interlocked.Increment(ref synced);
+                if (await SyncTenantAsync(tenant, token)) Interlocked.Increment(ref synced);
                 else Interlocked.Increment(ref failed);
             });
 
@@ -57,6 +35,33 @@ public sealed class DeviceSyncService(
         logger.LogInformation("{Source} device sync pass: {Synced} synced, {Failed} failed, {Skipped} not onboarded, of {Tenants} tenants",
             source.Name, summary.Synced, summary.Failed, summary.Skipped, summary.Tenants);
         return summary;
+    }
+
+    /// <summary>Syncs one tenant and stores the outcome. Returns true if the inventory was refreshed.</summary>
+    public async Task<bool> SyncTenantAsync(Tenant tenant, CancellationToken ct = default)
+    {
+        DeviceSyncResult result;
+        try
+        {
+            result = await source.GetDevicesAsync(tenant, ct);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            logger.LogError(ex, "{Source} sync for {Tenant} ({TenantId}) threw", source.Name, tenant.DisplayName, tenant.Id);
+            result = Failure(tenant, $"Unexpected error: {ex.Message}");
+        }
+
+        try
+        {
+            await devices.SaveSyncAsync(result, ct);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            logger.LogError(ex, "Saving {Source} sync for {Tenant} ({TenantId}) failed", source.Name, tenant.DisplayName, tenant.Id);
+            return false;
+        }
+
+        return result.Succeeded;
     }
 
     /// <summary>Consent granted and a credential configured. Others aren't ready for sync yet.</summary>

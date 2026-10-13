@@ -21,6 +21,7 @@
     <ProjectReference Include="..\..\src\SecurePulse.Data\SecurePulse.Data.csproj" />
     <ProjectReference Include="..\..\src\SecurePulse.Intune\SecurePulse.Intune.csproj" />
     <ProjectReference Include="..\..\src\SecurePulse.Worker\SecurePulse.Worker.csproj" />
+    <ProjectReference Include="..\..\src\SecurePulse.Web\SecurePulse.Web.csproj" />
   </ItemGroup>
 
   <ItemGroup>

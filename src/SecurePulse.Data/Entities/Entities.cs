@@ -79,3 +79,28 @@ public sealed class DeviceSyncStatusEntity
     public string? Error { get; set; }
     public int DeviceCount { get; set; }
 }
+
+public sealed class OnboardingRequestEntity
+{
+    public Guid Id { get; set; }
+    public string DisplayName { get; set; } = "";
+    public string PrimaryDomain { get; set; } = "";
+    public string? PartnerName { get; set; }
+    public string Industry { get; set; } = "General";
+    public Guid EntraTenantId { get; set; }
+    public OnboardingStatus Status { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? ConsentReceivedAt { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+    public Guid? TenantId { get; set; }
+    public string? LastError { get; set; }
+    public string[] GrantedPermissions { get; set; } = [];
+    public int VerificationAttempts { get; set; }
+
+    /// <summary>SHA-256 (hex) of the consent state. The raw state is never stored.</summary>
+    public string StateHash { get; set; } = "";
+
+    /// <summary>State encrypted with the portal's data-protection keys, for re-showing the link.</summary>
+    public string? ProtectedState { get; set; }
+}

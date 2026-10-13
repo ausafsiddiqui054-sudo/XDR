@@ -55,6 +55,8 @@ public sealed class CertificateGraphTokenProvider(IntuneOptions options, ICertif
         if (!Thumbprints.IsValid(tenant.CredentialReference))
             throw new GraphAuthException("Tenant credential reference is not a valid certificate thumbprint.");
 
+        // A new credential per call means no token cache, so each token reflects the
+        // permissions granted right now (onboarding verification depends on that).
         using var certificate = certificates.Find(tenant.CredentialReference!)
             ?? throw new GraphAuthException($"Certificate {tenant.CredentialReference} with a private key was not found in the certificate store.");
 
@@ -78,8 +80,9 @@ public sealed class CertificateGraphTokenProvider(IntuneOptions options, ICertif
 
 public sealed class GraphAuthException(string message, Exception? inner = null) : Exception(message, inner);
 
-internal static class Thumbprints
+public static class Thumbprints
 {
+    /// <summary>A SHA-1 certificate thumbprint: 40 hex characters.</summary>
     public static bool IsValid(string? value) =>
         value is { Length: 40 } && value.All(Uri.IsHexDigit);
 }

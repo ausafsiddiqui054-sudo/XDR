@@ -3,6 +3,8 @@ using SecurePulse.Core.Abstractions;
 using SecurePulse.Data;
 using SecurePulse.Web.Components;
 using SecurePulse.Web.Services;
+using SecurePulse.Web.Services.Onboarding;
+using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,9 +27,19 @@ else
     builder.Services.AddSingleton<ITenantRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IFindingRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IDeviceRepository>(sp => sp.GetRequiredService<SampleDataStore>());
+    builder.Services.AddSingleton<IOnboardingRepository>(sp => sp.GetRequiredService<SampleDataStore>());
 }
+builder.Services.AddSingleton(new PortalMode(useDatabase));
 builder.Services.AddScoped<PostureService>();
 builder.Services.AddScoped<EndpointService>();
+
+// Tenant onboarding. Consent-link state is encrypted with data protection; in production,
+// persist the key ring somewhere shared (PersistKeysTo...) so links survive restarts and scale-out.
+builder.Services.AddDataProtection().SetApplicationName("SecurePulse");
+builder.Services.AddSingleton(builder.Configuration.GetSection("Onboarding").Get<OnboardingOptions>() ?? new OnboardingOptions());
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddHttpClient<IEntraTenantResolver, EntraTenantResolver>(c => c.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddScoped<OnboardingService>();
 
 var app = builder.Build();
 
@@ -54,6 +66,15 @@ app.UseHttpsRedirection();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+
+// Entra redirects here after the admin-consent prompt. Handle it once, then redirect to a
+// result page so a refresh or a shared URL can't replay it.
+app.MapGet("/" + OnboardingService.CallbackPath, async (HttpRequest request, OnboardingService onboarding, CancellationToken ct) =>
+{
+    var q = request.Query;
+    var outcome = await onboarding.HandleCallbackAsync(q["state"], q["tenant"], q["admin_consent"], q["error"], q["error_description"], ct);
+    return Results.LocalRedirect($"~/onboarding/consent-result?outcome={outcome}");
+});
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

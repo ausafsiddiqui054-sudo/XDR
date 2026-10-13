@@ -22,6 +22,14 @@ builder.Services.AddOptions<DeviceSyncOptions>()
 builder.Services.AddSingleton<DeviceSyncService>();
 builder.Services.AddHostedService<DeviceSyncWorker>();
 
+builder.Services.AddOptions<OnboardingVerificationOptions>()
+    .Bind(builder.Configuration.GetSection("Onboarding"))
+    .Validate(o => o.PollInterval >= TimeSpan.FromSeconds(5), "Onboarding:PollInterval must be at least 5 seconds.")
+    .ValidateOnStart();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<OnboardingVerificationService>();
+builder.Services.AddHostedService<OnboardingVerificationWorker>();
+
 var host = builder.Build();
 
 if (builder.Configuration.GetValue("Database:MigrateOnStartup", true))

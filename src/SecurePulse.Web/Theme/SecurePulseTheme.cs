@@ -151,4 +151,24 @@ public static class SecurePulseTheme
         DefenderState.NotOnboarded => Color.Warning,
         _ => Color.Default
     };
+
+    public static string Label(OnboardingRequest request, DateTimeOffset now) => request.Status switch
+    {
+        _ when request.IsExpired(now) => "Link expired",
+        OnboardingStatus.AwaitingConsent => "Awaiting consent",
+        OnboardingStatus.Verifying => "Verifying",
+        OnboardingStatus.Completed => "Connected",
+        OnboardingStatus.Failed => "Failed",
+        _ => "Cancelled"
+    };
+
+    public static Color ColorOf(OnboardingRequest request, DateTimeOffset now) => request.Status switch
+    {
+        _ when request.IsExpired(now) => Color.Default,
+        OnboardingStatus.AwaitingConsent => Color.Info,
+        OnboardingStatus.Verifying => Color.Primary,
+        OnboardingStatus.Completed => Color.Success,
+        OnboardingStatus.Failed => Color.Error,
+        _ => Color.Default
+    };
 }

@@ -1,0 +1,12 @@
+@inherits LayoutComponentBase
+@* For pages client admins reach from outside the portal (e.g. after consent): no navigation. *@
+
+<MudThemeProvider Theme="SecurePulseTheme.Theme" />
+
+<div class="sp-public">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-8">
+        <MudIcon Icon="@Icons.Material.Rounded.Security" Color="Color.Primary" />
+        <MudText Typo="Typo.h6">SecurePulse</MudText>
+    </MudStack>
+    @Body
+</div>
