@@ -1,0 +1,5 @@
+<MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@SecurePulseTheme.ColorOf(State)">@SecurePulseTheme.Label(State)</MudChip>
+
+@code {
+    [Parameter, EditorRequired] public DeviceComplianceState State { get; set; }
+}

@@ -106,4 +106,49 @@ public static class SecurePulseTheme
         FindingStatus.NotEvaluated => "Not evaluated",
         _ => status.ToString()
     };
+
+    public static Color ColorOf(DeviceComplianceState state) => state switch
+    {
+        DeviceComplianceState.Compliant => Color.Success,
+        DeviceComplianceState.InGracePeriod => Color.Warning,
+        DeviceComplianceState.Noncompliant => Color.Error,
+        _ => Color.Default
+    };
+
+    public static string Label(DeviceComplianceState state) => state switch
+    {
+        DeviceComplianceState.InGracePeriod => "In grace period",
+        _ => state.ToString()
+    };
+
+    public static string IconOf(DevicePlatform platform) => platform switch
+    {
+        DevicePlatform.Windows => Icons.Material.Rounded.LaptopWindows,
+        DevicePlatform.MacOS => Icons.Material.Rounded.LaptopMac,
+        DevicePlatform.iOS => Icons.Material.Rounded.PhoneIphone,
+        DevicePlatform.Android => Icons.Material.Rounded.PhoneAndroid,
+        _ => Icons.Material.Rounded.Computer
+    };
+
+    public static string Label(DevicePlatform platform) => platform switch
+    {
+        DevicePlatform.MacOS => "macOS",
+        _ => platform.ToString()
+    };
+
+    public static string Label(DefenderState state) => state switch
+    {
+        DefenderState.Protected => "Protected",
+        DefenderState.Unhealthy => "Unhealthy",
+        DefenderState.NotOnboarded => "Not onboarded",
+        _ => "Unknown"
+    };
+
+    public static Color ColorOf(DefenderState state) => state switch
+    {
+        DefenderState.Protected => Color.Success,
+        DefenderState.Unhealthy => Color.Error,
+        DefenderState.NotOnboarded => Color.Warning,
+        _ => Color.Default
+    };
 }

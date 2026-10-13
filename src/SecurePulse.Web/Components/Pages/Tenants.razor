@@ -49,8 +49,12 @@ else
                         <MudText Typo="Typo.body2" Color="Color.Secondary">
                             @score.Failed failing · @score.Investigate to investigate · last scan @Dashboard.Ago(t.Tenant.LastScanAt)
                         </MudText>
-                        <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-2 px-0"
-                                   OnClick="@(() => Nav.NavigateTo($"findings?tenant={t.Tenant.Id}"))">View findings</MudButton>
+                        <MudStack Row="true" Spacing="4" Class="mt-2">
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" Class="px-0"
+                                       OnClick="@(() => Nav.NavigateTo($"findings?tenant={t.Tenant.Id}"))">View findings</MudButton>
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" Class="px-0"
+                                       OnClick="@(() => Nav.NavigateTo($"endpoints?tenant={t.Tenant.Id}"))">View devices</MudButton>
+                        </MudStack>
                     }
                     else
                     {

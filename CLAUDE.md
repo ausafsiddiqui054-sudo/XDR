@@ -45,3 +45,6 @@ dotnet test SecurePulse.slnx
    portal login with roles (Owner, MSP admin, Client viewer).
 4. ScubaGear adapter (check current OS/PowerShell requirements; may need a Windows worker).
 5. Branded PDF report (QuestPDF; check its license tier).
+6. Endpoints: Worker syncs Intune devices into `IDeviceRepository` via read-only Graph
+   (`DeviceManagementManagedDevices.Read.All`). Remote actions (sync/restart/retire/wipe)
+   stay disabled until the approval queue and audit log exist; the UI dialog is already built.

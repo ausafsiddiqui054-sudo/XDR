@@ -1,0 +1,249 @@
+@page "/endpoints/{TenantId:guid}/{DeviceId}"
+@inject EndpointService EndpointData
+@inject NavigationManager Nav
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_detail?.Device.DeviceName ?? "Device") · SecurePulse</PageTitle>
+
+@if (!_loaded)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_detail is null)
+{
+    <MudPaper Class="sp-card pa-8" Elevation="0" Outlined="true">
+        <MudStack AlignItems="AlignItems.Center" Spacing="2">
+            <span class="sp-icon-badge sp-icon-badge-lg"><MudIcon Icon="@Icons.Material.Rounded.DevicesOther" Size="Size.Large" /></span>
+            <MudText Typo="Typo.h6">Device not found</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">It may have been removed from Intune since the last inventory.</MudText>
+            <MudButton Variant="Variant.Text" Color="Color.Primary" Href="endpoints" StartIcon="@Icons.Material.Rounded.ArrowBack">Back to endpoints</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+else
+{
+    var d = _detail.Device;
+    var tenant = _detail.Tenant;
+    var failing = d.ComplianceSettings.Where(s => !s.Compliant).ToList();
+    var stale = d.LastSyncAt is not { } last || DateTimeOffset.UtcNow - last > EndpointService.StaleAfter;
+
+    <MudBreadcrumbs Items="_breadcrumbs" Class="px-0 pt-0" />
+
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap" Spacing="4">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="4">
+            <span class="sp-icon-badge sp-icon-badge-lg"><MudIcon Icon="@SecurePulseTheme.IconOf(d.Platform)" Size="Size.Large" /></span>
+            <div style="min-width:0">
+                <MudText Typo="Typo.h4">@d.DeviceName</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@d.Manufacturer @d.Model · @tenant.DisplayName</MudText>
+                <MudStack Row="true" Spacing="1" Class="mt-2" Wrap="Wrap.Wrap">
+                    <ComplianceChip State="d.ComplianceState" />
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text">@d.Ownership</MudChip>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text">@SecurePulseTheme.Label(d.Platform)</MudChip>
+                </MudStack>
+            </div>
+        </MudStack>
+
+        <MudStack Row="true" Spacing="2">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@DeviceActions.Icon(DeviceAction.Sync)"
+                       Disabled="!CanRemediate" OnClick="@(() => RequestAsync(DeviceAction.Sync))">Sync</MudButton>
+            <MudMenu Label="More actions" EndIcon="@Icons.Material.Rounded.KeyboardArrowDown" Variant="Variant.Outlined"
+                     Color="Color.Primary" Disabled="!CanRemediate" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                @foreach (var action in new[] { DeviceAction.Restart, DeviceAction.Retire, DeviceAction.Wipe })
+                {
+                    <MudMenuItem Icon="@DeviceActions.Icon(action)"
+                                 IconColor="@(DeviceActions.IsDestructive(action) ? Color.Error : Color.Default)"
+                                 OnClick="@(() => RequestAsync(action))">@DeviceActions.Label(action)</MudMenuItem>
+                }
+            </MudMenu>
+        </MudStack>
+    </MudStack>
+
+    @if (!CanRemediate)
+    {
+        <MudAlert Severity="MudBlazor.Severity.Info" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px"
+                  Icon="@Icons.Material.Rounded.Lock">
+            SecurePulse has read-only access to @tenant.DisplayName. Remote actions need remediation consent from the
+            tenant's admin, and each one then goes through approval.
+        </MudAlert>
+    }
+
+    <MudGrid Spacing="4">
+        <MudItem xs="12" md="7">
+            <MudStack Spacing="4">
+                <MudPaper Class="sp-card pa-5" Elevation="0" Outlined="true">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-1" Wrap="Wrap.Wrap">
+                        <MudText Typo="Typo.h6">Compliance</MudText>
+                        <MudText Typo="Typo.body2" Color="@(failing.Count > 0 ? Color.Error : Color.Success)">
+                            @(failing.Count == 0 ? "All settings pass" : $"{failing.Count} of {d.ComplianceSettings.Count} settings failing")
+                        </MudText>
+                    </MudStack>
+                    @foreach (var policy in d.ComplianceSettings.GroupBy(s => s.Policy))
+                    {
+                        <MudText Typo="Typo.overline" Color="Color.Secondary">@policy.Key</MudText>
+                        <MudList T="string" Dense="true" ReadOnly="true" Padding="false">
+                            @foreach (var s in policy.OrderBy(s => s.Compliant))
+                            {
+                                <MudListItem T="string"
+                                             Icon="@(s.Compliant ? Icons.Material.Rounded.CheckCircle : Icons.Material.Rounded.Cancel)"
+                                             IconColor="@(s.Compliant ? Color.Success : Color.Error)">
+                                    <MudText Typo="Typo.body2" Style="@(s.Compliant ? "" : "font-weight:600")">@s.Setting</MudText>
+                                    @if (s.Detail is { } detail)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@detail</MudText>
+                                    }
+                                </MudListItem>
+                            }
+                        </MudList>
+                    }
+                </MudPaper>
+
+                <MudPaper Class="sp-card pa-5" Elevation="0" Outlined="true">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-1" Wrap="Wrap.Wrap">
+                        <div>
+                            <MudText Typo="Typo.h6">Tenant device policies</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Open device findings for @tenant.DisplayName</MudText>
+                        </div>
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                                   Href="@($"findings?tenant={tenant.Id}")">View all findings</MudButton>
+                    </MudStack>
+                    @if (_detail.RelatedFindings.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">No open device findings for this tenant.</MudText>
+                    }
+                    else
+                    {
+                        <MudStack Spacing="1" Class="mt-2">
+                            @foreach (var f in _detail.RelatedFindings)
+                            {
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="sp-breakdown-row">
+                                    <div style="min-width:0">
+                                        <MudText Typo="Typo.body2" Style="font-weight:600">@f.Title</MudText>
+                                        @if (f.Evidence is { } ev)
+                                        {
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">@ev</MudText>
+                                        }
+                                    </div>
+                                    <MudStack Row="true" Spacing="1">
+                                        <SeverityChip Severity="f.Severity" />
+                                        <StatusChip Status="f.Status" />
+                                    </MudStack>
+                                </MudStack>
+                            }
+                        </MudStack>
+                    }
+                </MudPaper>
+            </MudStack>
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            <MudStack Spacing="4">
+                <MudPaper Class="sp-card pa-5" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.h6" Class="mb-3">Protection</MudText>
+                    <MudStack Spacing="3">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                            <span class="sp-icon-badge">
+                                <MudIcon Icon="@(d.IsEncrypted == false ? Icons.Material.Rounded.LockOpen : Icons.Material.Rounded.Lock)"
+                                         Color="@(d.IsEncrypted switch { true => Color.Success, false => Color.Error, _ => Color.Default })" />
+                            </span>
+                            <div>
+                                <MudText Typo="Typo.body2" Style="font-weight:600">Disk encryption</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @(d.IsEncrypted switch { true => "Encrypted", false => "Not encrypted", _ => "Not reported" })
+                                </MudText>
+                            </div>
+                        </MudStack>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                            <span class="sp-icon-badge">
+                                <MudIcon Icon="@Icons.Material.Rounded.Shield" Color="@SecurePulseTheme.ColorOf(d.Defender)" />
+                            </span>
+                            <div>
+                                <MudText Typo="Typo.body2" Style="font-weight:600">Microsoft Defender</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@SecurePulseTheme.Label(d.Defender)</MudText>
+                            </div>
+                        </MudStack>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                            <span class="sp-icon-badge">
+                                <MudIcon Icon="@Icons.Material.Rounded.Sync" Color="@(stale ? Color.Warning : Color.Success)" />
+                            </span>
+                            <div>
+                                <MudText Typo="Typo.body2" Style="font-weight:600">Last check-in</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @Dashboard.Ago(d.LastSyncAt)@(stale ? " · compliance may be out of date" : "")
+                                </MudText>
+                            </div>
+                        </MudStack>
+                    </MudStack>
+                </MudPaper>
+
+                <MudPaper Class="sp-card pa-5" Elevation="0" Outlined="true">
+                    <MudText Typo="Typo.h6" Class="mb-3">Device</MudText>
+                    <dl class="sp-props">
+                        <dt>Primary user</dt>
+                        <dd>@(d.UserDisplayName ?? "None")</dd>
+                        <dt>User principal</dt>
+                        <dd>@(d.UserPrincipalName ?? "—")</dd>
+                        <dt>Ownership</dt>
+                        <dd>@d.Ownership</dd>
+                        <dt>Operating system</dt>
+                        <dd>@(d.OsVersion ?? "—")</dd>
+                        <dt>Manufacturer</dt>
+                        <dd>@(d.Manufacturer ?? "—")</dd>
+                        <dt>Model</dt>
+                        <dd>@(d.Model ?? "—")</dd>
+                        <dt>Serial number</dt>
+                        <dd>@(d.SerialNumber ?? "—")</dd>
+                        <dt>Enrolled</dt>
+                        <dd>@(d.EnrolledAt?.ToLocalTime().ToString("d MMM yyyy") ?? "—")</dd>
+                        <dt>Intune device ID</dt>
+                        <dd style="font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:0.8rem">@d.Id</dd>
+                    </dl>
+                </MudPaper>
+            </MudStack>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid TenantId { get; set; }
+    [Parameter] public string DeviceId { get; set; } = "";
+
+    private DeviceDetail? _detail;
+    private bool _loaded;
+    private List<BreadcrumbItem> _breadcrumbs = [];
+
+    private bool CanRemediate => _detail?.Tenant.ConsentState == TenantConsentState.RemediationGranted;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _detail = await EndpointData.GetDeviceAsync(TenantId, DeviceId);
+        _breadcrumbs =
+        [
+            new("Endpoints", href: "endpoints"),
+            new(_detail?.Tenant.DisplayName ?? "Tenant", href: $"endpoints?tenant={TenantId}"),
+            new(_detail?.Device.DeviceName ?? "Device", href: null, disabled: true)
+        ];
+        _loaded = true;
+    }
+
+    private async Task RequestAsync(DeviceAction action)
+    {
+        if (_detail is null || !CanRemediate) return;
+
+        var parameters = new DialogParameters<RemoteActionDialog>
+        {
+            { x => x.Action, action },
+            { x => x.DeviceName, _detail.Device.DeviceName },
+            { x => x.TenantName, _detail.Tenant.DisplayName }
+        };
+        var dialog = await Dialogs.ShowAsync<RemoteActionDialog>(null, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+
+        if ((await dialog.Result) is { Canceled: false })
+        {
+            // No approval queue or Graph write path exists yet, so be explicit that nothing happened.
+            Snackbar.Add($"The approval workflow isn't built yet, so the {DeviceActions.Label(action).ToLowerInvariant()} request " +
+                         $"for {_detail.Device.DeviceName} wasn't sent.", MudBlazor.Severity.Info);
+        }
+    }
+}

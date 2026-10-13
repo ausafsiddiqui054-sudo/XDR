@@ -58,6 +58,12 @@
     background: var(--mud-palette-background-gray);
 }
 
+.sp-note {
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: var(--mud-palette-background-gray);
+}
+
 #blazor-error-ui {
     background: #ffe7a6;
     bottom: 0;
@@ -85,4 +91,84 @@
     .sp-card.sp-lift:hover {
         transform: translateY(-2px);
     }
+}
+
+/* Segmented compliance bar (M3 Expressive: rounded segments with gaps). */
+.sp-bar {
+    display: flex;
+    gap: 3px;
+    height: 10px;
+    min-width: 0;
+}
+
+.sp-bar > span {
+    display: block;
+    min-width: 6px;
+    border-radius: 999px;
+}
+
+.sp-bar-success { background: var(--mud-palette-success); }
+.sp-bar-warning { background: var(--mud-palette-warning); }
+.sp-bar-error { background: var(--mud-palette-error); }
+.sp-bar-unknown { background: var(--mud-palette-lines-default); }
+
+.sp-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.sp-legend i {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+}
+
+/* Tonal icon badge used for platform and protection tiles. */
+.sp-icon-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+    background: var(--mud-palette-background-gray);
+    color: var(--mud-palette-primary);
+}
+
+.sp-icon-badge.sp-icon-badge-lg {
+    width: 64px;
+    height: 64px;
+    border-radius: 22px;
+}
+
+.sp-breakdown-row {
+    border-radius: 16px;
+    padding: 10px 12px;
+}
+
+.sp-breakdown-row:hover,
+.sp-breakdown-row.sp-active {
+    background: var(--mud-palette-background-gray);
+}
+
+.sp-props {
+    display: grid;
+    grid-template-columns: minmax(110px, auto) 1fr;
+    gap: 10px 16px;
+    margin: 0;
+}
+
+.sp-props dt {
+    color: var(--mud-palette-text-secondary);
+    font-size: 0.875rem;
+}
+
+.sp-props dd {
+    margin: 0;
+    font-size: 0.875rem;
+    overflow-wrap: anywhere;
 }

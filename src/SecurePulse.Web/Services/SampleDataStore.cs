@@ -9,10 +9,11 @@ namespace SecurePulse.Web.Services;
 /// portal can be designed and demoed before real scans exist. Replace with EF Core
 /// repositories once the Worker starts writing real scan results.
 /// </summary>
-public sealed class SampleDataStore : ITenantRepository, IFindingRepository
+public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDeviceRepository
 {
     private readonly List<Tenant> _tenants;
     private readonly ConcurrentDictionary<Guid, IReadOnlyList<Finding>> _findings = new();
+    private readonly ConcurrentDictionary<Guid, IReadOnlyList<ManagedDevice>> _devices = new();
 
     private sealed record Check(
         string Id, string Title, string Category, Severity Severity,
@@ -95,14 +96,18 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository
         };
 
         _findings[tenant.Id] = tenant.LastScanAt is null ? [] : Generate(tenant, passRate);
+        _devices[tenant.Id] = tenant.LastScanAt is null ? [] : GenerateDevices(tenant, passRate);
         return tenant;
     }
+
+    private static Random StableRandom(string seed, int salt = 0) =>
+        new(seed.Aggregate(17 + salt, (h, c) => unchecked(h * 31 + c)) & 0x7fffffff);
 
     private static IReadOnlyList<Finding> Generate(Tenant tenant, double passRate)
     {
         // Deterministic per tenant name so the demo looks the same on every run.
         // (string.GetHashCode is randomized per process, so hash the characters ourselves.)
-        var stable = new Random(tenant.DisplayName.Aggregate(17, (h, c) => unchecked(h * 31 + c)) & 0x7fffffff);
+        var stable = StableRandom(tenant.DisplayName);
 
         return Catalog.Select(check =>
         {
@@ -129,6 +134,142 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository
         }).ToList();
     }
 
+    private sealed record SettingDef(string Setting, string FailDetail, bool IsEncryption = false, bool IsDefender = false);
+
+    private sealed record PlatformDef(
+        DevicePlatform Platform, double Share, string NamePart, string Policy,
+        (string Manufacturer, string Model)[] Models, string[] OsVersions, SettingDef[] Settings);
+
+    private static readonly PlatformDef[] Platforms =
+    [
+        new(DevicePlatform.Windows, 0.55, "LT", "Windows 11 baseline",
+            [("Dell", "Latitude 5440"), ("HP", "EliteBook 840 G10"), ("Lenovo", "ThinkPad T14 Gen 4"), ("Microsoft", "Surface Laptop 5")],
+            ["Windows 11 23H2 (22631.4317)", "Windows 11 24H2 (26100.2033)", "Windows 10 22H2 (19045.5011)"],
+            [
+                new("BitLocker drive encryption", "OS drive is not encrypted.", IsEncryption: true),
+                new("Microsoft Defender Antivirus", "Real-time protection is turned off.", IsDefender: true),
+                new("Firewall enabled", "Windows Firewall is off for the domain profile."),
+                new("Minimum OS version 10.0.22631", "Running a build below the minimum supported version."),
+                new("Secure Boot enabled", "Secure Boot is disabled in firmware."),
+                new("Password required", "No sign-in password or Windows Hello PIN is set.")
+            ]),
+        new(DevicePlatform.MacOS, 0.10, "MB", "macOS baseline",
+            [("Apple", "MacBook Air (M2, 2022)"), ("Apple", "MacBook Pro 14 (M3, 2023)")],
+            ["macOS 14.6.1", "macOS 15.0.1"],
+            [
+                new("FileVault enabled", "FileVault is off.", IsEncryption: true),
+                new("Firewall enabled", "Application firewall is off."),
+                new("Gatekeeper enabled", "Apps from unidentified developers are allowed."),
+                new("Minimum OS version 14.0", "Running a macOS version below the minimum.")
+            ]),
+        new(DevicePlatform.iOS, 0.20, "IP", "iOS baseline",
+            [("Apple", "iPhone 14"), ("Apple", "iPhone 15 Pro"), ("Apple", "iPad (10th gen)")],
+            ["iOS 17.6.1", "iOS 18.0.1"],
+            [
+                new("Jailbroken devices blocked", "Device reports as jailbroken."),
+                new("Passcode required", "No passcode is set."),
+                new("Minimum OS version 17.0", "Running an iOS version below the minimum.")
+            ]),
+        new(DevicePlatform.Android, 0.12, "AN", "Android Enterprise baseline",
+            [("Samsung", "Galaxy S23"), ("Samsung", "Galaxy A54"), ("Google", "Pixel 8")],
+            ["Android 14", "Android 13"],
+            [
+                new("Rooted devices blocked", "Device reports as rooted."),
+                new("Storage encryption", "Storage is not encrypted.", IsEncryption: true),
+                new("Google Play Protect", "Play Protect is turned off."),
+                new("Minimum OS version 13", "Running an Android version below the minimum.")
+            ]),
+        new(DevicePlatform.Linux, 0.03, "WS", "Linux baseline",
+            [("Dell", "OptiPlex 7010")],
+            ["Ubuntu 22.04.5 LTS", "Ubuntu 24.04.1 LTS"],
+            [
+                new("Disk encryption (dm-crypt)", "Root partition is not encrypted.", IsEncryption: true),
+                new("Password policy", "Password complexity requirements are not met.")
+            ])
+    ];
+
+    private static readonly string[] People =
+    [
+        "Aisha Rahman", "Omar Haddad", "Fatima Al Mansoori", "Rahul Menon", "Sara Khoury", "Daniel Brooks",
+        "Noura Saeed", "Yousef Karim", "Priya Nair", "Hassan Ali", "Maria Santos", "Khalid Nasser",
+        "Layla Farouk", "James Whitfield", "Mariam Obaid", "Arjun Pillai", "Reem Al Hashimi", "Tariq Aziz"
+    ];
+
+    private static IReadOnlyList<ManagedDevice> GenerateDevices(Tenant tenant, double passRate)
+    {
+        var stable = StableRandom(tenant.DisplayName, salt: 101);
+        var prefix = string.Concat(tenant.DisplayName.Split(' ').Select(w => char.ToUpperInvariant(w[0])));
+        var mailDomain = tenant.PrimaryDomain;
+        var failChance = (1 - passRate) * 0.12;
+        var now = DateTimeOffset.UtcNow;
+        var count = 10 + stable.Next(14);
+        var devices = new List<ManagedDevice>(count);
+
+        for (var i = 1; i <= count; i++)
+        {
+            var roll = stable.NextDouble();
+            var platform = Platforms[^1];
+            foreach (var p in Platforms)
+            {
+                if (roll < p.Share) { platform = p; break; }
+                roll -= p.Share;
+            }
+
+            var (manufacturer, model) = platform.Models[stable.Next(platform.Models.Length)];
+            var os = platform.OsVersions[stable.Next(platform.OsVersions.Length)];
+            var person = People[stable.Next(People.Length)];
+            var upn = $"{person.Split(' ')[0].ToLowerInvariant()}.{person.Split(' ')[^1].ToLowerInvariant()}@{mailDomain}";
+
+            var settings = platform.Settings.Select(s =>
+            {
+                // Windows 10 always misses the Windows 11 minimum build.
+                var ok = s.Setting.StartsWith("Minimum OS", StringComparison.Ordinal) && os.StartsWith("Windows 10", StringComparison.Ordinal)
+                    ? false
+                    : stable.NextDouble() >= failChance;
+                return new DeviceComplianceSetting(platform.Policy, s.Setting, ok, ok ? null : s.FailDetail);
+            }).ToList();
+
+            var failing = settings.Count(s => !s.Compliant);
+            var encryption = platform.Settings.Select((s, idx) => (s, idx)).FirstOrDefault(x => x.s.IsEncryption);
+            var defender = platform.Settings.Select((s, idx) => (s, idx)).FirstOrDefault(x => x.s.IsDefender);
+
+            var stale = stable.NextDouble() < 0.12;
+            var mobile = platform.Platform is DevicePlatform.iOS or DevicePlatform.Android;
+            var idBytes = new byte[16];
+            stable.NextBytes(idBytes);
+
+            devices.Add(new ManagedDevice
+            {
+                Id = new Guid(idBytes).ToString(),
+                TenantId = tenant.Id,
+                DeviceName = $"{prefix}-{platform.NamePart}-{i:D3}",
+                UserDisplayName = person,
+                UserPrincipalName = upn,
+                Platform = platform.Platform,
+                OsVersion = os,
+                Manufacturer = manufacturer,
+                Model = model,
+                SerialNumber = string.Concat(Enumerable.Range(0, 10).Select(_ => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[stable.Next(32)])),
+                Ownership = mobile && stable.NextDouble() < 0.5 ? DeviceOwnership.Personal : DeviceOwnership.Corporate,
+                ComplianceState = failing == 0 ? DeviceComplianceState.Compliant
+                    : stable.NextDouble() < 0.3 ? DeviceComplianceState.InGracePeriod
+                    : DeviceComplianceState.Noncompliant,
+                // iOS hardware encryption is always on and isn't reported as a setting.
+                IsEncrypted = platform.Platform == DevicePlatform.iOS ? true
+                    : encryption.s is null ? null
+                    : settings[encryption.idx].Compliant,
+                Defender = defender.s is not null
+                    ? settings[defender.idx].Compliant ? DefenderState.Protected : DefenderState.Unhealthy
+                    : stable.NextDouble() < 0.7 ? DefenderState.Protected : DefenderState.NotOnboarded,
+                EnrolledAt = now.AddDays(-30 - stable.Next(670)),
+                LastSyncAt = stale ? now.AddDays(-31 - stable.Next(40)) : now.AddMinutes(-stable.Next(60 * 48)),
+                ComplianceSettings = settings
+            });
+        }
+
+        return devices;
+    }
+
     public Task<IReadOnlyList<Tenant>> GetAllAsync(CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<Tenant>>(_tenants);
 
@@ -140,6 +281,12 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository
 
     Task<IReadOnlyList<Finding>> IFindingRepository.GetAllAsync(CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<Finding>>(_findings.Values.SelectMany(f => f).ToList());
+
+    Task<IReadOnlyList<ManagedDevice>> IDeviceRepository.GetForTenantAsync(Guid tenantId, CancellationToken ct) =>
+        Task.FromResult(_devices.TryGetValue(tenantId, out var d) ? d : (IReadOnlyList<ManagedDevice>)[]);
+
+    public Task<ManagedDevice?> GetAsync(Guid tenantId, string deviceId, CancellationToken ct = default) =>
+        Task.FromResult(_devices.TryGetValue(tenantId, out var d) ? d.FirstOrDefault(x => x.Id == deviceId) : null);
 
     public Task SaveScanAsync(ScanResult result, CancellationToken ct = default)
     {

@@ -26,3 +26,9 @@ public interface IFindingRepository
     Task<IReadOnlyList<Finding>> GetAllAsync(CancellationToken ct = default);
     Task SaveScanAsync(ScanResult result, CancellationToken ct = default);
 }
+
+public interface IDeviceRepository
+{
+    Task<IReadOnlyList<ManagedDevice>> GetForTenantAsync(Guid tenantId, CancellationToken ct = default);
+    Task<ManagedDevice?> GetAsync(Guid tenantId, string deviceId, CancellationToken ct = default);
+}

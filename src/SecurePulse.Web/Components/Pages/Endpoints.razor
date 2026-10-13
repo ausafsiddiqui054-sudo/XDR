@@ -1,0 +1,252 @@
+@page "/endpoints"
+@inject EndpointService EndpointData
+@inject NavigationManager Nav
+
+<PageTitle>Endpoints · SecurePulse</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
+    <div>
+        <MudText Typo="Typo.h4">Endpoints</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Intune-managed devices across your tenants</MudText>
+    </div>
+    @if (_fleet is not null)
+    {
+        <MudText Typo="Typo.caption" Color="Color.Secondary">Inventory as of @_fleet.AsOf.ToLocalTime().ToString("d MMM, HH:mm")</MudText>
+    }
+</MudStack>
+
+@if (_fleet is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var overall = _fleet.Overall;
+
+    <MudGrid Spacing="4" Class="mb-4">
+        <MudItem xs="6" md="3">
+            <Kpi Label="Managed devices" Value="@overall.Total" Icon="@Icons.Material.Rounded.Devices" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <Kpi Label="Compliant" Value="@overall.CompliantPercent" Suffix="%" Icon="@Icons.Material.Rounded.VerifiedUser"
+                 Color="@SecurePulseTheme.ColorOfScore(overall.CompliantPercent)" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <Kpi Label="Not encrypted" Value="@_fleet.NotEncrypted" Icon="@Icons.Material.Rounded.LockOpen" Color="Color.Error" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <Kpi Label="No check-in for 30+ days" Value="@_fleet.Stale" Icon="@Icons.Material.Rounded.History" Color="Color.Warning" />
+        </MudItem>
+
+        <MudItem xs="12" lg="6">
+            <MudPaper Class="sp-card pa-4" Elevation="0" Outlined="true">
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="px-2 pb-2" Wrap="Wrap.Wrap">
+                    <MudText Typo="Typo.h6">Compliance by platform</MudText>
+                    <ComplianceLegend />
+                </MudStack>
+                @foreach (var (platform, b) in _fleet.ByPlatform)
+                {
+                    <div class="@($"sp-breakdown-row sp-clickable-row {(_platform == platform ? "sp-active" : "")}")"
+                         @onclick="@(() => _platform = _platform == platform ? null : platform)">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                            <span class="sp-icon-badge"><MudIcon Icon="@SecurePulseTheme.IconOf(platform)" Size="Size.Small" /></span>
+                            <div style="flex:1;min-width:0">
+                                <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mb-1">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600">@SecurePulseTheme.Label(platform)</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@b.Compliant of @b.Total compliant</MudText>
+                                </MudStack>
+                                <ComplianceBar Breakdown="b" />
+                            </div>
+                        </MudStack>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" lg="6">
+            <MudPaper Class="sp-card pa-4" Elevation="0" Outlined="true">
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="px-2 pb-2" Wrap="Wrap.Wrap">
+                    <MudText Typo="Typo.h6">Compliance by tenant</MudText>
+                    <ComplianceLegend />
+                </MudStack>
+                @foreach (var (tenant, b) in _fleet.ByTenant)
+                {
+                    <div class="@($"sp-breakdown-row sp-clickable-row {(TenantId == tenant.Id ? "sp-active" : "")}")"
+                         @onclick="@(() => TenantId = TenantId == tenant.Id ? null : tenant.Id)">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Baseline" Class="mb-1">
+                            <MudText Typo="Typo.body2" Style="font-weight:600">@tenant.DisplayName</MudText>
+                            <MudText Typo="Typo.body2" Color="@SecurePulseTheme.ColorOfScore(b.CompliantPercent)">
+                                <b>@b.CompliantPercent%</b>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Inline="true"> · @b.Total devices</MudText>
+                            </MudText>
+                        </MudStack>
+                        <ComplianceBar Breakdown="b" />
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudPaper Class="sp-card pa-4 mb-4" Elevation="0" Outlined="true">
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="3">
+                <MudSelect T="Guid?" Label="Tenant" @bind-Value="TenantId" Clearable="true" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
+                    @foreach (var (t, _) in _fleet.ByTenant.OrderBy(x => x.Tenant.DisplayName))
+                    {
+                        <MudSelectItem T="Guid?" Value="@t.Id">@t.DisplayName</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" md="2">
+                <MudSelect T="DevicePlatform?" Label="Platform" @bind-Value="_platform" Clearable="true" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
+                    @foreach (var p in Enum.GetValues<DevicePlatform>())
+                    {
+                        <MudSelectItem T="DevicePlatform?" Value="@p">@SecurePulseTheme.Label(p)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" md="3">
+                <MudSelect T="DeviceComplianceState?" Label="Compliance" @bind-Value="_compliance" Clearable="true" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
+                    @foreach (var s in Enum.GetValues<DeviceComplianceState>())
+                    {
+                        <MudSelectItem T="DeviceComplianceState?" Value="@s">@SecurePulseTheme.Label(s)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField T="string" @bind-Value="_search" Label="Search device, user or model" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Immediate="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Clearable="true" />
+            </MudItem>
+        </MudGrid>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mt-2" Wrap="Wrap.Wrap">
+            <MudChipSet T="string" @bind-SelectedValues="_flags" SelectionMode="SelectionMode.MultiSelection" CheckMark="true"
+                        Variant="Variant.Outlined" Size="Size.Small">
+                <MudChip Value="@FlagUnencrypted" Text="Not encrypted" />
+                <MudChip Value="@FlagStale" Text="No check-in for 30+ days" />
+                <MudChip Value="@FlagPersonal" Text="Personal devices" />
+            </MudChipSet>
+            @if (HasFilters)
+            {
+                <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Rounded.FilterAltOff" OnClick="ClearFilters">
+                    Clear filters
+                </MudButton>
+            }
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="sp-card pa-2" Elevation="0" Outlined="true">
+        <MudTable Items="Filtered" T="DeviceRow" Hover="true" Elevation="0" Breakpoint="Breakpoint.Sm" Dense="true"
+                  RowClass="sp-clickable-row" OnRowClick="@(e => Open(e.Item!))">
+            <HeaderContent>
+                <MudTh><MudTableSortLabel T="DeviceRow" SortBy="r => r.Device.DeviceName">Device</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="DeviceRow" SortBy="r => r.Tenant.DisplayName">Tenant</MudTableSortLabel></MudTh>
+                <MudTh>Platform</MudTh>
+                <MudTh><MudTableSortLabel T="DeviceRow" SortBy="r => r.Device.ComplianceState">Compliance</MudTableSortLabel></MudTh>
+                <MudTh>Protection</MudTh>
+                <MudTh><MudTableSortLabel T="DeviceRow" SortBy="r => r.Device.LastSyncAt ?? DateTimeOffset.MinValue">Last check-in</MudTableSortLabel></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Device">
+                    <MudText Typo="Typo.body2" Style="font-weight:600">@context.Device.DeviceName</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@(context.Device.UserDisplayName ?? "No primary user")</MudText>
+                </MudTd>
+                <MudTd DataLabel="Tenant">@context.Tenant.DisplayName</MudTd>
+                <MudTd DataLabel="Platform">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudIcon Icon="@SecurePulseTheme.IconOf(context.Device.Platform)" Size="Size.Small" Color="Color.Primary" />
+                        <div style="min-width:0">
+                            <MudText Typo="Typo.body2">@SecurePulseTheme.Label(context.Device.Platform)</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Device.OsVersion</MudText>
+                        </div>
+                    </MudStack>
+                </MudTd>
+                <MudTd DataLabel="Compliance"><ComplianceChip State="context.Device.ComplianceState" /></MudTd>
+                <MudTd DataLabel="Protection">
+                    <MudStack Row="true" Spacing="1">
+                        @switch (context.Device.IsEncrypted)
+                        {
+                            case true:
+                                <MudTooltip Text="Encrypted"><MudIcon Icon="@Icons.Material.Rounded.Lock" Size="Size.Small" Color="Color.Success" /></MudTooltip>
+                                break;
+                            case false:
+                                <MudTooltip Text="Not encrypted"><MudIcon Icon="@Icons.Material.Rounded.LockOpen" Size="Size.Small" Color="Color.Error" /></MudTooltip>
+                                break;
+                            default:
+                                <MudTooltip Text="Encryption not reported"><MudIcon Icon="@Icons.Material.Rounded.HelpOutline" Size="Size.Small" Color="Color.Default" /></MudTooltip>
+                                break;
+                        }
+                        <MudTooltip Text="@($"Defender: {SecurePulseTheme.Label(context.Device.Defender)}")">
+                            <MudIcon Icon="@Icons.Material.Rounded.Shield" Size="Size.Small" Color="@SecurePulseTheme.ColorOf(context.Device.Defender)" />
+                        </MudTooltip>
+                    </MudStack>
+                </MudTd>
+                <MudTd DataLabel="Last check-in">
+                    <MudText Typo="Typo.body2" Color="@(context.IsStale(_fleet.AsOf) ? Color.Warning : Color.Default)">
+                        @Dashboard.Ago(context.Device.LastSyncAt)
+                    </MudText>
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Class="pa-6" Color="Color.Secondary">No devices match these filters.</MudText>
+            </NoRecordsContent>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new[] { 15, 30, 60 }" />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    private const string FlagUnencrypted = "unencrypted";
+    private const string FlagStale = "stale";
+    private const string FlagPersonal = "personal";
+
+    [SupplyParameterFromQuery(Name = "tenant")]
+    public Guid? TenantId { get; set; }
+
+    private EndpointFleet? _fleet;
+    private DevicePlatform? _platform;
+    private DeviceComplianceState? _compliance;
+    private string? _search;
+    private IReadOnlyCollection<string> _flags = [];
+
+    protected override async Task OnInitializedAsync() => _fleet = await EndpointData.GetFleetAsync();
+
+    private bool HasFilters => TenantId is not null || _platform is not null || _compliance is not null
+                               || !string.IsNullOrWhiteSpace(_search) || _flags.Count > 0;
+
+    private void ClearFilters()
+    {
+        TenantId = null;
+        _platform = null;
+        _compliance = null;
+        _search = null;
+        _flags = [];
+    }
+
+    private void Open(DeviceRow row) => Nav.NavigateTo($"endpoints/{row.Tenant.Id}/{row.Device.Id}");
+
+    private IEnumerable<DeviceRow> Filtered =>
+        (_fleet?.Devices ?? [])
+            .Where(r => TenantId is null || r.Tenant.Id == TenantId)
+            .Where(r => _platform is null || r.Device.Platform == _platform)
+            .Where(r => _compliance is null || r.Device.ComplianceState == _compliance)
+            .Where(r => !_flags.Contains(FlagUnencrypted) || r.Device.IsEncrypted == false)
+            .Where(r => !_flags.Contains(FlagStale) || r.IsStale(_fleet!.AsOf))
+            .Where(r => !_flags.Contains(FlagPersonal) || r.Device.Ownership == DeviceOwnership.Personal)
+            .Where(r => string.IsNullOrWhiteSpace(_search)
+                        || r.Device.DeviceName.Contains(_search, StringComparison.OrdinalIgnoreCase)
+                        || (r.Device.UserDisplayName?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false)
+                        || (r.Device.UserPrincipalName?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false)
+                        || (r.Device.Model?.Contains(_search, StringComparison.OrdinalIgnoreCase) ?? false))
+            // Worst first: noncompliant, then grace period, then unknown, then compliant.
+            .OrderBy(r => r.Device.ComplianceState switch
+            {
+                DeviceComplianceState.Noncompliant => 0,
+                DeviceComplianceState.InGracePeriod => 1,
+                DeviceComplianceState.Unknown => 2,
+                _ => 3
+            })
+            .ThenBy(r => r.Tenant.DisplayName)
+            .ThenBy(r => r.Device.DeviceName);
+}

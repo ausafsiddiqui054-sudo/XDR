@@ -15,7 +15,9 @@ builder.Services.AddMudServices();
 builder.Services.AddSingleton<SampleDataStore>();
 builder.Services.AddSingleton<ITenantRepository>(sp => sp.GetRequiredService<SampleDataStore>());
 builder.Services.AddSingleton<IFindingRepository>(sp => sp.GetRequiredService<SampleDataStore>());
+builder.Services.AddSingleton<IDeviceRepository>(sp => sp.GetRequiredService<SampleDataStore>());
 builder.Services.AddScoped<PostureService>();
+builder.Services.AddScoped<EndpointService>();
 
 var app = builder.Build();
 

@@ -33,7 +33,7 @@ dotnet test
 
 The portal starts with **sample data** (five fictional tenants) so you can design and demo
 the UI before connecting any real tenant. Pages: Overview (`/`), Findings (`/findings`),
-Tenants (`/tenants`). Dark mode toggle is in the top bar.
+Endpoints (`/endpoints`, device detail at `/endpoints/{tenant}/{device}`), Tenants (`/tenants`). Dark mode toggle is in the top bar.
 
 ## How scoring works
 
@@ -48,6 +48,7 @@ checks are excluded. Any open **Critical** caps the grade at C.
 | Core models, scoring, Maester parser | Built; covered by `SecurePulse.Tests` |
 | Maester engine runner | Built; needs a real tenant + certificate to exercise |
 | Portal (Overview, Findings, Tenants) | Built on sample data; builds clean on MudBlazor 8 |
+| Endpoints (Intune device inventory, device detail) | Built on sample data; Graph device sync and remote actions not wired |
 | Worker service, EF Core persistence | Next |
 | Multi-tenant admin-consent onboarding | Next |
 | ScubaGear adapter, PDF report | Next |

@@ -128,6 +128,9 @@ else
     {
         if (when is null) return "Never";
         var span = DateTimeOffset.UtcNow - when.Value;
-        return span.TotalHours < 24 ? $"{(int)span.TotalHours}h ago" : $"{(int)span.TotalDays}d ago";
+        return span.TotalMinutes < 1 ? "Just now"
+            : span.TotalHours < 1 ? $"{(int)span.TotalMinutes}m ago"
+            : span.TotalHours < 24 ? $"{(int)span.TotalHours}h ago"
+            : $"{(int)span.TotalDays}d ago";
     }
 }
