@@ -1,0 +1,147 @@
+@page "/findings"
+@inject PostureService Posture
+
+<PageTitle>Findings · SecurePulse</PageTitle>
+
+<MudText Typo="Typo.h4">Findings</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">Every check from every engine, normalized into one list</MudText>
+
+@if (_portfolio is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Class="sp-card pa-4 mb-4" Elevation="0" Outlined="true">
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="4">
+                <MudSelect T="Guid?" Label="Tenant" @bind-Value="TenantId" Clearable="true" Variant="Variant.Outlined" Dense="true">
+                    @foreach (var t in _portfolio.Scanned)
+                    {
+                        <MudSelectItem T="Guid?" Value="@t.Tenant.Id">@t.Tenant.DisplayName</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" md="2">
+                <MudSelect T="Severity?" Label="Severity" @bind-Value="_severity" Clearable="true" Variant="Variant.Outlined" Dense="true">
+                    @foreach (var s in Enum.GetValues<Severity>().Reverse())
+                    {
+                        <MudSelectItem T="Severity?" Value="@s">@s</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="6" md="2">
+                <MudSelect T="FindingStatus?" Label="Status" @bind-Value="_status" Clearable="true" Variant="Variant.Outlined" Dense="true">
+                    @foreach (var s in Enum.GetValues<FindingStatus>())
+                    {
+                        <MudSelectItem T="FindingStatus?" Value="@s">@SecurePulseTheme.Label(s)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField T="string" @bind-Value="_search" Label="Search" Variant="Variant.Outlined" Dense="true" Immediate="true"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Clearable="true" />
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudGrid Spacing="4">
+        <MudItem xs="12" lg="@(_selected is null ? 12 : 7)">
+            <MudPaper Class="sp-card pa-2" Elevation="0" Outlined="true">
+                <MudTable Items="Filtered" T="Row" Hover="true" Elevation="0" Breakpoint="Breakpoint.Sm" Dense="true"
+                          RowClass="sp-clickable-row" OnRowClick="@(e => _selected = e.Item)">
+                    <HeaderContent>
+                        <MudTh>Check</MudTh>
+                        <MudTh>Tenant</MudTh>
+                        <MudTh>Severity</MudTh>
+                        <MudTh>Status</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Check">
+                            <MudText Typo="Typo.body2" Style="font-weight:600">@context.Finding.Title</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Finding.Category · @context.Finding.Source</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Tenant">@context.Tenant.DisplayName</MudTd>
+                        <MudTd DataLabel="Severity"><SeverityChip Severity="context.Finding.Severity" /></MudTd>
+                        <MudTd DataLabel="Status"><StatusChip Status="context.Finding.Status" /></MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent>
+                        <MudText Class="pa-6" Color="Color.Secondary">No findings match these filters.</MudText>
+                    </NoRecordsContent>
+                    <PagerContent>
+                        <MudTablePager PageSizeOptions="new[] { 15, 30, 60 }" />
+                    </PagerContent>
+                </MudTable>
+            </MudPaper>
+        </MudItem>
+
+        @if (_selected is { } sel)
+        {
+            <MudItem xs="12" lg="5">
+                <MudPaper Class="sp-card pa-6" Elevation="0" Outlined="true">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start">
+                        <MudText Typo="Typo.h6">@sel.Finding.Title</MudText>
+                        <MudIconButton Icon="@Icons.Material.Rounded.Close" Size="Size.Small" aria-label="Close details"
+                                       OnClick="@(() => _selected = null)" />
+                    </MudStack>
+                    <MudStack Row="true" Spacing="1" Class="my-3" Wrap="Wrap.Wrap">
+                        <SeverityChip Severity="sel.Finding.Severity" />
+                        <StatusChip Status="sel.Finding.Status" />
+                        @foreach (var fw in sel.Finding.Frameworks)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary">@fw</MudChip>
+                        }
+                    </MudStack>
+
+                    <MudText Typo="Typo.overline" Color="Color.Secondary">Tenant</MudText>
+                    <MudText Typo="Typo.body2" Class="mb-4">@sel.Tenant.DisplayName (@sel.Tenant.PrimaryDomain)</MudText>
+
+                    @if (!string.IsNullOrWhiteSpace(sel.Finding.Evidence))
+                    {
+                        <MudText Typo="Typo.overline" Color="Color.Secondary">What we found</MudText>
+                        <div class="sp-evidence mb-4">@sel.Finding.Evidence</div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(sel.Finding.Remediation))
+                    {
+                        <MudText Typo="Typo.overline" Color="Color.Secondary">How to fix it</MudText>
+                        <MudText Typo="Typo.body2" Class="mb-4">@sel.Finding.Remediation</MudText>
+                    }
+
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Source: @sel.Finding.Source@(sel.Finding.SourceCheckId is { } id ? $" ({id})" : "")
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private sealed record Row(Tenant Tenant, Finding Finding);
+
+    [SupplyParameterFromQuery(Name = "tenant")]
+    public Guid? TenantId { get; set; }
+
+    private PortfolioPosture? _portfolio;
+    private Severity? _severity;
+    private FindingStatus? _status = FindingStatus.Failed;
+    private string? _search;
+    private Row? _selected;
+
+    protected override async Task OnInitializedAsync() => _portfolio = await Posture.GetPortfolioAsync();
+
+    private IEnumerable<Row> Filtered =>
+        (_portfolio?.Scanned ?? [])
+            .Where(t => TenantId is null || t.Tenant.Id == TenantId)
+            .SelectMany(t => t.Findings.Select(f => new Row(t.Tenant, f)))
+            .Where(r => _severity is null || r.Finding.Severity == _severity)
+            .Where(r => _status is null || r.Finding.Status == _status)
+            .Where(r => string.IsNullOrWhiteSpace(_search)
+                        || r.Finding.Title.Contains(_search, StringComparison.OrdinalIgnoreCase)
+                        || r.Finding.Category.Contains(_search, StringComparison.OrdinalIgnoreCase)
+                        || r.Tenant.DisplayName.Contains(_search, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(r => r.Finding.Status == FindingStatus.Failed)
+            .ThenByDescending(r => r.Finding.Severity)
+            .ThenBy(r => r.Tenant.DisplayName);
+}

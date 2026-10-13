@@ -1,0 +1,15 @@
+<MudPaper Class="sp-card sp-lift pa-5" Elevation="0" Outlined="true">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+        <MudText Typo="Typo.body2" Color="Color.Secondary">@Label</MudText>
+        <MudIcon Icon="@Icon" Color="@Color" />
+    </MudStack>
+    <div class="sp-kpi-value mt-3">@($"{Value}{Suffix}")</div>
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public int Value { get; set; }
+    [Parameter] public string? Suffix { get; set; }
+    [Parameter] public string Icon { get; set; } = Icons.Material.Rounded.Insights;
+    [Parameter] public Color Color { get; set; } = Color.Primary;
+}

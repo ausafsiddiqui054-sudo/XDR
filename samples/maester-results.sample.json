@@ -1,0 +1,73 @@
+{
+  "Result": "Failed",
+  "TenantId": "00000000-0000-0000-0000-000000000000",
+  "TotalCount": 6,
+  "PassedCount": 2,
+  "FailedCount": 2,
+  "InvestigateCount": 1,
+  "SkippedCount": 1,
+  "Tests": [
+    {
+      "Index": 1,
+      "Id": "SAMPLE.001",
+      "Title": "Privileged roles require phishing-resistant MFA",
+      "Name": "SAMPLE.001: Privileged roles require phishing-resistant MFA",
+      "HelpUrl": "https://maester.dev/docs/tests",
+      "Severity": "Critical",
+      "Tag": ["Entra", "Conditional Access", "Privileged"],
+      "Result": "Failed",
+      "Block": "Conditional Access Baseline Policies",
+      "Duration": "00:00:01",
+      "ResultDetail": {
+        "TestDescription": "Admins must use phishing-resistant authentication.",
+        "TestResult": "No Conditional Access policy enforces an authentication strength for directory roles."
+      }
+    },
+    {
+      "Index": 2,
+      "Id": "SAMPLE.002",
+      "Title": "Legacy authentication is blocked",
+      "Severity": "High",
+      "Tag": ["Entra", "Conditional Access"],
+      "Result": "Passed",
+      "Block": "Conditional Access Baseline Policies"
+    },
+    {
+      "Index": 3,
+      "Id": "SAMPLE.003",
+      "Title": "Devices must be compliant to access corporate data",
+      "Severity": "High",
+      "Tag": ["Intune", "Device"],
+      "Result": "Failed",
+      "Block": "Intune",
+      "ResultDetail": { "TestResult": "No compliance-based Conditional Access policy found." }
+    },
+    {
+      "Index": 4,
+      "Id": "SAMPLE.004",
+      "Title": "External forwarding of mail is disabled",
+      "Severity": "Medium",
+      "Tag": ["EXO"],
+      "Result": "Passed",
+      "Block": "Exchange Online"
+    },
+    {
+      "Index": 5,
+      "Id": "SAMPLE.005",
+      "Title": "Guest access to SharePoint is reviewed",
+      "Severity": "",
+      "Tag": "SharePoint",
+      "Result": "Investigate",
+      "Block": "SharePoint Online"
+    },
+    {
+      "Index": 6,
+      "Id": "SAMPLE.006",
+      "Title": "Defender for Identity sensors are healthy",
+      "Severity": "Low",
+      "Tag": [],
+      "Result": "Skipped",
+      "Block": "Defender"
+    }
+  ]
+}

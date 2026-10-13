@@ -1,0 +1,5 @@
+<MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@SecurePulseTheme.ColorOf(Severity)">@Severity</MudChip>
+
+@code {
+    [Parameter, EditorRequired] public Severity Severity { get; set; }
+}

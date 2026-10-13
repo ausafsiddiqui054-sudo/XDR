@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SecurePulse.Core/SecurePulse.Core.csproj" />
+    <Project Path="src/SecurePulse.Engines/SecurePulse.Engines.csproj" />
+    <Project Path="src/SecurePulse.Reporting/SecurePulse.Reporting.csproj" />
+    <Project Path="src/SecurePulse.Web/SecurePulse.Web.csproj" />
+  </Folder>
+</Solution>

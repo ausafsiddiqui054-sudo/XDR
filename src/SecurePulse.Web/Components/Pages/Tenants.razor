@@ -1,0 +1,88 @@
+@page "/tenants"
+@inject PostureService Posture
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Tenants · SecurePulse</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
+    <div>
+        <MudText Typo="Typo.h4">Tenants</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Client Microsoft 365 tenants and their consent status</MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add" OnClick="Connect">
+        Connect tenant
+    </MudButton>
+</MudStack>
+
+@if (_portfolio is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid Spacing="4">
+        @foreach (var t in _portfolio.Tenants)
+        {
+            <MudItem xs="12" sm="6" lg="4">
+                <MudPaper Class="sp-card sp-lift pa-5" Elevation="0" Outlined="true">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start">
+                        <div style="min-width:0">
+                            <MudText Typo="Typo.h6">@t.Tenant.DisplayName</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@t.Tenant.PrimaryDomain · @t.Tenant.Industry</MudText>
+                        </div>
+                        @if (t.Score is { } s)
+                        {
+                            <MudText Typo="Typo.h5" Color="@SecurePulseTheme.ColorOfScore(s.Score)">@s.Score</MudText>
+                        }
+                    </MudStack>
+
+                    <MudStack Row="true" Spacing="1" Class="my-3" Wrap="Wrap.Wrap">
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@ConsentColor(t.Tenant.ConsentState)">
+                            @ConsentLabel(t.Tenant.ConsentState)
+                        </MudChip>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text">@(t.Tenant.PartnerName ?? "Direct client")</MudChip>
+                    </MudStack>
+
+                    @if (t.Score is { } score)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            @score.Failed failing · @score.Investigate to investigate · last scan @Dashboard.Ago(t.Tenant.LastScanAt)
+                        </MudText>
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-2 px-0"
+                                   OnClick="@(() => Nav.NavigateTo($"findings?tenant={t.Tenant.Id}"))">View findings</MudButton>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Waiting for an admin to grant read-only consent.</MudText>
+                    }
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private PortfolioPosture? _portfolio;
+
+    protected override async Task OnInitializedAsync() => _portfolio = await Posture.GetPortfolioAsync();
+
+    private void Connect() =>
+        Snackbar.Add("The admin-consent onboarding flow is the next build step.", MudBlazor.Severity.Info);
+
+    private static string ConsentLabel(TenantConsentState s) => s switch
+    {
+        TenantConsentState.ReadOnlyGranted => "Read-only access",
+        TenantConsentState.RemediationGranted => "Remediation access",
+        TenantConsentState.Revoked => "Consent revoked",
+        _ => "Consent pending"
+    };
+
+    private static Color ConsentColor(TenantConsentState s) => s switch
+    {
+        TenantConsentState.ReadOnlyGranted => Color.Success,
+        TenantConsentState.RemediationGranted => Color.Warning,
+        TenantConsentState.Revoked => Color.Error,
+        _ => Color.Default
+    };
+}

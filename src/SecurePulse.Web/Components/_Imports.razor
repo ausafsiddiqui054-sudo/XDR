@@ -1,0 +1,19 @@
+@using System.Net.Http
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+@using Microsoft.JSInterop
+@using MudBlazor
+@using SecurePulse.Core.Models
+@using SecurePulse.Reporting
+@using SecurePulse.Web
+@using SecurePulse.Web.Components
+@using SecurePulse.Web.Components.Layout
+@using SecurePulse.Web.Components.Shared
+@using SecurePulse.Web.Services
+@using SecurePulse.Web.Theme
+@* MudBlazor also has a Severity type (for snackbars); ours wins inside components. *@
+@using Severity = SecurePulse.Core.Models.Severity

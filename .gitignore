@@ -1,0 +1,15 @@
+bin/
+obj/
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+TestResults/
+publish/
+*.pfx
+*.p12
+*.pem
+appsettings.*.local.json
+.env

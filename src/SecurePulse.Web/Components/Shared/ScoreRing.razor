@@ -1,0 +1,13 @@
+<div class="sp-score-ring" role="img" aria-label="@($"Security score {Score} out of 100, grade {Grade}")">
+    <MudProgressCircular Value="@Score" Min="0" Max="100" StrokeWidth="12" Rounded="true"
+                         Color="@SecurePulseTheme.ColorOfScore(Score)" Style="width:168px;height:168px" />
+    <div class="sp-score-label">
+        <span class="sp-score-value">@Score</span>
+        <MudText Typo="Typo.caption" Color="Color.Secondary">Grade @Grade</MudText>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int Score { get; set; }
+    [Parameter, EditorRequired] public string Grade { get; set; } = "-";
+}

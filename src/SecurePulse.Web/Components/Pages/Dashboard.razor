@@ -1,0 +1,133 @@
+@page "/"
+@inject PostureService Posture
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Overview · SecurePulse</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
+    <div>
+        <MudText Typo="Typo.h4">Security posture</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Across all connected Microsoft 365 tenants</MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Refresh"
+               OnClick="RunScan">Run scan</MudButton>
+</MudStack>
+
+@if (_portfolio is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid Spacing="4">
+        <MudItem xs="12" md="4">
+            <MudPaper Class="sp-card pa-6" Elevation="0" Outlined="true">
+                <MudText Typo="Typo.subtitle1" Class="mb-4">Portfolio score</MudText>
+                <ScoreRing Score="_portfolio.AverageScore" Grade="@GradeOf(_portfolio.AverageScore)" />
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Class="mt-4">
+                    Average of @_portfolio.Scanned.Count() scanned tenants
+                </MudText>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="8">
+            <MudGrid Spacing="4">
+                <MudItem xs="6" sm="6">
+                    <Kpi Label="Open critical" Value="@_portfolio.OpenOf(Severity.Critical)" Icon="@Icons.Material.Rounded.ErrorOutline" Color="Color.Error" />
+                </MudItem>
+                <MudItem xs="6" sm="6">
+                    <Kpi Label="Open high" Value="@_portfolio.OpenOf(Severity.High)" Icon="@Icons.Material.Rounded.WarningAmber" Color="Color.Warning" />
+                </MudItem>
+                <MudItem xs="6" sm="6">
+                    <Kpi Label="Checks passing" Value="@_portfolio.PassRatePercent" Suffix="%" Icon="@Icons.Material.Rounded.CheckCircleOutline" Color="Color.Success" />
+                </MudItem>
+                <MudItem xs="6" sm="6">
+                    <Kpi Label="Tenants connected" Value="@_portfolio.Tenants.Count" Icon="@Icons.Material.Rounded.Apartment" Color="Color.Primary" />
+                </MudItem>
+            </MudGrid>
+        </MudItem>
+
+        <MudItem xs="12" lg="7">
+            <MudPaper Class="sp-card pa-4" Elevation="0" Outlined="true">
+                <MudText Typo="Typo.h6" Class="px-2 pb-2">Tenants</MudText>
+                <MudTable Items="_portfolio.Tenants" T="TenantPosture" Hover="true" Elevation="0" Breakpoint="Breakpoint.Sm"
+                          RowClass="sp-clickable-row" OnRowClick="@(e => OpenTenant(e.Item!))">
+                    <HeaderContent>
+                        <MudTh>Tenant</MudTh>
+                        <MudTh>Score</MudTh>
+                        <MudTh>Critical</MudTh>
+                        <MudTh>Last scan</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Tenant">
+                            <MudText Typo="Typo.body1">@context.Tenant.DisplayName</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@(context.Tenant.PartnerName ?? "Direct client")</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Score">
+                            @if (context.Score is { } s)
+                            {
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudProgressLinear Value="@s.Score" Color="@SecurePulseTheme.ColorOfScore(s.Score)" Rounded="true" Size="Size.Medium" Style="width:96px" />
+                                    <MudText Typo="Typo.body2"><b>@s.Score</b> · @s.Grade</MudText>
+                                </MudStack>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Awaiting consent</MudChip>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Critical">
+                            @{ var crit = context.Score?.FailedBySeverity[Severity.Critical] ?? 0; }
+                            <MudText Typo="Typo.body2" Color="@(crit > 0 ? Color.Error : Color.Default)">@crit</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Last scan">
+                            <MudText Typo="Typo.body2">@Ago(context.Tenant.LastScanAt)</MudText>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" lg="5">
+            <MudPaper Class="sp-card pa-4" Elevation="0" Outlined="true">
+                <MudText Typo="Typo.h6" Class="px-2 pb-2">Fix these first</MudText>
+                <MudStack Spacing="1">
+                    @foreach (var (tenant, finding) in _portfolio.TopRisks())
+                    {
+                        <MudPaper Elevation="0" Class="pa-3 sp-clickable-row" Style="border-radius:16px"
+                                  @onclick="@(() => Nav.NavigateTo($"findings?tenant={tenant.Tenant.Id}"))">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                <div style="min-width:0">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600">@finding.Title</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@tenant.Tenant.DisplayName · @finding.Category</MudText>
+                                </div>
+                                <SeverityChip Severity="finding.Severity" />
+                            </MudStack>
+                        </MudPaper>
+                    }
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private PortfolioPosture? _portfolio;
+
+    protected override async Task OnInitializedAsync() => _portfolio = await Posture.GetPortfolioAsync();
+
+    private void OpenTenant(TenantPosture t) => Nav.NavigateTo($"findings?tenant={t.Tenant.Id}");
+
+    private void RunScan() =>
+        Snackbar.Add("Scanning runs from the Worker service, which arrives in the next build step.", MudBlazor.Severity.Info);
+
+    private static string GradeOf(int score) => score switch { >= 90 => "A", >= 80 => "B", >= 70 => "C", >= 60 => "D", _ => "F" };
+
+    internal static string Ago(DateTimeOffset? when)
+    {
+        if (when is null) return "Never";
+        var span = DateTimeOffset.UtcNow - when.Value;
+        return span.TotalHours < 24 ? $"{(int)span.TotalHours}h ago" : $"{(int)span.TotalDays}d ago";
+    }
+}
