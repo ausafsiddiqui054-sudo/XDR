@@ -17,6 +17,7 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
     public DbSet<AuditEventEntity> AuditEvents => Set<AuditEventEntity>();
     public DbSet<ScanRunEntity> ScanRuns => Set<ScanRunEntity>();
     public DbSet<DeviceActionEntity> DeviceActions => Set<DeviceActionEntity>();
+    public DbSet<DataProtectionKeyEntity> DataProtectionKeys => Set<DataProtectionKeyEntity>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder builder)
     {
@@ -109,6 +110,14 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
             e.HasOne<TenantEntity>().WithMany().HasForeignKey(x => x.ClientTenantId).OnDelete(DeleteBehavior.Cascade);
         });
     
+        b.Entity<DataProtectionKeyEntity>(e =>
+        {
+            e.ToTable("data_protection_keys");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.FriendlyName).HasMaxLength(256);
+            e.HasIndex(x => x.FriendlyName).IsUnique();
+        });
+
         b.Entity<AuditEventEntity>(e =>
         {
             e.ToTable("audit_events");

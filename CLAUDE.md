@@ -50,7 +50,7 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
   and check its `roles` (all of `AssessmentPermissions.Required`, nothing outside
   `AssessmentPermissions.IsReadOnly`).
 - Consent links are single-use, expiring, bound to the domain's Entra tenant; only a SHA-256
-  of `state` is stored for lookup. The portal holds no certificate and never calls Graph.
+  of `state` is stored for lookup. The portal holds no Graph certificate and never calls Graph.
 
 ## Sign-in invariants
 - Authorization reads only claims SecurePulse issues (`PortalClaims`, issuer "SecurePulse"),
@@ -119,8 +119,17 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
   unavailable so missing sensors aren't reported as "not onboarded".
 - Match Defender devices to Intune by Entra device ID; a host-name fallback only when unique on both sides.
 
+## Data protection invariants
+- With PostgreSQL the key ring is shared through `data_protection_keys` (`DatabaseXmlRepository`), always
+  encrypted with the key-encryption certificate (`DataProtection:CertificateThumbprint`). The repository
+  refuses elements still marked `requiresEncryption`; never store keys unencrypted or add a plaintext fallback.
+- Startup fails rather than silently giving each instance its own keys: database store without a
+  certificate, a malformed thumbprint, or a missing (current or previous) certificate. `Local` is an
+  explicit single-instance choice.
+- Keep `SetApplicationName(KeyRing.ApplicationName)`; changing it invalidates every cookie and stored consent state.
+- The key-encryption certificate is the portal's own; it is not the Graph app's certificate and the
+  portal still never calls Graph.
+
 ## Next steps (in order)
-1. Persist the data-protection key ring (shared store) before running more than one portal
-   instance: it protects consent-link state and the sign-in cookie.
-2. Audit retention: a maintenance role allowed to purge `audit_events` older than a configured
+1. Audit retention: a maintenance role allowed to purge `audit_events` older than a configured
    period (the trigger blocks the app). Optionally ship events to a SIEM (Sentinel) as well.

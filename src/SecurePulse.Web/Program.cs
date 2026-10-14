@@ -4,7 +4,6 @@ using SecurePulse.Data;
 using SecurePulse.Web.Components;
 using SecurePulse.Web.Services;
 using SecurePulse.Web.Services.Onboarding;
-using Microsoft.AspNetCore.DataProtection;
 using SecurePulse.Web.Security;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -51,15 +50,23 @@ builder.Services.AddSingleton(ReportSettings.Load(builder.Configuration.GetSecti
     builder.Environment.ContentRootPath));
 builder.Services.AddScoped<ReportService>();
 
-// Tenant onboarding. Consent-link state is encrypted with data protection; in production,
-// persist the key ring somewhere shared (PersistKeysTo...) so links survive restarts and scale-out.
-builder.Services.AddDataProtection().SetApplicationName("SecurePulse");
+// Data protection (sign-in cookie, antiforgery, consent-link state). With PostgreSQL the key ring is
+// shared by every instance and encrypted with a certificate; a setup that can't do that stops here.
+var keyRing = builder.Services.AddSecurePulseDataProtection(
+    builder.Configuration.GetSection("DataProtection").Get<KeyRingOptions>() ?? new KeyRingOptions(),
+    useDatabase, builder.Environment.IsDevelopment(), KeyRing.FindInStores);
+
+// Tenant onboarding.
 builder.Services.AddSingleton(builder.Configuration.GetSection("Onboarding").Get<OnboardingOptions>() ?? new OnboardingOptions());
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddHttpClient<IEntraTenantResolver, EntraTenantResolver>(c => c.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddScoped<OnboardingService>();
 
 var app = builder.Build();
+
+app.Logger.LogInformation("Data-protection keys: {KeyRing}", keyRing.Description);
+foreach (var warning in keyRing.Warnings)
+    app.Logger.LogWarning("{KeyRingWarning}", warning);
 
 if (useDatabase && app.Environment.IsDevelopment())
 {

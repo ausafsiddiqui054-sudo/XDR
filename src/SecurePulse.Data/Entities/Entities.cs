@@ -217,3 +217,16 @@ public sealed class DeviceActionEntity
     public DateTimeOffset? CompletedAt { get; set; }
     public string? Error { get; set; }
 }
+
+/// <summary>
+/// One ASP.NET Core data-protection key ring element (a key or a revocation), shared by every
+/// portal instance. The key material inside <see cref="Xml"/> is encrypted with the portal's
+/// key-encryption certificate before it gets here; the database never holds it in the clear.
+/// </summary>
+public sealed class DataProtectionKeyEntity
+{
+    public int Id { get; set; }
+    public string FriendlyName { get; set; } = "";
+    public string Xml { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; }
+}

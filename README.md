@@ -114,6 +114,37 @@ To run the PostgreSQL repository tests, point `SECUREPULSE_TEST_POSTGRES` at a s
 (no `Database=`) with a role that can create databases. Each test class creates and drops its
 own database. Without the variable those tests are reported as skipped.
 
+## Running more than one portal instance
+
+The portal uses ASP.NET Core data protection for the sign-in cookie, antiforgery tokens and the
+state behind consent links. Every instance needs the same keys, otherwise a user signed in on one
+instance is signed out on the next and consent links can't be shown again. With PostgreSQL the key
+ring lives in the `data_protection_keys` table, shared by all instances.
+
+The database never holds the keys in the clear: each key is encrypted with a **key-encryption
+certificate** before it's stored, and the repository refuses to store a key that isn't encrypted.
+Use a certificate of its own (not the Graph app's), with its private key, in `CurrentUser\My` or
+`LocalMachine\My` on every portal host:
+
+| Setting | Default | |
+|---|---|---|
+| `DataProtection:Store` | `Auto` | `Auto`: the database when PostgreSQL is configured (local in Development without a certificate), otherwise local. `Database` or `Local` to choose. |
+| `DataProtection:CertificateThumbprint` | | The key-encryption certificate. Required for the database store. |
+| `DataProtection:PreviousCertificateThumbprints` | `[]` | Certificates rotated out, kept until the keys they encrypted have expired (keys live 90 days). |
+
+The portal won't start if the database store is used without a certificate, the thumbprint is
+malformed, or a certificate (current or previous) isn't found with its private key. It logs which
+store it uses, and warns when a certificate expires within 30 days. `Local` keeps ASP.NET Core's
+per-machine folder, for a single instance only; outside Development the portal warns about it.
+
+To rotate the certificate: install the new one on every host, set it as
+`CertificateThumbprint`, move the old thumbprint to `PreviousCertificateThumbprints`, and restart
+the instances. Remove the old one after 90 days. Switching an existing deployment to the shared
+store signs everyone out once, and consent links made before the switch can't be shown again
+(create new ones). The Worker applies the migration that creates the table, so update it first.
+Blazor Server keeps each user's session on one instance, so the load balancer needs sticky
+sessions as well.
+
 ## Connecting a client tenant
 
 Tenants → **Connect tenant** creates an Entra admin-consent link for the client's domain. Send
@@ -446,6 +477,7 @@ checks are excluded. Any open **Critical** caps the grade at C.
 | Defender health per device (Intune antivirus state, Defender for Endpoint sensor via advanced hunting) | Built; tested with stubbed Graph and against PostgreSQL 16; needs a real tenant with Defender for Endpoint to exercise |
 | Device remote actions (remediation consent, approval queue, Worker sending via Graph) | Built; tested with stubbed Graph and against PostgreSQL 16; needs the remediation app registration and a real tenant to exercise |
 | PostgreSQL persistence (`SecurePulse.Data`) | Built; tested against PostgreSQL 16 |
+| Shared data-protection key ring (PostgreSQL, certificate-encrypted) | Built; tested against PostgreSQL 16 and with two portal instances |
 | Worker: Intune device sync | Built and tested against stubbed Graph; needs a real tenant + certificate to exercise |
 | Tenant onboarding (admin consent, verification, first sync) | Built; tested with stubbed Entra; needs the app registration to exercise |
 | Worker: scheduled Maester scans (queue, retries, permission check, Run scan / Scan now) | Built; tested against PostgreSQL 16 and end to end with a stand-in `pwsh` |
@@ -465,4 +497,6 @@ checks are excluded. Any open **Critical** caps the grade at C.
   person's approval.
 - Portal access comes from SecurePulse's own user table, never from token role claims.
 - Security events are kept in an append-only audit table the app can't modify.
+- Data-protection keys (sign-in cookie, consent-link state) are shared through PostgreSQL only
+  after encryption with a certificate; the portal refuses a shared key store without one.
 - Check each engine's license before redistributing modified versions (Wazuh is GPLv2).
