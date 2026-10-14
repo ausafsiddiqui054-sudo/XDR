@@ -44,6 +44,11 @@ builder.Services.AddScoped<AuditTrail>();
 builder.Services.AddSingleton(ScanEngineSelection.From(builder.Configuration.GetSection("Scans:Engines").Get<string[]>()));
 builder.Services.AddScoped<ScanRequestService>();
 
+// Branded PDF reports. Off until Reports:QuestPdfLicense names the QuestPDF license tier held.
+builder.Services.AddSingleton(ReportSettings.Load(builder.Configuration.GetSection("Reports").Get<ReportOptions>() ?? new ReportOptions(),
+    builder.Environment.ContentRootPath));
+builder.Services.AddScoped<ReportService>();
+
 // Tenant onboarding. Consent-link state is encrypted with data protection; in production,
 // persist the key ring somewhere shared (PersistKeysTo...) so links survive restarts and scale-out.
 builder.Services.AddDataProtection().SetApplicationName("SecurePulse");
@@ -92,6 +97,7 @@ app.MapGet("/" + OnboardingService.CallbackPath, async (HttpRequest request, Onb
 
 app.MapPortalAuthEndpoints(useEntra);
 app.MapAuditExport();
+ReportService.MapReportDownload(app);
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

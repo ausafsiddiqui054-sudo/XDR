@@ -19,6 +19,10 @@
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Refresh"
                    OnClick="RunScan" Disabled="_queueing">Run scan</MudButton>
     </AuthorizeView>
+    @if (_isViewer && _portfolio?.Scanned.FirstOrDefault() is { } mine)
+    {
+        <ReportButton TenantId="mine.Tenant.Id" Variant="Variant.Filled" />
+    }
 </MudStack>
 
 @if (_portfolio is null)

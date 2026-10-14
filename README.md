@@ -18,7 +18,7 @@ SecurePulse.slnx
     ├── SecurePulse.Data        EF Core + PostgreSQL repositories, migrations, dev seeder
     ├── SecurePulse.Engines     Engine adapters (Maester, ScubaGear): out-of-process runners + JSON parsers
     ├── SecurePulse.Intune      Intune device inventory over Microsoft Graph (certificate auth)
-    ├── SecurePulse.Reporting   RiskScoreCalculator (0–100 score, grade, top risks)
+    ├── SecurePulse.Reporting   RiskScoreCalculator (0–100 score, grade, top risks) and the branded PDF report (QuestPDF)
     ├── SecurePulse.Web         Blazor Server portal (MudBlazor, M3 Expressive-style theme), consent links
     └── SecurePulse.Worker      Background service: consent verification, Intune device sync, scheduled engine scans
 tests/
@@ -274,6 +274,7 @@ filters).
 | Devices | Remote action requests (currently recorded as not sent) |
 | Scans | Scan requested from the portal (scheduled scans are in `scan_runs`, not the audit log) |
 | Audit log | Each CSV export |
+| Reports | Each PDF report download |
 
 - **Append-only in the database:** a trigger rejects `UPDATE`, `DELETE` and `TRUNCATE` on
   `audit_events`, so entries can't be changed through the app or with its credentials. No
@@ -289,6 +290,51 @@ filters).
 - If writing an audit entry fails, the action stands and the failure is logged at Critical
   level. CSV cells that start with `=`, `+`, `-`, `@` or a tab are prefixed with `'` so
   spreadsheets don't run them as formulas.
+
+## Client reports (PDF)
+
+**Report** on a tenant card, **Download report** on the Findings page (with a tenant selected) and
+on a client viewer's Overview download a branded PDF for one tenant:
+
+- a cover with the brand, tenant, score ring and grade;
+- a summary (open findings by severity, pass rate, device compliance);
+- the ten things to fix first, linked to their details;
+- results by area, with Intune device compliance and the longest-unseen non-compliant devices;
+- every finding to fix, with evidence, remediation and a link to the check's documentation (https only);
+- the checks that pass, and how the score is calculated (weights read from `RiskScoreCalculator`).
+
+The score is `RiskScoreCalculator`'s, the same as in the portal. Client viewers can download
+only their own tenant's report; any other tenant returns 404. A tenant without scan results
+returns 409. Each download is recorded as *Report downloaded* in the audit log. The file is
+generated per request and not stored.
+
+**License (required).** Reports use [QuestPDF](https://www.questpdf.com), which must be told which
+license tier your organisation holds. Reports stay off (buttons disabled, the endpoint returns
+503) until `Reports:QuestPdfLicense` is set:
+
+- `Community`: free only for organisations under USD 1M annual gross revenue, individuals,
+  charities, academic institutions and OSI open-source projects. Public-sector bodies and listed
+  companies never qualify.
+- `Professional` or `Enterprise`: paid; needed before production use otherwise.
+
+See QuestPDF's [license guide](https://www.questpdf.com/license/guide.html). SecurePulse never picks
+a tier for you.
+
+Branding settings:
+
+| Setting | Default | |
+|---|---|---|
+| `Reports:Branding:CompanyName` | `SecurePulse` | Shown on reports for tenants without a partner. A tenant's `PartnerName` (its MSP) is used instead when set. |
+| `Reports:Branding:LogoPath` | (shield) | PNG, JPEG or SVG, at most 1 MB, relative to the portal's content root. |
+| `Reports:Branding:AccentColor` | `#4F46C8` | Headings, rules and the brand bar. |
+| `Reports:Branding:ContactLine` | | E.g. `security@msp.example · +971 4 000 0000`, under the brand on the cover. |
+| `Reports:TimeZone` | `UTC` | For printed dates, e.g. `Asia/Dubai`. |
+
+Invalid settings stop the portal at startup rather than producing broken reports. Text uses
+QuestPDF's bundled Lato with Noto Sans Arabic (SIL OFL 1.1, embedded in `SecurePulse.Reporting`)
+as fallback, so Arabic tenant, device and user names render without fonts on the host. Other
+scripts (e.g. CJK, emoji) print as placeholders rather than failing the report; add a Noto font
+to `src/SecurePulse.Reporting/Fonts` and to `ReportFonts.Families` if you need them.
 
 ## How scoring works
 
@@ -311,7 +357,7 @@ checks are excluded. Any open **Critical** caps the grade at C.
 | ScubaGear engine (Entra ID baseline, Windows Worker) | Built; parser tested against ScubaGear 1.8.0's sample report, runner end to end with a stand-in; needs a Windows Worker, a real tenant and certificate to exercise |
 | Portal sign-in with roles (Entra ID, Owner / MSP admin / Client viewer) | Built; tested with development sign-in and the real Entra redirect |
 | Security audit log (append-only, page + CSV export) | Built; tested against PostgreSQL 16 |
-| PDF report | Next |
+| Branded PDF client report (QuestPDF) | Built; content checked by extracting the PDF's text; off until `Reports:QuestPdfLicense` is set |
 
 ## Security notes
 

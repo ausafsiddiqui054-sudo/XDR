@@ -85,12 +85,22 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
   directory roles, which break the read-only rule. Don't add products without that decision.
 - Shared out-of-process plumbing (validation, work folder, timeout) is in `Engines/OutOfProcessScan.cs`.
 
+## Report invariants
+- PDF reports use QuestPDF. Its license tier is an organisational decision: it comes only from
+  `Reports:QuestPdfLicense` (`ReportLicense.Apply`); never default or hard-code a tier. Tests set
+  Community for development in the `QuestPDF` test collection (the setting is process-wide).
+- Reports show `RiskScoreCalculator`'s score and weights; the document never computes its own.
+- The download endpoint builds `UserContext` from `HttpContext.User` (no Blazor circuit there),
+  filters with `CanSee` (404 for other tenants) and audits `report.downloaded`.
+- Engine text in reports is untrusted: only https links become hyperlinks.
+- Fonts are embedded (`ReportFonts`: Lato + Noto Sans Arabic); QuestPDF 2026.9+ ignores system fonts.
+  Missing glyphs print placeholders (`ThrowOnMissingTextGlyphs = false`) instead of failing a report.
+
 ## Next steps (in order)
-1. Branded PDF report (QuestPDF; check its license tier).
-2. Device remote actions (sync/restart/retire/wipe): approval queue + audit log, then a
+1. Device remote actions (sync/restart/retire/wipe): approval queue + audit log, then a
    separate write-consent app and Graph client. The UI dialog is built and disabled until then.
-3. Defender health per device via the Defender for Endpoint API (not in Graph v1.0 managedDevice).
-4. Persist the data-protection key ring (shared store) before running more than one portal
+2. Defender health per device via the Defender for Endpoint API (not in Graph v1.0 managedDevice).
+3. Persist the data-protection key ring (shared store) before running more than one portal
    instance: it protects consent-link state and the sign-in cookie.
-5. Audit retention: a maintenance role allowed to purge `audit_events` older than a configured
+4. Audit retention: a maintenance role allowed to purge `audit_events` older than a configured
    period (the trigger blocks the app). Optionally ship events to a SIEM (Sentinel) as well.

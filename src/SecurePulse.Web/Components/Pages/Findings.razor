@@ -3,8 +3,16 @@
 
 <PageTitle>Findings · SecurePulse</PageTitle>
 
-<MudText Typo="Typo.h4">Findings</MudText>
-<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">Every check from every engine, normalized into one list</MudText>
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
+    <div>
+        <MudText Typo="Typo.h4">Findings</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Every check from every engine, normalized into one list</MudText>
+    </div>
+    @if (TenantId is { } reportTenant && _portfolio?.Scanned.Any(t => t.Tenant.Id == reportTenant) == true)
+    {
+        <ReportButton TenantId="reportTenant" />
+    }
+</MudStack>
 
 @if (_portfolio is null)
 {

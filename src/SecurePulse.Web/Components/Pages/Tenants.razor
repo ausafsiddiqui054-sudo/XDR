@@ -149,6 +149,7 @@ else
                         {
                             <MudButton Variant="Variant.Text" Color="Color.Primary" Class="px-0"
                                        OnClick="@(() => Nav.NavigateTo($"findings?tenant={t.Tenant.Id}"))">View findings</MudButton>
+                            <ReportButton TenantId="t.Tenant.Id" Variant="Variant.Text" Label="Report" Class="px-0" />
                         }
                         @if (connected)
                         {
