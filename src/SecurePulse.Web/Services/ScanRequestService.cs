@@ -5,23 +5,41 @@ using SecurePulse.Web.Security;
 namespace SecurePulse.Web.Services;
 
 /// <summary>
-/// Portal side of scanning: shows each tenant's latest run and lets operators queue a scan now.
-/// The Worker does the scanning; the portal only adds rows to the queue.
+/// The engines this deployment runs (portal setting Scans:Engines, default Maester). It should list
+/// the engines of all Workers together; a run queued for an engine no Worker runs would never start.
+/// </summary>
+public sealed record ScanEngineSelection(IReadOnlyList<string> Engines)
+{
+    public static ScanEngineSelection From(string[]? configured)
+    {
+        var engines = configured is { Length: > 0 } ? configured.Distinct(StringComparer.Ordinal).ToList() : [ScanEngines.Maester];
+        if (engines.FirstOrDefault(e => !ScanEngines.All.Contains(e, StringComparer.Ordinal)) is { } unknown)
+            throw new InvalidOperationException($"Scans:Engines lists '{unknown}'. Known engines: {string.Join(", ", ScanEngines.All)}.");
+        return new ScanEngineSelection(engines);
+    }
+}
+
+/// <summary>
+/// Portal side of scanning: shows each tenant's latest run per engine and lets operators queue a
+/// scan now. The Worker does the scanning; the portal only adds rows to the queue.
 /// </summary>
 public sealed class ScanRequestService(
     IScanRunRepository runs,
     ITenantRepository tenants,
     IUserContextAccessor users,
     AuditTrail audit,
+    ScanEngineSelection selection,
     TimeProvider time)
 {
-    /// <summary>Latest Maester run per tenant the current user can see.</summary>
-    public async Task<IReadOnlyDictionary<Guid, ScanRun>> GetLatestAsync(CancellationToken ct = default)
+    public IReadOnlyList<string> Engines => selection.Engines;
+
+    /// <summary>Latest run per tenant and configured engine, for tenants the current user can see.</summary>
+    public async Task<IReadOnlyDictionary<(Guid TenantId, string Engine), ScanRun>> GetLatestAsync(CancellationToken ct = default)
     {
         var user = await users.GetAsync();
         return (await runs.GetLatestAsync(ct))
-            .Where(r => r.Engine == ScanEngines.Maester && user.CanSee(r.TenantId))
-            .ToDictionary(r => r.TenantId);
+            .Where(r => selection.Engines.Contains(r.Engine) && user.CanSee(r.TenantId))
+            .ToDictionary(r => (r.TenantId, r.Engine));
     }
 
     /// <summary>Queues a scan of every onboarded tenant. Returns how many runs were newly queued.</summary>
@@ -38,7 +56,7 @@ public sealed class ScanRequestService(
         foreach (var id in tenantIds.Distinct())
         {
             if (await tenants.GetAsync(id, ct) is not { } tenant || !IsOnboarded(tenant)) continue;
-            foreach (var engine in ScanEngines.All)
+            foreach (var engine in selection.Engines)
             {
                 var (run, created) = await runs.EnqueueAsync(tenant.Id, engine, ScanTrigger.Manual, actor.Name, time.GetUtcNow(), ct);
                 if (!created) continue;

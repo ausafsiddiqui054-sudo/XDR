@@ -12,14 +12,15 @@ and a client-ready report.
 ```
 SecurePulse.slnx
 ├── samples/maester-results.sample.json   Example Maester output used for testing the parser
+├── samples/scubagear-results.sample.json ScubaGear 1.8.0's own sample report (CC0; raw tenant export removed)
 └── src/
     ├── SecurePulse.Core        Domain models (Finding, Tenant, ManagedDevice, RiskScore) + interfaces
     ├── SecurePulse.Data        EF Core + PostgreSQL repositories, migrations, dev seeder
-    ├── SecurePulse.Engines     Engine adapters. Maester: out-of-process runner + JSON parser
+    ├── SecurePulse.Engines     Engine adapters (Maester, ScubaGear): out-of-process runners + JSON parsers
     ├── SecurePulse.Intune      Intune device inventory over Microsoft Graph (certificate auth)
     ├── SecurePulse.Reporting   RiskScoreCalculator (0–100 score, grade, top risks)
     ├── SecurePulse.Web         Blazor Server portal (MudBlazor, M3 Expressive-style theme), consent links
-    └── SecurePulse.Worker      Background service: consent verification, Intune device sync, scheduled Maester scans
+    └── SecurePulse.Worker      Background service: consent verification, Intune device sync, scheduled engine scans
 tests/
     └── SecurePulse.Tests       xUnit: parser, scoring, Graph client, onboarding, sync, scans, PostgreSQL repositories
 ```
@@ -114,9 +115,18 @@ the result page shows no tenant data.
 
 ## Security scans
 
-The Worker runs [Maester](https://maester.dev) against each connected tenant (consent granted and
-a certificate in `CredentialReference`) and stores the results as findings, which drive the
-score and the fix list.
+The Worker runs [Maester](https://maester.dev) and, on a Windows Worker,
+[ScubaGear](https://github.com/cisagov/ScubaGear) (CISA's SCuBA baselines) against each connected
+tenant (consent granted and a certificate in `CredentialReference`). Results are stored as
+findings, which drive the score and the fix list; each engine replaces only its own findings.
+
+`Scans:Engines` (default `["Maester"]`) says which engines a Worker runs. ScubaGear needs
+Windows PowerShell 5.1, so a typical setup is a Linux Worker with `Maester` and a Windows Worker
+with `ScubaGear` (device sync and onboarding turned off there with `DeviceSync:Enabled` and
+`Onboarding:Enabled`); both share the queue and each claims only its own engines' runs. Set the
+portal's `Scans:Engines` to all the engines your Workers run: the portal shows one status line per
+engine and queues **Scan now** for each. In environment variables: `Scans__Engines__0=Maester`,
+`Scans__Engines__1=ScubaGear`.
 
 - **Schedule:** a tenant is scanned when it has never been scanned, `Scans:Interval` (1 day)
   after its last scan, or `Scans:RetryFailedAfter` (2 hours) after a failed one. A new tenant
@@ -125,17 +135,20 @@ score and the fix list.
   survive restarts and several Workers can share the work. A tenant has at most one queued or
   running scan per engine (enforced by a unique index); claims use `FOR UPDATE SKIP LOCKED`.
   Manual scans go ahead of scheduled ones. Up to `Scans:MaxParallelScans` (2) run at once; a run
-  stuck in Running for `Scans:StaleAfter` (45 minutes, longer than `Maester:Timeout`) is failed
-  so it can be retried.
+  stuck in Running for `Scans:StaleAfter` (45 minutes, longer than every engine's `Timeout`) is
+  failed so it can be retried.
 - **Portal:** Owners and MSP admins can **Run scan** (Overview, all ready tenants) or **Scan
   now** (Tenants, one tenant). The portal only queues the run and records *Scan requested* in the
   audit log; the Worker does the work. Each tenant card shows the latest run (queued, running
   with start time, failed with the error, or the last result) and updates while a scan runs.
 - **Failures** keep the tenant's previous findings. Before each scan the Worker gets a token
   and checks its `roles` like onboarding does: anything that isn't read-only stops the scan, and
-  missing permissions fail it with "Re-consent needed: …".
+  missing permissions for *that engine* fail it with "Re-consent needed: …" (so a tenant that
+  hasn't re-consented for ScubaGear keeps its Maester scans).
 - **Re-consent:** tenants connected before a permission was added must approve again. **Re-consent**
   on the tenant card opens the Connect page filled in; the new consent updates the same tenant.
+
+### Maester
 
 Worker setup (Windows or Linux):
 
@@ -171,6 +184,46 @@ Maester's optional extras are not requested because they aren't read-only:
 `ReportSettings.ReadWrite.All`, `Sites.FullControl.All` and the Exchange `Exchange.ManageAsApp`
 role. Checks that need them (Exchange Online, Teams, some SharePoint settings) are reported as
 skipped, and skipped checks don't count toward the score.
+
+### ScubaGear
+
+ScubaGear assesses the tenant's **Entra ID** configuration against CISA's SCuBA baseline
+(`-ProductNames aad`). Its other products aren't run, because unattended runs need permissions
+SecurePulse's read-only consent doesn't grant: Exchange Online and Defender need
+`Exchange.ManageAsApp` plus the Global Reader role, Teams needs Global Reader, SharePoint needs
+`Sites.FullControl.All`, and Power Platform needs an interactive registration. A token with
+`Exchange.ManageAsApp` or `Sites.FullControl.All` would also stop every scan at the read-only
+check. Maester covers some of the same Exchange and Teams settings when they're licensed.
+
+Worker setup (Windows only, Windows PowerShell 5.1, ScubaGear 1.8.0):
+
+```powershell
+# Windows PowerShell 5.1 (not pwsh), as the account the Worker runs under
+Install-Module ScubaGear -Scope CurrentUser
+Install-ScubaDependencies                         # Graph auth + powershell-yaml modules and OPA (~/.scubagear/Tools)
+```
+
+Then add `ScubaGear` to the Windows Worker's `Scans:Engines` and, optionally, set
+`ScubaGear:ModuleVersion` (pin e.g. `1.8.0`; the parser is written against its output),
+`ScubaGear:OpaPath`, `ScubaGear:PowerShellPath` (default `powershell.exe`) and
+`ScubaGear:Timeout` (30 minutes). `ScubaGear:AppClientId` defaults to `Intune:AppClientId`. The
+certificate must be in the Worker user's `Cert:\CurrentUser\My`. The script runs with
+`-ExecutionPolicy RemoteSigned` (a Group Policy setting still wins). Each run gets its own work
+folder, deleted afterwards because ScubaGear exports the tenant's configuration there.
+
+Extra Graph application permissions (ScubaGear 1.8.0, Entra ID), all read-only, on top of
+`Directory.Read.All` and `Policy.Read.All`: `PrivilegedAccess.Read.AzureADGroup`,
+`PrivilegedEligibilitySchedule.Read.AzureADGroup`, `RoleManagement.Read.Directory`,
+`RoleManagementPolicy.Read.AzureADGroup`, `User.Read.All`. Add them to the app registration;
+tenants connected earlier need **Re-consent** before their ScubaGear scans succeed.
+
+How results map: each control becomes a finding with the control ID (e.g. `MS.AAD.1.1v1`), the
+requirement as its title and a link to its section of the baseline. *SHALL* controls are High,
+*SHOULD* Medium and *MAY* Low; Fail and Warning (a SHOULD not met) count as failed; N/A (manual
+or third-party checks), errors and omissions aren't evaluated. Findings carry the framework
+"CISA SCuBA" and a "BOD 25-01" tag where CISA marks the control as required by that directive. If
+ScubaGear can't evaluate any control (for example, sign-in failed), the scan fails and the
+previous results are kept.
 
 ## Sign-in and roles
 
@@ -255,9 +308,10 @@ checks are excluded. Any open **Critical** caps the grade at C.
 | Worker: Intune device sync | Built and tested against stubbed Graph; needs a real tenant + certificate to exercise |
 | Tenant onboarding (admin consent, verification, first sync) | Built; tested with stubbed Entra; needs the app registration to exercise |
 | Worker: scheduled Maester scans (queue, retries, permission check, Run scan / Scan now) | Built; tested against PostgreSQL 16 and end to end with a stand-in `pwsh` |
+| ScubaGear engine (Entra ID baseline, Windows Worker) | Built; parser tested against ScubaGear 1.8.0's sample report, runner end to end with a stand-in; needs a Windows Worker, a real tenant and certificate to exercise |
 | Portal sign-in with roles (Entra ID, Owner / MSP admin / Client viewer) | Built; tested with development sign-in and the real Entra redirect |
 | Security audit log (append-only, page + CSV export) | Built; tested against PostgreSQL 16 |
-| ScubaGear adapter, PDF report | Next |
+| PDF report | Next |
 
 ## Security notes
 

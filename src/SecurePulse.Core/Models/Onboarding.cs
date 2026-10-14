@@ -61,12 +61,15 @@ public sealed record GraphPermission(string Name, string Purpose, string Group);
 /// by the portal (shown to admins before they consent) and the Worker (checked after consent and
 /// before every scan). Maester's list follows its documentation for unattended runs (v2.3.0);
 /// its optional privileged extras (ReportSettings.ReadWrite.All, Exchange.ManageAsApp,
-/// Sites.FullControl.All) are deliberately not requested.
+/// Sites.FullControl.All) are deliberately not requested. ScubaGear's list is what its Entra ID
+/// (aad) baseline needs (v1.8.0); its other products need Exchange.ManageAsApp, Sites.FullControl.All
+/// or directory roles, so they aren't assessed.
 /// </summary>
 public static class AssessmentPermissions
 {
     public const string DevicesGroup = "Devices (Intune)";
     public const string SecurityChecksGroup = "Security checks (Maester)";
+    public const string CisaBaselineGroup = "CISA baseline checks (ScubaGear)";
 
     public static readonly IReadOnlyList<GraphPermission> Required =
     [
@@ -95,14 +98,35 @@ public static class AssessmentPermissions
         new("SecurityIdentitiesHealth.Read.All", "Read Defender for Identity health", SecurityChecksGroup),
         new("SharePointTenantSettings.Read.All", "Read SharePoint tenant settings", SecurityChecksGroup),
         new("ThreatHunting.Read.All", "Run read-only advanced hunting queries", SecurityChecksGroup),
-        new("UserAuthenticationMethod.Read.All", "Read users' registered sign-in methods", SecurityChecksGroup)
+        new("UserAuthenticationMethod.Read.All", "Read users' registered sign-in methods", SecurityChecksGroup),
+
+        new("PrivilegedAccess.Read.AzureADGroup", "Read PIM for Groups settings", CisaBaselineGroup),
+        new("PrivilegedEligibilitySchedule.Read.AzureADGroup", "Read PIM for Groups eligible assignments", CisaBaselineGroup),
+        new("RoleManagement.Read.Directory", "Read directory roles and their members", CisaBaselineGroup),
+        new("RoleManagementPolicy.Read.AzureADGroup", "Read PIM for Groups activation rules", CisaBaselineGroup),
+        new("User.Read.All", "Read user accounts", CisaBaselineGroup)
     ];
 
-    /// <summary>Required permissions that aren't in <paramref name="granted"/>.</summary>
-    public static IReadOnlyList<string> MissingFrom(IEnumerable<string> granted)
+    /// <summary>What each engine needs, so a tenant missing one engine's permissions can still run the others.</summary>
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> ByEngine = new Dictionary<string, IReadOnlyList<string>>
+    {
+        [ScanEngines.Maester] = Required.Where(p => p.Group is DevicesGroup or SecurityChecksGroup).Select(p => p.Name).ToList(),
+        [ScanEngines.ScubaGear] =
+        [
+            "Directory.Read.All", "Policy.Read.All", "PrivilegedAccess.Read.AzureADGroup", "PrivilegedEligibilitySchedule.Read.AzureADGroup",
+            "RoleManagement.Read.Directory", "RoleManagementPolicy.Read.AzureADGroup", "User.Read.All"
+        ]
+    };
+
+    /// <summary>The permissions <paramref name="engine"/> needs; every required permission for an unknown engine.</summary>
+    public static IReadOnlyList<string> RequiredFor(string engine) =>
+        ByEngine.TryGetValue(engine, out var names) ? names : Required.Select(p => p.Name).ToList();
+
+    /// <summary>Permissions in <paramref name="needed"/> (default: all required) that aren't in <paramref name="granted"/>.</summary>
+    public static IReadOnlyList<string> MissingFrom(IEnumerable<string> granted, IEnumerable<string>? needed = null)
     {
         var set = new HashSet<string>(granted, StringComparer.OrdinalIgnoreCase);
-        return Required.Select(p => p.Name).Where(p => !set.Contains(p)).ToList();
+        return (needed ?? Required.Select(p => p.Name)).Where(p => !set.Contains(p)).ToList();
     }
 
     /// <summary>Granted permissions that aren't read-only.</summary>

@@ -108,7 +108,7 @@ public sealed class ScanService(
         if (await tenants.GetAsync(run.TenantId, ct) is not { } tenant || !IsOnboarded(tenant))
             return (null, "The tenant isn't onboarded (consent or certificate missing).");
 
-        if (options.Value.CheckPermissions && await CheckPermissionsAsync(tenant, ct) is { } permissionError)
+        if (options.Value.CheckPermissions && await CheckPermissionsAsync(tenant, engine.Name, ct) is { } permissionError)
             return (null, permissionError);
 
         var result = await engine.RunAsync(tenant, ct);
@@ -122,9 +122,10 @@ public sealed class ScanService(
     /// <summary>
     /// A token carries the permissions actually granted. Checking first turns "re-consent needed"
     /// into one clear error instead of a long scan full of 403s, and refuses to scan with a grant
-    /// that isn't read-only (CLAUDE.md rule 5).
+    /// that isn't read-only (CLAUDE.md rule 5). Only the engine's own permissions must be present,
+    /// so a tenant that hasn't re-consented for a new engine keeps its other scans.
     /// </summary>
-    private async Task<string?> CheckPermissionsAsync(Tenant tenant, CancellationToken ct)
+    private async Task<string?> CheckPermissionsAsync(Tenant tenant, string engine, CancellationToken ct)
     {
         string token;
         try
@@ -152,7 +153,7 @@ public sealed class ScanService(
         if (notReadOnly.Count > 0)
             return $"Not scanning: the app has permissions that aren't read-only ({string.Join(", ", notReadOnly)}). Remove them from the app registration.";
 
-        var missing = AssessmentPermissions.MissingFrom(claims.Roles);
+        var missing = AssessmentPermissions.MissingFrom(claims.Roles, AssessmentPermissions.RequiredFor(engine));
         return missing.Count == 0
             ? null
             : $"Re-consent needed: the tenant hasn't granted {string.Join(", ", missing)}. Use Re-consent on the Tenants page.";

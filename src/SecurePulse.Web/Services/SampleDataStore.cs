@@ -618,8 +618,10 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
 
     public Task SaveScanAsync(ScanResult result, CancellationToken ct = default)
     {
+        // Like the database: a scan replaces only its own engine's findings.
         if (result.Succeeded)
-            _findings[result.TenantId] = result.Findings;
+            _findings[result.TenantId] = _findings.GetValueOrDefault(result.TenantId, [])
+                .Where(f => f.Source != result.Source).Concat(result.Findings).ToList();
         return Task.CompletedTask;
     }
 }

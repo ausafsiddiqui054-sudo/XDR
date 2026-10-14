@@ -4,6 +4,9 @@ public sealed class ScanOptions
 {
     public bool Enabled { get; set; } = true;
 
+    // Scans:Engines (which engines this Worker runs, default Maester) is read in Program.cs,
+    // because it decides which engines are registered.
+
     /// <summary>How often each onboarded tenant is scanned.</summary>
     public TimeSpan Interval { get; set; } = TimeSpan.FromHours(24);
 
@@ -16,7 +19,7 @@ public sealed class ScanOptions
     /// <summary>Scans running at the same time (each is a PowerShell process).</summary>
     public int MaxParallelScans { get; set; } = 2;
 
-    /// <summary>A run still Running after this long is marked failed (its Worker stopped). Keep above the engine timeout.</summary>
+    /// <summary>A run still Running after this long is marked failed (its Worker stopped). Keep above every engine's timeout.</summary>
     public TimeSpan StaleAfter { get; set; } = TimeSpan.FromMinutes(45);
 
     /// <summary>Check the tenant granted every required permission before starting a scan.</summary>

@@ -88,7 +88,7 @@ else
 
                     @{
                         var connected = t.Tenant.ConsentState is TenantConsentState.ReadOnlyGranted or TenantConsentState.RemediationGranted;
-                        _scans.TryGetValue(t.Tenant.Id, out var run);
+                        var engineRuns = Scans.Engines.Select(e => (Engine: e, Run: _scans.GetValueOrDefault((t.Tenant.Id, e)))).ToList();
                     }
                     @if (t.Score is { } score)
                     {
@@ -107,32 +107,39 @@ else
 
                     @if (connected)
                     {
-                        <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Class="mt-3" data-testid="scan-status">
-                            @switch (run?.Status)
+                        <MudStack Spacing="1" Class="mt-3">
+                            @foreach (var (engine, run) in engineRuns)
                             {
-                                case ScanRunStatus.Running:
-                                    <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" Style="width:18px;height:18px" />
-                                    <MudText Typo="Typo.caption">Scanning now (started @Dashboard.Ago(run.StartedAt).ToLowerInvariant())</MudText>
-                                    break;
-                                case ScanRunStatus.Queued:
-                                    <MudIcon Icon="@Icons.Material.Rounded.HourglassTop" Size="Size.Small" Color="Color.Info" />
-                                    <MudText Typo="Typo.caption">Scan queued@(run.RequestedBy is { } by ? $" by {by}" : "")</MudText>
-                                    break;
-                                case ScanRunStatus.Failed:
-                                    <MudIcon Icon="@Icons.Material.Rounded.ErrorOutline" Size="Size.Small" Color="Color.Error" />
-                                    <div style="min-width:0">
-                                        <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block">Last scan failed @Dashboard.Ago(run.CompletedAt).ToLowerInvariant()</MudText>
-                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Style="overflow-wrap:anywhere">@Clip(run.Error)</MudText>
-                                    </div>
-                                    break;
-                                case ScanRunStatus.Succeeded:
-                                    <MudIcon Icon="@Icons.Material.Rounded.CheckCircle" Size="Size.Small" Color="Color.Success" />
-                                    <MudText Typo="Typo.caption">Last scan @Dashboard.Ago(run.CompletedAt).ToLowerInvariant() · @run.FindingCount checks</MudText>
-                                    break;
-                                default:
-                                    <MudIcon Icon="@Icons.Material.Rounded.Schedule" Size="Size.Small" Color="Color.Default" />
-                                    <MudText Typo="Typo.caption">@(ScanRequestService.IsOnboarded(t.Tenant) ? "First scan starts shortly" : "Not ready to scan: no certificate configured")</MudText>
-                                    break;
+                                // With one engine the label adds nothing; with several each line says whose status it is.
+                                var who = Scans.Engines.Count > 1 ? $"{engine}: " : "";
+                                <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" data-testid="scan-status" data-engine="@engine">
+                                    @switch (run?.Status)
+                                    {
+                                        case ScanRunStatus.Running:
+                                            <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" Style="width:18px;height:18px" />
+                                            <MudText Typo="Typo.caption">@(who)Scanning now (started @Dashboard.Ago(run.StartedAt).ToLowerInvariant())</MudText>
+                                            break;
+                                        case ScanRunStatus.Queued:
+                                            <MudIcon Icon="@Icons.Material.Rounded.HourglassTop" Size="Size.Small" Color="Color.Info" />
+                                            <MudText Typo="Typo.caption">@(who)Scan queued@(run.RequestedBy is { } by ? $" by {by}" : "")</MudText>
+                                            break;
+                                        case ScanRunStatus.Failed:
+                                            <MudIcon Icon="@Icons.Material.Rounded.ErrorOutline" Size="Size.Small" Color="Color.Error" />
+                                            <div style="min-width:0">
+                                                <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block">@(who)Last scan failed @Dashboard.Ago(run.CompletedAt).ToLowerInvariant()</MudText>
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="overflow-wrap:anywhere">@Clip(run.Error)</MudText>
+                                            </div>
+                                            break;
+                                        case ScanRunStatus.Succeeded:
+                                            <MudIcon Icon="@Icons.Material.Rounded.CheckCircle" Size="Size.Small" Color="Color.Success" />
+                                            <MudText Typo="Typo.caption">@(who)Last scan @Dashboard.Ago(run.CompletedAt).ToLowerInvariant() · @run.FindingCount checks</MudText>
+                                            break;
+                                        default:
+                                            <MudIcon Icon="@Icons.Material.Rounded.Schedule" Size="Size.Small" Color="Color.Default" />
+                                            <MudText Typo="Typo.caption">@(who)@(ScanRequestService.IsOnboarded(t.Tenant) ? "First scan starts shortly" : "Not ready to scan: no certificate configured")</MudText>
+                                            break;
+                                    }
+                                </MudStack>
                             }
                         </MudStack>
                     }
@@ -151,7 +158,7 @@ else
                         @if (_isOperator && connected)
                         {
                             <MudButton Variant="Variant.Text" Color="Color.Primary" Class="px-0" StartIcon="@Icons.Material.Rounded.PlayArrow"
-                                       Disabled="@(run?.IsActive == true || !ScanRequestService.IsOnboarded(t.Tenant))"
+                                       Disabled="@(engineRuns.All(r => r.Run?.IsActive == true) || !ScanRequestService.IsOnboarded(t.Tenant))"
                                        OnClick="@(() => ScanNowAsync(t.Tenant))">Scan now</MudButton>
                             <MudButton Variant="Variant.Text" Color="Color.Default" Class="px-0" StartIcon="@Icons.Material.Rounded.VerifiedUser"
                                        Href="@ReconsentUrl(t.Tenant)">Re-consent</MudButton>
@@ -168,7 +175,7 @@ else
 
     private IReadOnlyList<OnboardingRequest> _pending = [];
 
-    private IReadOnlyDictionary<Guid, ScanRun> _scans = new Dictionary<Guid, ScanRun>();
+    private IReadOnlyDictionary<(Guid TenantId, string Engine), ScanRun> _scans = new Dictionary<(Guid, string), ScanRun>();
     private bool _isOperator;
     private PeriodicTimer? _timer;
     private readonly CancellationTokenSource _cts = new();
@@ -197,7 +204,7 @@ else
                 if (!_scans.Values.Any(r => r.IsActive)) continue;
                 var before = _scans;
                 _scans = await Scans.GetLatestAsync();
-                if (before.Values.Any(r => r.IsActive && _scans.GetValueOrDefault(r.TenantId)?.IsActive != true))
+                if (before.Values.Any(r => r.IsActive && _scans.GetValueOrDefault((r.TenantId, r.Engine))?.IsActive != true))
                     _portfolio = await Posture.GetPortfolioAsync(); // a scan finished: pick up its results
                 await InvokeAsync(StateHasChanged);
             }
@@ -208,7 +215,7 @@ else
     private async Task ScanNowAsync(Tenant tenant)
     {
         var queued = await Scans.RequestAsync([tenant.Id]);
-        Snackbar.Add(queued > 0 ? $"Scan of {tenant.DisplayName} queued." : $"A scan of {tenant.DisplayName} is already queued or running.",
+        Snackbar.Add(queued > 0 ? $"Scan of {tenant.DisplayName} queued." : $"Scans of {tenant.DisplayName} are already queued or running.",
             queued > 0 ? MudBlazor.Severity.Success : MudBlazor.Severity.Info);
         _scans = await Scans.GetLatestAsync();
     }

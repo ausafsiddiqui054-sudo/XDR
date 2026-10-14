@@ -74,18 +74,23 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
   the Worker claims and runs them. Never run an engine from the portal.
 - One queued-or-running run per tenant and engine (unique index `IX_scan_runs_active`); claims
   use `FOR UPDATE SKIP LOCKED`, so keep both if you change the queue.
-- Before each scan the Worker checks the token's `roles` (same rules as onboarding). Adding a
-  permission to `AssessmentPermissions.Required` means existing tenants must re-consent.
-- A failed scan never replaces stored findings; only `SaveScanAsync` on success does.
+- Before each scan the Worker checks the token's `roles` (same rules as onboarding) against
+  `AssessmentPermissions.RequiredFor(engine)`. Adding a permission to `AssessmentPermissions.Required`
+  means existing tenants must re-consent; list it under the engine that needs it.
+- A failed scan never replaces stored findings; only `SaveScanAsync` on success does, and only that
+  engine's (`Source`) findings. An engine that evaluated nothing must report failure, not success.
+- Each Worker runs the engines in its `Scans:Engines` (ScubaGear needs Windows PowerShell 5.1, so a
+  Windows Worker); the portal's `Scans:Engines` must list every engine some Worker runs.
+- ScubaGear runs only `aad`: its other products need Exchange.ManageAsApp, Sites.FullControl.All or
+  directory roles, which break the read-only rule. Don't add products without that decision.
+- Shared out-of-process plumbing (validation, work folder, timeout) is in `Engines/OutOfProcessScan.cs`.
 
 ## Next steps (in order)
-1. ScubaGear adapter as another `IScanEngine` (add it to `ScanEngines.All`; check current
-   OS/PowerShell requirements, it may need a Windows worker).
-2. Branded PDF report (QuestPDF; check its license tier).
-3. Device remote actions (sync/restart/retire/wipe): approval queue + audit log, then a
+1. Branded PDF report (QuestPDF; check its license tier).
+2. Device remote actions (sync/restart/retire/wipe): approval queue + audit log, then a
    separate write-consent app and Graph client. The UI dialog is built and disabled until then.
-4. Defender health per device via the Defender for Endpoint API (not in Graph v1.0 managedDevice).
-5. Persist the data-protection key ring (shared store) before running more than one portal
+3. Defender health per device via the Defender for Endpoint API (not in Graph v1.0 managedDevice).
+4. Persist the data-protection key ring (shared store) before running more than one portal
    instance: it protects consent-link state and the sign-in cookie.
-6. Audit retention: a maintenance role allowed to purge `audit_events` older than a configured
+5. Audit retention: a maintenance role allowed to purge `audit_events` older than a configured
    period (the trigger blocks the app). Optionally ship events to a SIEM (Sentinel) as well.

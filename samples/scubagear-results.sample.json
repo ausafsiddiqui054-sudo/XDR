@@ -1,0 +1,1796 @@
+{
+  "MetaData": {
+    "TenantId": "ca08493a-c9c8-4db0-a9e8-d3b4bafac269",
+    "DisplayName": "tqhjy",
+    "DomainName": "tqhjy.onmicrosoft.com",
+    "ProductSuite": "Microsoft 365",
+    "ProductsAssessed": [
+      "Azure Active Directory",
+      "Microsoft 365 Defender",
+      "Exchange Online",
+      "Microsoft Power Platform",
+      "SharePoint Online",
+      "Microsoft Teams"
+    ],
+    "ProductAbbreviationMapping": {
+      "Microsoft 365 Defender": "Defender",
+      "SharePoint Online": "SharePoint",
+      "Azure Active Directory": "AAD",
+      "Microsoft Power Platform": "PowerPlatform",
+      "Microsoft Teams": "Teams",
+      "Exchange Online": "EXO"
+    },
+    "Tool": "ScubaGear",
+    "ToolVersion": "1.8.0",
+    "TimestampZulu": "2026-05-04T17:15:48.307Z",
+    "ReportUUID": "fa5589b7-d528-4f80-8e7d-5c20eda7b6d8"
+  },
+  "Summary": {
+    "AAD": {
+      "Manual": 3,
+      "Failures": 11,
+      "Warnings": 4,
+      "Errors": 0,
+      "Passes": 12,
+      "Omits": 0,
+      "IncorrectResults": 0
+    },
+    "Defender": {
+      "Manual": 4,
+      "Failures": 2,
+      "Warnings": 3,
+      "Errors": 0,
+      "Passes": 10,
+      "Omits": 0,
+      "IncorrectResults": 0
+    },
+    "EXO": {
+      "Manual": 0,
+      "Failures": 0,
+      "Warnings": 1,
+      "Errors": 0,
+      "Passes": 11,
+      "Omits": 0,
+      "IncorrectResults": 0
+    },
+    "PowerPlatform": {
+      "Manual": 2,
+      "Failures": 1,
+      "Warnings": 1,
+      "Errors": 0,
+      "Passes": 5,
+      "Omits": 0,
+      "IncorrectResults": 0
+    },
+    "SharePoint": {
+      "Manual": 0,
+      "Failures": 0,
+      "Warnings": 0,
+      "Errors": 0,
+      "Passes": 8,
+      "Omits": 0,
+      "IncorrectResults": 0
+    },
+    "Teams": {
+      "Manual": 0,
+      "Failures": 0,
+      "Warnings": 3,
+      "Errors": 0,
+      "Passes": 11,
+      "Omits": 0,
+      "IncorrectResults": 0
+    }
+  },
+  "AnnotatedFailedPolicies": {
+    "MS.AAD.7.5v1": {
+      "Comment": null,
+      "RemediationDate": null,
+      "IncorrectResult": false
+    },
+    "MS.AAD.3.6v1": {
+      "Comment": null,
+      "RemediationDate": null,
+      "IncorrectResult": false
+    },
+    "MS.AAD.7.7v1": {
+      "Comment": null,
+      "RemediationDate": null,
+      "IncorrectResult": false
+    },
+    "MS.AAD.5.2v1": {
+      "Comment": null,
+      "RemediationDate": null,
+      "IncorrectResult": false
+    },
+    "MS.AAD.3.1v1": {
+      "Comment": null,
+      "RemediationDate": null,
+      "IncorrectResult": false
+    },
+    "MS.AAD.7.6v1": {
+      "Comment": null,
+      "RemediationDate": null,
+      "IncorrectResult": false
+    },
+    "MS.AAD.5.1v1": {
+      "Comment": null,
+      "RemediationDate": null,
+      "IncorrectResult": false
+    },
+    "MS.AAD.6.1v1": {
+      "Comment": null,
+      "RemediationDate": null,
+      "IncorrectResult": false
+    },
+    "MS.AAD.3.4v1": {
+      "Comment": null,
+      "RemediationDate": null,
+      "IncorrectResult": false
+    },
+    "MS.AAD.7.4v1": {
+      "Comment": null,
+      "RemediationDate": null,
+      "IncorrectResult": false
+    },
+    "MS.AAD.7.2v1": {
+      "Comment": null,
+      "RemediationDate": null,
+      "IncorrectResult": false
+    },
+    "MS.DEFENDER.1.4v1": {
+      "Comment": null,
+      "RemediationDate": null,
+      "IncorrectResult": false
+    },
+    "MS.DEFENDER.1.5v1": {
+      "Comment": null,
+      "RemediationDate": null,
+      "IncorrectResult": false
+    },
+    "MS.POWERPLATFORM.2.1v1": {
+      "Comment": null,
+      "RemediationDate": null,
+      "IncorrectResult": false
+    }
+  },
+  "Results": {
+    "AAD": [
+      {
+        "GroupName": "Legacy Authentication",
+        "GroupNumber": "1",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#1-legacy-authentication",
+        "Controls": [
+          {
+            "Control ID": "MS.AAD.1.1v1",
+            "Requirement": "Legacy authentication SHALL be blocked.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/configuration.md#conditional-access-policy-exclusions' target='_blank' class='indicator indicator-configurable' title='Configurable'>Configurable</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "1 conditional access policy(s) found that meet(s) all requirements: MS.AAD.1.1v1 Legacy authentication SHALL be blocked. ",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "1 conditional access policy(s) found that meet(s) all requirements:<br/>MS.AAD.1.1v1 Legacy authentication SHALL be blocked. <a href='#caps'>View all CA policies</a>.",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Risk Based Policies",
+        "GroupNumber": "2",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#2-risk-based-policies",
+        "Controls": [
+          {
+            "Control ID": "MS.AAD.2.1v1",
+            "Requirement": "Users detected as high risk SHALL be blocked.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/configuration.md#conditional-access-policy-exclusions' target='_blank' class='indicator indicator-configurable' title='Configurable'>Configurable</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "2 conditional access policy(s) found that meet(s) all requirements: MS.AAD.2.1v1 Users detected as high risk SHALL be blocked, MS.AAD.2.1v1 Users detected as high risk SHALL be blocked Duplicate. ",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "2 conditional access policy(s) found that meet(s) all requirements:<br/>MS.AAD.2.1v1 Users detected as high risk SHALL be blocked, MS.AAD.2.1v1 Users detected as high risk SHALL be blocked Duplicate. <a href='#caps'>View all CA policies</a>.",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.2.2v1",
+            "Requirement": "A notification SHOULD be sent to the administrator when high-risk users are detected.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#msaad22v1-instructions' target='_blank' class='indicator indicator-manual' title='Manual'>Manual</a></div>",
+            "Result": "N/A",
+            "Criticality": "Should/Not-Implemented",
+            "Details": "This product does not currently have the capability to check compliance for this policy. See Secure Configuration Baseline policy, https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#msaad22v1 for instructions on manual check",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "N/A",
+            "OriginalDetails": "This product does not currently have the capability to check compliance for this policy. See <a href=\"https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#msaad22v1\" target=\"_blank\">Secure Configuration Baseline policy</a> for instructions on manual check",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.2.3v1",
+            "Requirement": "Sign-ins detected as high risk SHALL be blocked.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/configuration.md#conditional-access-policy-exclusions' target='_blank' class='indicator indicator-configurable' title='Configurable'>Configurable</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "1 conditional access policy(s) found that meet(s) all requirements: MS.AAD.2.3v1 Sign-ins detected as high risk SHALL be blocked. ",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "1 conditional access policy(s) found that meet(s) all requirements:<br/>MS.AAD.2.3v1 Sign-ins detected as high risk SHALL be blocked. <a href='#caps'>View all CA policies</a>.",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Strong Authentication and a Secure Registration Process",
+        "GroupNumber": "3",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#3-strong-authentication-and-a-secure-registration-process",
+        "Controls": [
+          {
+            "Control ID": "MS.AAD.3.1v1",
+            "Requirement": "Phishing-resistant MFA SHALL be enforced for all users.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/configuration.md#conditional-access-policy-exclusions' target='_blank' class='indicator indicator-configurable' title='Configurable'>Configurable</a></div>",
+            "Result": "Fail",
+            "Criticality": "Shall",
+            "Details": "0 conditional access policy(s) found that meet(s) all requirements. ",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Fail",
+            "OriginalDetails": "0 conditional access policy(s) found that meet(s) all requirements. <a href='#caps'>View all CA policies</a>.",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.3.2v2",
+            "Requirement": "MFA SHALL be enforced for all users.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/configuration.md#conditional-access-policy-exclusions' target='_blank' class='indicator indicator-configurable' title='Configurable'>Configurable</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "1 conditional access policy(s) found that meet(s) all requirements: MS.AAD.3.2v1 If phishing-resistant MFA has not been enforced, an alternative MFA method SHALL be enforced for all users. ",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "1 conditional access policy(s) found that meet(s) all requirements:<br/>MS.AAD.3.2v1 If phishing-resistant MFA has not been enforced, an alternative MFA method SHALL be enforced for all users. <a href='#caps'>View all CA policies</a>.",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.3.3v2",
+            "Requirement": "If Microsoft Authenticator is enabled, it SHALL be configured to show login context information.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.3.4v1",
+            "Requirement": "The Authentication Methods Manage Migration feature SHALL be set to Migration Complete.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Fail",
+            "Criticality": "Shall",
+            "Details": "Requirement not met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Fail",
+            "OriginalDetails": "Requirement not met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.3.5v2",
+            "Requirement": "The authentication methods SMS, Voice Call, and Email One-Time Passcode (OTP) SHALL be disabled.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.3.6v1",
+            "Requirement": "Phishing-resistant MFA SHALL be required for highly privileged roles.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/configuration.md#conditional-access-policy-exclusions' target='_blank' class='indicator indicator-configurable' title='Configurable'>Configurable</a></div>",
+            "Result": "Fail",
+            "Criticality": "Shall",
+            "Details": "0 conditional access policy(s) found that meet(s) all requirements. ",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Fail",
+            "OriginalDetails": "0 conditional access policy(s) found that meet(s) all requirements. <a href='#caps'>View all CA policies</a>.",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.3.7v1",
+            "Requirement": "Managed devices SHOULD be required for authentication.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/configuration.md#conditional-access-policy-exclusions' target='_blank' class='indicator indicator-configurable' title='Configurable'>Configurable</a></div>",
+            "Result": "Warning",
+            "Criticality": "Should",
+            "Details": "0 conditional access policy(s) found that meet(s) all requirements. ",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Warning",
+            "OriginalDetails": "0 conditional access policy(s) found that meet(s) all requirements. <a href='#caps'>View all CA policies</a>.",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.3.8v1",
+            "Requirement": "Managed Devices SHOULD be required to register MFA.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/configuration.md#conditional-access-policy-exclusions' target='_blank' class='indicator indicator-configurable' title='Configurable'>Configurable</a></div>",
+            "Result": "Warning",
+            "Criticality": "Should",
+            "Details": "0 conditional access policy(s) found that meet(s) all requirements. ",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Warning",
+            "OriginalDetails": "0 conditional access policy(s) found that meet(s) all requirements. <a href='#caps'>View all CA policies</a>.",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.3.9v1",
+            "Requirement": "Device code authentication SHOULD be blocked.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/configuration.md#conditional-access-policy-exclusions' target='_blank' class='indicator indicator-configurable' title='Configurable'>Configurable</a></div>",
+            "Result": "Warning",
+            "Criticality": "Should",
+            "Details": "0 conditional access policy(s) found that meet(s) all requirements. ",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Warning",
+            "OriginalDetails": "0 conditional access policy(s) found that meet(s) all requirements. <a href='#caps'>View all CA policies</a>.",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Centralized Log Collection",
+        "GroupNumber": "4",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#4-centralized-log-collection",
+        "Controls": [
+          {
+            "Control ID": "MS.AAD.4.1v1",
+            "Requirement": "Security logs SHALL be sent to the agency's security operations center for monitoring.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#msaad41v1-instructions' target='_blank' class='indicator indicator-manual' title='Manual'>Manual</a></div>",
+            "Result": "N/A",
+            "Criticality": "Shall/Not-Implemented",
+            "Details": "This product does not currently have the capability to check compliance for this policy. See Secure Configuration Baseline policy, https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#msaad41v1 for instructions on manual check",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "N/A",
+            "OriginalDetails": "This product does not currently have the capability to check compliance for this policy. See <a href=\"https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#msaad41v1\" target=\"_blank\">Secure Configuration Baseline policy</a> for instructions on manual check",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Application Registration and Consent",
+        "GroupNumber": "5",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#5-application-registration-and-consent",
+        "Controls": [
+          {
+            "Control ID": "MS.AAD.5.1v1",
+            "Requirement": "Only administrators SHALL be allowed to register applications.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Fail",
+            "Criticality": "Shall",
+            "Details": "1 authorization policies found that allow non-admin users to register third-party applications: authorizationPolicy",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Fail",
+            "OriginalDetails": "1 authorization policies found that allow non-admin users to register third-party applications:<br/>authorizationPolicy",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.5.2v1",
+            "Requirement": "User consent to applications SHALL be restricted.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Fail",
+            "Criticality": "Shall",
+            "Details": "1 authorization policies found that allow non-admin users to consent to third-party applications with risky delegated permission classifications: authorizationPolicy",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Fail",
+            "OriginalDetails": "1 authorization policies found that allow non-admin users to consent to third-party applications with risky delegated permission classifications:<br/>authorizationPolicy",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.5.3v1",
+            "Requirement": "An admin consent workflow SHALL be configured for applications.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Passwords",
+        "GroupNumber": "6",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#6-passwords",
+        "Controls": [
+          {
+            "Control ID": "MS.AAD.6.1v1",
+            "Requirement": "User passwords SHALL NOT expire.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Fail",
+            "Criticality": "Shall",
+            "Details": "Requirement not met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Fail",
+            "OriginalDetails": "Requirement not met",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Highly Privileged User Access",
+        "GroupNumber": "7",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#7-highly-privileged-user-access",
+        "Controls": [
+          {
+            "Control ID": "MS.AAD.7.1v1",
+            "Requirement": "A minimum of two users and a maximum of eight users SHALL be provisioned with the Global Administrator role.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "2 global admin(s) found: Jane Doe, John Public",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "2 global admin(s) found:<br/>Jane Doe, John Public",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.7.2v1",
+            "Requirement": "Privileged users SHALL be provisioned with finer-grained roles instead of Global Administrator.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Fail",
+            "Criticality": "Shall",
+            "Details": "Requirement not met: Least Privilege Score = 2 (should be 1 or less) Calculated by 2 global admins / 1 privileged users without global admin role",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Fail",
+            "OriginalDetails": "Requirement not met: Least Privilege Score = 2 (should be 1 or less)\nCalculated by 2 global admins / 1 privileged users without global admin role",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.7.3v1",
+            "Requirement": "Privileged users SHALL be provisioned cloud-only accounts separate from an on-premises directory or other federated identity providers.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "0 admin(s) that are not cloud-only found",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "0 admin(s) that are not cloud-only found",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.7.4v1",
+            "Requirement": "Permanent active role assignments SHALL NOT be allowed for highly privileged roles.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/configuration.md#privileged-user-policy-exclusions' target='_blank' class='indicator indicator-configurable' title='Configurable'>Configurable</a></div>",
+            "Result": "Fail",
+            "Criticality": "Shall",
+            "Details": "6 role(s) that contain users with permanent active assignment: Application Administrator, Cloud Application Administrator, Exchange Administrator, Global Administrator, SharePoint Administrator, User Administrator",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Fail",
+            "OriginalDetails": "6 role(s) that contain users with permanent active assignment:<br/>Application Administrator, Cloud Application Administrator, Exchange Administrator, Global Administrator, SharePoint Administrator, User Administrator",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.7.5v1",
+            "Requirement": "Provisioning users to highly privileged roles SHALL NOT occur outside of a PAM system.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Fail",
+            "Criticality": "Shall",
+            "Details": "3 role(s) assigned to users outside of PIM: Global Administrator, SharePoint Administrator, User Administrator",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Fail",
+            "OriginalDetails": "3 role(s) assigned to users outside of PIM:<br/>Global Administrator, SharePoint Administrator, User Administrator",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.7.6v1",
+            "Requirement": "Activation of the Global Administrator role SHALL require approval.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Fail",
+            "Criticality": "Shall",
+            "Details": "1 role(s) or group(s) allowing activation without approval found: Global Administrator(Directory Role)",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Fail",
+            "OriginalDetails": "1 role(s) or group(s) allowing activation without approval found:<br/>Global Administrator(Directory Role)",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.7.7v1",
+            "Requirement": "Eligible and active highly privileged role assignments SHALL trigger an alert.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Fail",
+            "Criticality": "Shall",
+            "Details": "6 role(s) or group(s) without notification e-mail configured for role assignments found: Cloud Application Administrator(Directory Role), Exchange Administrator(Directory Role), Global Administrator(Directory Role), Hybrid Identity Administrator(Directory Role), Privileged Role Administrator(Directory Role), SharePoint Administrator(Directory Role)",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Fail",
+            "OriginalDetails": "6 role(s) or group(s) without notification e-mail configured for role assignments found:<br/>Cloud Application Administrator(Directory Role), Exchange Administrator(Directory Role), Global Administrator(Directory Role), Hybrid Identity Administrator(Directory Role), Privileged Role Administrator(Directory Role), SharePoint Administrator(Directory Role)",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.7.8v1",
+            "Requirement": "User activation of the Global Administrator role SHALL trigger an alert.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "0 role(s) or group(s) without notification e-mail configured for Global Administrator activations found",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "0 role(s) or group(s) without notification e-mail configured for Global Administrator activations found",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.7.9v1",
+            "Requirement": "User activation of other highly privileged roles SHOULD trigger an alert.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Warning",
+            "Criticality": "Should",
+            "Details": "5 role(s) or group(s) without notification e-mail configured for role activations found: Cloud Application Administrator(Directory Role), Exchange Administrator(Directory Role), Hybrid Identity Administrator(Directory Role), Privileged Role Administrator(Directory Role), SharePoint Administrator(Directory Role)",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Warning",
+            "OriginalDetails": "5 role(s) or group(s) without notification e-mail configured for role activations found:<br/>Cloud Application Administrator(Directory Role), Exchange Administrator(Directory Role), Hybrid Identity Administrator(Directory Role), Privileged Role Administrator(Directory Role), SharePoint Administrator(Directory Role)",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Guest User Access",
+        "GroupNumber": "8",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#8-guest-user-access",
+        "Controls": [
+          {
+            "Control ID": "MS.AAD.8.1v1",
+            "Requirement": "Guest users SHOULD have limited or restricted access to Microsoft Entra ID directory objects.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Should",
+            "Details": "Permission level set to \"Limited access\" (authorizationPolicy)",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Permission level set to \"Limited access\" (authorizationPolicy)",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.8.2v1",
+            "Requirement": "Only users with the Guest Inviter role SHOULD be able to invite guest users.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Should",
+            "Details": "Permission level set to \"adminsAndGuestInviters\" (authorizationPolicy)",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Permission level set to \"adminsAndGuestInviters\" (authorizationPolicy)",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.AAD.8.3v1",
+            "Requirement": "Guest invites SHOULD only be allowed to specific external domains that have been authorized by the agency for legitimate business purposes.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#msaad83v1-instructions' target='_blank' class='indicator indicator-manual' title='Manual'>Manual</a></div>",
+            "Result": "N/A",
+            "Criticality": "Should/Not-Implemented",
+            "Details": "This product does not currently have the capability to check compliance for this policy. See Secure Configuration Baseline policy, https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#msaad83v1 for instructions on manual check",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "N/A",
+            "OriginalDetails": "This product does not currently have the capability to check compliance for this policy. See <a href=\"https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/aad.md#msaad83v1\" target=\"_blank\">Secure Configuration Baseline policy</a> for instructions on manual check",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      }
+    ],
+    "Defender": [
+      {
+        "GroupName": "Preset Security Profiles",
+        "GroupNumber": "1",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#1-preset-security-profiles",
+        "Controls": [
+          {
+            "Control ID": "MS.DEFENDER.1.1v1",
+            "Requirement": "The standard and strict preset security policies SHALL be enabled.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.DEFENDER.1.2v1",
+            "Requirement": "All users SHALL be added to Exchange Online Protection (EOP) in either the standard or strict preset security policy.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.DEFENDER.1.3v1",
+            "Requirement": "All users SHALL be added to Defender for Office 365 protection in either the standard or strict preset security policy.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.DEFENDER.1.4v1",
+            "Requirement": "Sensitive accounts SHALL be added to Exchange Online Protection in the strict preset security policy.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/configuration.md#defender-configuration' target='_blank' class='indicator indicator-requires-config' title='Requires Configuration'>Requires Configuration</a></div>",
+            "Result": "Fail",
+            "Criticality": "Shall",
+            "Details": "Requirement not met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Fail",
+            "OriginalDetails": "Requirement not met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.DEFENDER.1.5v1",
+            "Requirement": "Sensitive accounts SHALL be added to Defender for Office 365 protection in the strict preset security policy.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/configuration.md#defender-configuration' target='_blank' class='indicator indicator-requires-config' title='Requires Configuration'>Requires Configuration</a></div>",
+            "Result": "Fail",
+            "Criticality": "Shall",
+            "Details": "Requirement not met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Fail",
+            "OriginalDetails": "Requirement not met",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Impersonation Protection",
+        "GroupNumber": "2",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#2-impersonation-protection",
+        "Controls": [
+          {
+            "Control ID": "MS.DEFENDER.2.1v1",
+            "Requirement": "User impersonation protection SHOULD be enabled for sensitive accounts in both the standard and strict preset policies.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/configuration.md#defender-configuration' target='_blank' class='indicator indicator-requires-config' title='Requires Configuration'>Requires Configuration</a></div>",
+            "Result": "Pass",
+            "Criticality": "Should",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.DEFENDER.2.2v1",
+            "Requirement": "Domain impersonation protection SHOULD be enabled for domains owned by the agency in both the standard and strict preset policies.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/configuration.md#defender-configuration' target='_blank' class='indicator indicator-requires-config' title='Requires Configuration'>Requires Configuration</a></div>",
+            "Result": "Warning",
+            "Criticality": "Should",
+            "Details": "Not all agency domains are included for targeted protection in Strict or Standard policy.",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Warning",
+            "OriginalDetails": "Not all agency domains are included for targeted protection in Strict or Standard policy.",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.DEFENDER.2.3v1",
+            "Requirement": "Domain impersonation protection SHOULD be added for key suppliers and partners in both the standard and strict preset policies.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/configuration.md#defender-configuration' target='_blank' class='indicator indicator-requires-config' title='Requires Configuration'>Requires Configuration</a></div>",
+            "Result": "Warning",
+            "Criticality": "Should",
+            "Details": "Not all partner domains are included for targeted protection in Strict or Standard policy.",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Warning",
+            "OriginalDetails": "Not all partner domains are included for targeted protection in Strict or Standard policy.",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Safe Attachments",
+        "GroupNumber": "3",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#3-safe-attachments",
+        "Controls": [
+          {
+            "Control ID": "MS.DEFENDER.3.1v1",
+            "Requirement": "Safe attachments SHOULD be enabled for SharePoint, OneDrive, and Microsoft Teams.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Should",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Data Loss Prevention",
+        "GroupNumber": "4",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#4-data-loss-prevention",
+        "Controls": [
+          {
+            "Control ID": "MS.DEFENDER.4.1v2",
+            "Requirement": "A custom policy SHALL be configured to protect PII and sensitive information, as defined by the agency, blocking at a minimum: credit card numbers, U.S. Individual Taxpayer Identification Numbers (ITIN), and U.S. Social Security numbers (SSN).<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.DEFENDER.4.2v1",
+            "Requirement": "The custom policy SHOULD be applied to Exchange, OneDrive, SharePoint, Teams chat, and Devices.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Warning",
+            "Criticality": "Should",
+            "Details": "DLP custom policy applied to the following locations: Exchange, OneDrive, SharePoint, Teams. Custom policy protecting sensitive info types NOT applied to: Devices. Devices location requires DLP for Endpoint licensing and at least one registered device. For full policy details, see the ActualValue field in the results file: ./TestResults.json",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Warning",
+            "OriginalDetails": "DLP custom policy applied to the following locations: Exchange, OneDrive, SharePoint, Teams. Custom policy protecting sensitive info types NOT applied to: Devices. Devices location requires DLP for Endpoint licensing and at least one registered device. For full policy details, see the ActualValue field in the results file: ./TestResults.json",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.DEFENDER.4.3v1",
+            "Requirement": "The action for the custom policy SHOULD be set to block sharing sensitive information with everyone.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Should",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.DEFENDER.4.4v1",
+            "Requirement": "Notifications to inform users and help educate them on the proper use of sensitive information SHOULD be enabled in the custom policy.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Should",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.DEFENDER.4.5v1",
+            "Requirement": "A list of apps that are restricted from accessing files protected by DLP policy SHOULD be defined.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#msdefender45v1-instructions' target='_blank' class='indicator indicator-manual' title='Manual'>Manual</a></div>",
+            "Result": "N/A",
+            "Criticality": "Should/Not-Implemented",
+            "Details": "This product does not currently have the capability to check compliance for this policy. See Secure Configuration Baseline policy, https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#msdefender45v1 for instructions on manual check",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "N/A",
+            "OriginalDetails": "This product does not currently have the capability to check compliance for this policy. See <a href=\"https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#msdefender45v1\" target=\"_blank\">Secure Configuration Baseline policy</a> for instructions on manual check",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.DEFENDER.4.6v1",
+            "Requirement": "The custom policy SHOULD include an action to block access to sensitive information by restricted apps and unwanted Bluetooth applications.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#msdefender46v1-instructions' target='_blank' class='indicator indicator-manual' title='Manual'>Manual</a></div>",
+            "Result": "N/A",
+            "Criticality": "Should/Not-Implemented",
+            "Details": "This product does not currently have the capability to check compliance for this policy. See Secure Configuration Baseline policy, https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#msdefender46v1 for instructions on manual check",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "N/A",
+            "OriginalDetails": "This product does not currently have the capability to check compliance for this policy. See <a href=\"https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#msdefender46v1\" target=\"_blank\">Secure Configuration Baseline policy</a> for instructions on manual check",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Alerts",
+        "GroupNumber": "5",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#5-alerts",
+        "Controls": [
+          {
+            "Control ID": "MS.DEFENDER.5.1v1",
+            "Requirement": "At a minimum, the alerts required by the CISA M365 Secure Configuration Baseline for Exchange Online SHALL be enabled.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.DEFENDER.5.2v1",
+            "Requirement": "The alerts SHOULD be sent to a monitored address or incorporated into a Security Information and Event Management (SIEM).<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#msdefender52v1-instructions' target='_blank' class='indicator indicator-manual' title='Manual'>Manual</a></div>",
+            "Result": "N/A",
+            "Criticality": "Should/Not-Implemented",
+            "Details": "This product does not currently have the capability to check compliance for this policy. See Secure Configuration Baseline policy, https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#msdefender52v1 for instructions on manual check",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "N/A",
+            "OriginalDetails": "This product does not currently have the capability to check compliance for this policy. See <a href=\"https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#msdefender52v1\" target=\"_blank\">Secure Configuration Baseline policy</a> for instructions on manual check",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Audit Logging",
+        "GroupNumber": "6",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#6-audit-logging",
+        "Controls": [
+          {
+            "Control ID": "MS.DEFENDER.6.1v1",
+            "Requirement": "Unified Audit logging SHALL be enabled.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.DEFENDER.6.3v1",
+            "Requirement": "Audit logs SHALL be maintained for at least the minimum duration dictated by OMB M-21-31.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#msdefender63v1-instructions' target='_blank' class='indicator indicator-manual' title='Manual'>Manual</a></div>",
+            "Result": "N/A",
+            "Criticality": "Shall/Not-Implemented",
+            "Details": "This product does not currently have the capability to check compliance for this policy. See Secure Configuration Baseline policy, https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#msdefender63v1 for instructions on manual check",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "N/A",
+            "OriginalDetails": "This product does not currently have the capability to check compliance for this policy. See <a href=\"https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/defender.md#msdefender63v1\" target=\"_blank\">Secure Configuration Baseline policy</a> for instructions on manual check",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      }
+    ],
+    "EXO": [
+      {
+        "GroupName": "Automatic Forwarding to External Domains",
+        "GroupNumber": "1",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#1-automatic-forwarding-to-external-domains",
+        "Controls": [
+          {
+            "Control ID": "MS.EXO.1.1v2",
+            "Requirement": "Automatic forwarding to external domains SHALL be disabled.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/configuration.md#automatic-forwarding-to-remote-domains' target='_blank' class='indicator indicator-configurable' title='Configurable'>Configurable</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "No domains allow automatic forwarding.",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "No domains allow automatic forwarding.",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Sender Policy Framework",
+        "GroupNumber": "2",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#2-sender-policy-framework",
+        "Controls": [
+          {
+            "Control ID": "MS.EXO.2.2v3",
+            "Requirement": "An SPF policy SHALL be published for each domain that fails all non-approved senders.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/parameters.md#preferreddnsresolvers' target='_blank' class='indicator indicator-configurable' title='Configurable'>Configurable</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met. View DNS logs, #dns-logs for more details.",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met. <a href=\"#dns-logs\">View DNS logs</a> for more details.",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "DomainKeys Identified Mail",
+        "GroupNumber": "3",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#3-domainkeys-identified-mail",
+        "Controls": [
+          {
+            "Control ID": "MS.EXO.3.1v1",
+            "Requirement": "DKIM SHOULD be enabled for all domains.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/parameters.md#preferreddnsresolvers' target='_blank' class='indicator indicator-configurable' title='Configurable'>Configurable</a></div>",
+            "Result": "Warning",
+            "Criticality": "Should",
+            "Details": "1 agency domain(s) found in violation: tqhjy.onmicrosoft.com. View DNS logs, #dns-logs for more details.",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Warning",
+            "OriginalDetails": "1 agency domain(s) found in violation: tqhjy.onmicrosoft.com. <a href=\"#dns-logs\">View DNS logs</a> for more details.",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Domain-Based Message Authentication, Reporting, and Conformance (DMARC)",
+        "GroupNumber": "4",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#4-domain-based-message-authentication-reporting-and-conformance-dmarc",
+        "Controls": [
+          {
+            "Control ID": "MS.EXO.4.1v1",
+            "Requirement": "A DMARC policy SHALL be published for every second-level domain.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/parameters.md#preferreddnsresolvers' target='_blank' class='indicator indicator-configurable' title='Configurable'>Configurable</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met. View DNS logs, #dns-logs for more details.",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met. <a href=\"#dns-logs\">View DNS logs</a> for more details.",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.EXO.4.2v1",
+            "Requirement": "The DMARC message rejection option SHALL be p=reject.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/parameters.md#preferreddnsresolvers' target='_blank' class='indicator indicator-configurable' title='Configurable'>Configurable</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met. View DNS logs, #dns-logs for more details.",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met. <a href=\"#dns-logs\">View DNS logs</a> for more details.",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.EXO.4.3v1",
+            "Requirement": "The DMARC point of contact for aggregate reports SHALL include `reports@dmarc.cyber.dhs.gov`.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/parameters.md#preferreddnsresolvers' target='_blank' class='indicator indicator-configurable' title='Configurable'>Configurable</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met. View DNS logs, #dns-logs for more details.",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met. <a href=\"#dns-logs\">View DNS logs</a> for more details.",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.EXO.4.4v1",
+            "Requirement": "An agency point of contact SHOULD be included for aggregate and failure reports.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/docs/configuration/parameters.md#preferreddnsresolvers' target='_blank' class='indicator indicator-configurable' title='Configurable'>Configurable</a></div>",
+            "Result": "Pass",
+            "Criticality": "Should",
+            "Details": "Requirement met. View DNS logs, #dns-logs for more details.",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met. <a href=\"#dns-logs\">View DNS logs</a> for more details.",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Simple Mail Transfer Protocol Authentication",
+        "GroupNumber": "5",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#5-simple-mail-transfer-protocol-authentication",
+        "Controls": [
+          {
+            "Control ID": "MS.EXO.5.1v1",
+            "Requirement": "SMTP AUTH SHALL be disabled.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Calendar and Contact Sharing",
+        "GroupNumber": "6",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#6-calendar-and-contact-sharing",
+        "Controls": [
+          {
+            "Control ID": "MS.EXO.6.1v1",
+            "Requirement": "Contact folders SHALL NOT be shared with all domains.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.EXO.6.2v1",
+            "Requirement": "Calendar details SHALL NOT be shared with all domains.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "External Sender Warnings",
+        "GroupNumber": "7",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#7-external-sender-warnings",
+        "Controls": [
+          {
+            "Control ID": "MS.EXO.7.1v1",
+            "Requirement": "External sender warnings SHALL be implemented.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Mailbox Auditing",
+        "GroupNumber": "13",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#13-mailbox-auditing",
+        "Controls": [
+          {
+            "Control ID": "MS.EXO.13.1v1",
+            "Requirement": "Mailbox auditing SHALL be enabled.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/exo.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      }
+    ],
+    "PowerPlatform": [
+      {
+        "GroupName": "Creation of Power Platform Environments",
+        "GroupNumber": "1",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#1-creation-of-power-platform-environments",
+        "Controls": [
+          {
+            "Control ID": "MS.POWERPLATFORM.1.1v1",
+            "Requirement": "The ability to create production and sandbox environments SHALL be restricted to admins.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.POWERPLATFORM.1.2v1",
+            "Requirement": "The ability to create trial environments SHALL be restricted to admins.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Power Platform Data Loss Prevention Policies",
+        "GroupNumber": "2",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#2-power-platform-data-loss-prevention-policies",
+        "Controls": [
+          {
+            "Control ID": "MS.POWERPLATFORM.2.1v1",
+            "Requirement": "A DLP policy SHALL be created to restrict connector access in the default Power Platform environment.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Fail",
+            "Criticality": "Shall",
+            "Details": "No policy found that applies to default environment",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Fail",
+            "OriginalDetails": "No policy found that applies to default environment",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.POWERPLATFORM.2.2v1",
+            "Requirement": "Non-default environments SHOULD have at least one DLP policy affecting them.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Warning",
+            "Criticality": "Should",
+            "Details": "No DLP policies found",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Warning",
+            "OriginalDetails": "No DLP policies found",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Power Platform Tenant Isolation",
+        "GroupNumber": "3",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#3-power-platform-tenant-isolation",
+        "Controls": [
+          {
+            "Control ID": "MS.POWERPLATFORM.3.1v1",
+            "Requirement": "Power Platform tenant isolation SHALL be enabled.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.POWERPLATFORM.3.2v1",
+            "Requirement": "An inbound/outbound connection allowlist SHOULD be configured.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#mspowerplatform32v1-instructions' target='_blank' class='indicator indicator-manual' title='Manual'>Manual</a></div>",
+            "Result": "N/A",
+            "Criticality": "Should/Not-Implemented",
+            "Details": "This product does not currently have the capability to check compliance for this policy. See Secure Configuration Baseline policy, https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#mspowerplatform32v1 for instructions on manual check",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "N/A",
+            "OriginalDetails": "This product does not currently have the capability to check compliance for this policy. See <a href=\"https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#mspowerplatform32v1\" target=\"_blank\">Secure Configuration Baseline policy</a> for instructions on manual check",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Power Apps Content Security Policy",
+        "GroupNumber": "4",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#4-power-apps-content-security-policy",
+        "Controls": [
+          {
+            "Control ID": "MS.POWERPLATFORM.4.1v1",
+            "Requirement": "Content Security Policy (CSP) SHALL be enforced for model-driven and canvas Power Apps.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#mspowerplatform41v1-instructions' target='_blank' class='indicator indicator-manual' title='Manual'>Manual</a></div>",
+            "Result": "N/A",
+            "Criticality": "Shall/Not-Implemented",
+            "Details": "This product does not currently have the capability to check compliance for this policy. See Secure Configuration Baseline policy, https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#mspowerplatform41v1 for instructions on manual check",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "N/A",
+            "OriginalDetails": "This product does not currently have the capability to check compliance for this policy. See <a href=\"https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#mspowerplatform41v1\" target=\"_blank\">Secure Configuration Baseline policy</a> for instructions on manual check",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Power Pages Creation",
+        "GroupNumber": "5",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#5-power-pages-creation",
+        "Controls": [
+          {
+            "Control ID": "MS.POWERPLATFORM.5.1v1",
+            "Requirement": "The ability to create Power Pages sites SHOULD be restricted to admins.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Should",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Power Apps Sharing Controls",
+        "GroupNumber": "6",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#6-power-apps-sharing-controls",
+        "Controls": [
+          {
+            "Control ID": "MS.POWERPLATFORM.6.1v1",
+            "Requirement": "The Share with Everyone feature SHOULD be disabled.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/powerplatform.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Should",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      }
+    ],
+    "SharePoint": [
+      {
+        "GroupName": "External Sharing",
+        "GroupNumber": "1",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#1-external-sharing",
+        "Controls": [
+          {
+            "Control ID": "MS.SHAREPOINT.1.1v1",
+            "Requirement": "External sharing for SharePoint SHALL be limited to \"Existing guests\" or \"Only people in your organization\".<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.SHAREPOINT.1.2v1",
+            "Requirement": "External sharing for OneDrive SHALL be limited to \"Existing guests\" or \"Only people in your organization\".<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.SHAREPOINT.1.3v1",
+            "Requirement": "External sharing SHALL be restricted to approved external domains and/or users in approved security groups per interagency collaboration needs.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "This policy is only applicable if the external sharing slider in the SharePoint admin center is not set to Only People In Your Organization. See Secure Configuration Baseline policy, https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#mssharepoint13v1 for more info",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "This policy is only applicable if the external sharing slider in the SharePoint admin center is not set to Only People In Your Organization. See <a href=\"https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#mssharepoint13v1\" target=\"_blank\">Secure Configuration Baseline policy</a> for more info",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "File and Folder Default Sharing Settings",
+        "GroupNumber": "2",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#2-file-and-folder-default-sharing-settings",
+        "Controls": [
+          {
+            "Control ID": "MS.SHAREPOINT.2.1v1",
+            "Requirement": "File and folder default sharing scope SHALL be set to \"Specific people (only the people the user specifies)\".<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.SHAREPOINT.2.2v1",
+            "Requirement": "File and folder default sharing permissions SHALL be set to view only.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Securing Anyone Links and Verification Code Users",
+        "GroupNumber": "3",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#3-securing-anyone-links-and-verification-code-users",
+        "Controls": [
+          {
+            "Control ID": "MS.SHAREPOINT.3.1v1",
+            "Requirement": "Expiration days for Anyone links SHALL be set to 30 days or less.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "This policy is only applicable if the external sharing slider in the SharePoint admin center is set to Anyone. See Secure Configuration Baseline policy, https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#mssharepoint31v1 for more info",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "This policy is only applicable if the external sharing slider in the SharePoint admin center is set to Anyone. See <a href=\"https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#mssharepoint31v1\" target=\"_blank\">Secure Configuration Baseline policy</a> for more info",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.SHAREPOINT.3.2v1",
+            "Requirement": "The allowable file and folder permissions for links SHALL be set to view only.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "This policy is only applicable if the external sharing slider in the SharePoint admin center is set to Anyone. See Secure Configuration Baseline policy, https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#mssharepoint32v1 for more info",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "This policy is only applicable if the external sharing slider in the SharePoint admin center is set to Anyone. See <a href=\"https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#mssharepoint32v1\" target=\"_blank\">Secure Configuration Baseline policy</a> for more info",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.SHAREPOINT.3.3v1",
+            "Requirement": "Reauthentication days for people who use a verification code SHALL be set to 30 days or less.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "This policy is only applicable if the external sharing slider in the SharePoint admin center is set to Anyone or New and Existing Guests. See Secure Configuration Baseline policy, https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#mssharepoint33v1 for more info",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "This policy is only applicable if the external sharing slider in the SharePoint admin center is set to Anyone or New and Existing Guests. See <a href=\"https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/sharepoint.md#mssharepoint33v1\" target=\"_blank\">Secure Configuration Baseline policy</a> for more info",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      }
+    ],
+    "Teams": [
+      {
+        "GroupName": "Meeting Policies",
+        "GroupNumber": "1",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#1-meeting-policies",
+        "Controls": [
+          {
+            "Control ID": "MS.TEAMS.1.1v1",
+            "Requirement": "External meeting participants SHOULD NOT be enabled to request control of shared desktops or windows.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Should",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.TEAMS.1.2v2",
+            "Requirement": "Anonymous users SHALL NOT be enabled to start meetings.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.TEAMS.1.3v1",
+            "Requirement": "Anonymous users and dial-in callers SHOULD NOT be admitted automatically.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Should",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.TEAMS.1.4v1",
+            "Requirement": "Internal users SHOULD be admitted automatically.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Should",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.TEAMS.1.5v1",
+            "Requirement": "Dial-in users SHOULD NOT be enabled to bypass the lobby.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Should",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.TEAMS.1.6v1",
+            "Requirement": "Meeting recording SHOULD be disabled.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Should",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.TEAMS.1.7v2",
+            "Requirement": "Record an event SHOULD NOT be set to Always record.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Should",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "External User Access",
+        "GroupNumber": "2",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#2-external-user-access",
+        "Controls": [
+          {
+            "Control ID": "MS.TEAMS.2.1v2",
+            "Requirement": "External access for users SHALL only be enabled on a per-domain basis.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "Requirement met",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "Requirement met",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.TEAMS.2.2v2",
+            "Requirement": "Unmanaged users SHALL NOT be enabled to initiate contact with internal users.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "This policy is not applicable to GCC, GCC High, or DOD environments. See Secure Configuration Baseline policy, https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#msteams22v2 for more info",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "This policy is not applicable to GCC, GCC High, or DOD environments. See <a href=\"https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#msteams22v2\" target=\"_blank\">Secure Configuration Baseline policy</a> for more info",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.TEAMS.2.3v2",
+            "Requirement": "Internal users SHOULD NOT be enabled to initiate contact with unmanaged users.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Should",
+            "Details": "This policy is not applicable to GCC, GCC High, or DOD environments. See Secure Configuration Baseline policy, https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#msteams23v2 for more info",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "This policy is not applicable to GCC, GCC High, or DOD environments. See <a href=\"https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#msteams23v2\" target=\"_blank\">Secure Configuration Baseline policy</a> for more info",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "Teams Email Integration",
+        "GroupNumber": "4",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#4-teams-email-integration",
+        "Controls": [
+          {
+            "Control ID": "MS.TEAMS.4.1v1",
+            "Requirement": "Teams email integration SHALL be disabled.<div class='policy-indicators'><a href='https://www.cisa.gov/news-events/directives/bod-25-01-implementation-guidance-implementing-secure-practices-cloud-services' target='_blank' class='indicator indicator-bod' title='BOD 25-01 Requirement'>BOD 25-01 Requirement</a><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Pass",
+            "Criticality": "Shall",
+            "Details": "This policy is not applicable to GCC, GCC High, or DOD environments. See Secure Configuration Baseline policy, https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#msteams41v1 for more info",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Pass",
+            "OriginalDetails": "This policy is not applicable to GCC, GCC High, or DOD environments. See <a href=\"https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#msteams41v1\" target=\"_blank\">Secure Configuration Baseline policy</a> for more info",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      },
+      {
+        "GroupName": "App Management",
+        "GroupNumber": "5",
+        "GroupReferenceURL": "https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#5-app-management",
+        "Controls": [
+          {
+            "Control ID": "MS.TEAMS.5.1v2",
+            "Requirement": "Agencies SHOULD only allow installation of Microsoft apps approved by the agency.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Warning",
+            "Criticality": "Should",
+            "Details": "Org-wide tenant setting (Microsoft apps): All - Non-compliant (should be set to None)",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Warning",
+            "OriginalDetails": "Org-wide tenant setting (Microsoft apps): All - Non-compliant (should be set to None)",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.TEAMS.5.2v2",
+            "Requirement": "Agencies SHOULD only allow installation of third-party apps approved by the agency.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Warning",
+            "Criticality": "Should",
+            "Details": "Org-wide tenant setting (third-party apps): All - Non-compliant (should be set to None)",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Warning",
+            "OriginalDetails": "Org-wide tenant setting (third-party apps): All - Non-compliant (should be set to None)",
+            "Comments": [],
+            "ResolutionDate": null
+          },
+          {
+            "Control ID": "MS.TEAMS.5.3v2",
+            "Requirement": "Agencies SHOULD only allow installation of custom apps approved by the agency.<div class='policy-indicators'><a href='https://github.com/cisagov/ScubaGear/blob/v1.8.0/PowerShell/ScubaGear/baselines/teams.md#key-terminology' target='_blank' class='indicator indicator-automated' title='Automated Check'>Automated Check</a></div>",
+            "Result": "Warning",
+            "Criticality": "Should",
+            "Details": "Org-wide tenant setting (custom apps): All - Non-compliant (should be set to None)",
+            "OmittedEvaluationResult": "N/A",
+            "OmittedEvaluationDetails": "N/A",
+            "IncorrectResult": "N/A",
+            "IncorrectResultDetails": "N/A",
+            "OriginalResult": "Warning",
+            "OriginalDetails": "Org-wide tenant setting (custom apps): All - Non-compliant (should be set to None)",
+            "Comments": [],
+            "ResolutionDate": null
+          }
+        ]
+      }
+    ]
+  },
+  "Raw": {}
+}

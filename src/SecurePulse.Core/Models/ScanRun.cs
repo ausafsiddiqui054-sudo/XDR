@@ -46,6 +46,7 @@ public sealed record ScanRun
 public static class ScanEngines
 {
     public const string Maester = "Maester";
+    public const string ScubaGear = "ScubaGear";
 
-    public static readonly IReadOnlyList<string> All = [Maester];
+    public static readonly IReadOnlyList<string> All = [Maester, ScubaGear];
 }

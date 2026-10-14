@@ -108,7 +108,15 @@ else
                         <MudText Typo="Typo.body2" Class="mb-4">@sel.Finding.Remediation</MudText>
                     }
 
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    @if (SafeLink(sel.Finding.HelpUrl) is { } help)
+                    {
+                        <MudLink Href="@help" Target="_blank" UserAttributes="@(new() { ["rel"] = "noopener noreferrer", ["data-testid"] = "finding-help" })"
+                                 Typo="Typo.body2" Class="d-inline-flex align-center mb-4">
+                            More about this check <MudIcon Icon="@Icons.Material.Rounded.OpenInNew" Size="Size.Small" Class="ml-1" />
+                        </MudLink>
+                    }
+
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
                         Source: @sel.Finding.Source@(sel.Finding.SourceCheckId is { } id ? $" ({id})" : "")
                     </MudText>
                 </MudPaper>
@@ -144,4 +152,8 @@ else
             .OrderByDescending(r => r.Finding.Status == FindingStatus.Failed)
             .ThenByDescending(r => r.Finding.Severity)
             .ThenBy(r => r.Tenant.DisplayName);
+
+    /// <summary>Help links come from engine output: only absolute https links are shown (never javascript: or relative ones).</summary>
+    internal static string? SafeLink(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps ? uri.AbsoluteUri : null;
 }

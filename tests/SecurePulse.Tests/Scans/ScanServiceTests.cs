@@ -14,12 +14,12 @@ public class ScanServiceTests
     private const string Thumbprint = "0123456789ABCDEF0123456789ABCDEF01234567";
     private static readonly string[] AllPermissions = AssessmentPermissions.Required.Select(p => p.Name).ToArray();
 
-    private sealed class FakeEngine(Func<Tenant, CancellationToken, Task<ScanResult>>? run = null) : IScanEngine
+    private sealed class FakeEngine(Func<Tenant, CancellationToken, Task<ScanResult>>? run = null, string name = ScanEngines.Maester) : IScanEngine
     {
         public List<Guid> Scanned { get; } = [];
         public int Running;
         public int Peak;
-        public string Name => ScanEngines.Maester;
+        public string Name => name;
 
         public async Task<ScanResult> RunAsync(Tenant tenant, CancellationToken ct = default)
         {
@@ -64,11 +64,12 @@ public class ScanServiceTests
         public SampleDataStore Store { get; } = new();
         public FakeTime Time { get; } = new(DateTimeOffset.UtcNow);
         public FakeEngine Engine { get; init; } = new();
+        public IReadOnlyList<FakeEngine> OtherEngines { get; init; } = [];
         public Tokens Tokens { get; init; } = new(t => Jwt.With(t.EntraTenantId, AllPermissions));
         public ScanOptions Options { get; } = new() { MaxParallelScans = 2 };
         public IScanRunRepository Runs => Store;
 
-        public ScanService Service => new(Store, Store, Store, [Engine], Tokens, Microsoft.Extensions.Options.Options.Create(Options), Time,
+        public ScanService Service => new(Store, Store, Store, [Engine, .. OtherEngines], Tokens, Microsoft.Extensions.Options.Options.Create(Options), Time,
             NullLogger<ScanService>.Instance);
 
         /// <summary>Gives the sample's connected tenants a certificate so they count as onboarded.</summary>
@@ -202,6 +203,62 @@ public class ScanServiceTests
         Assert.StartsWith("Re-consent needed", run.Error);
         Assert.Contains("Directory.Read.All", run.Error);
         Assert.Empty(h.Engine.Scanned);
+    }
+
+    [Fact]
+    public async Task EachEngineNeedsOnlyItsOwnPermissions()
+    {
+        // Connected before ScubaGear was added: Maester's permissions only.
+        var maesterOnly = AssessmentPermissions.RequiredFor(ScanEngines.Maester).ToArray();
+        var scubaGear = new FakeEngine((t, _) => Task.FromResult(FakeEngine.Ok(t) with { Source = ScanEngines.ScubaGear }), ScanEngines.ScubaGear);
+        var h = new Harness { OtherEngines = [scubaGear], Tokens = new Tokens(t => Jwt.With(t.EntraTenantId, maesterOnly)) };
+        var tenant = (await h.OnboardAsync(1))[0];
+        Assert.Equal(2, await h.Service.EnqueueDueAsync());
+
+        await h.Service.DrainAsync();
+
+        var runs = (await h.Runs.GetLatestAsync()).ToDictionary(r => r.Engine);
+        Assert.Equal(ScanRunStatus.Succeeded, runs[ScanEngines.Maester].Status);
+        Assert.Equal(ScanRunStatus.Failed, runs[ScanEngines.ScubaGear].Status);
+        Assert.StartsWith("Re-consent needed", runs[ScanEngines.ScubaGear].Error);
+        Assert.Contains("PrivilegedAccess.Read.AzureADGroup", runs[ScanEngines.ScubaGear].Error);
+        Assert.DoesNotContain("AuditLog.Read.All", runs[ScanEngines.ScubaGear].Error); // Maester's, not ScubaGear's
+        Assert.Equal([tenant.Id], h.Engine.Scanned);
+        Assert.Empty(scubaGear.Scanned);
+    }
+
+    [Fact]
+    public async Task AWorkerOnlyQueuesAndClaimsItsOwnEngines()
+    {
+        var h = new Harness();
+        var tenant = (await h.OnboardAsync(1))[0];
+        await h.Runs.EnqueueAsync(tenant.Id, ScanEngines.ScubaGear, ScanTrigger.Manual, "Olivia", h.Time.Now);
+
+        Assert.Equal(1, await h.Service.EnqueueDueAsync()); // Maester only
+        await h.Service.DrainAsync();
+
+        var runs = (await h.Runs.GetLatestAsync()).ToDictionary(r => r.Engine);
+        Assert.Equal(ScanRunStatus.Succeeded, runs[ScanEngines.Maester].Status);
+        Assert.Equal(ScanRunStatus.Queued, runs[ScanEngines.ScubaGear].Status); // left for a Worker that runs ScubaGear
+    }
+
+    [Fact]
+    public async Task OneEnginesResultsDontReplaceAnothers()
+    {
+        var scubaGear = new FakeEngine((t, _) => Task.FromResult(FakeEngine.Ok(t, 2) with
+        {
+            Source = ScanEngines.ScubaGear,
+            Findings = FakeEngine.Ok(t, 2).Findings.Select(f => f with { Id = f.Id.Replace("maester", "scubagear"), Source = ScanEngines.ScubaGear }).ToList()
+        }), ScanEngines.ScubaGear);
+        var h = new Harness { OtherEngines = [scubaGear] };
+        var tenant = (await h.OnboardAsync(1))[0];
+        await h.Service.EnqueueDueAsync();
+
+        await h.Service.DrainAsync();
+
+        var stored = await ((IFindingRepository)h.Store).GetForTenantAsync(tenant.Id);
+        Assert.Equal(3, stored.Count(f => f.Source == ScanEngines.Maester));
+        Assert.Equal(2, stored.Count(f => f.Source == ScanEngines.ScubaGear));
     }
 
     [Fact]
@@ -343,8 +400,9 @@ public class ScanRequestServiceTests
         return (store, ready, connected[1]);
     }
 
-    private static ScanRequestService Service(SampleDataStore store, FixedUser user) =>
-        new(store, store, user, new AuditTrail(store, user, TimeProvider.System, NullLogger<AuditTrail>.Instance), TimeProvider.System);
+    private static ScanRequestService Service(SampleDataStore store, FixedUser user, params string[] engines) =>
+        new(store, store, user, new AuditTrail(store, user, TimeProvider.System, NullLogger<AuditTrail>.Instance),
+            ScanEngineSelection.From(engines), TimeProvider.System);
 
     [Fact]
     public async Task OperatorsQueueManualScansForReadyTenantsAndAreAudited()
@@ -373,5 +431,29 @@ public class ScanRequestServiceTests
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => Service(store, FixedUser.Viewer(ready.Id)).RequestAllAsync());
         Assert.Single(await Service(store, FixedUser.Viewer(ready.Id)).GetLatestAsync());
         Assert.Empty(await Service(store, FixedUser.Viewer(notReady.Id)).GetLatestAsync());
+    }
+
+    [Fact]
+    public async Task QueuesAndShowsEachConfiguredEngine()
+    {
+        var (store, ready, _) = await StoreAsync();
+        var admin = FixedUser.MspAdmin();
+        var both = Service(store, admin, ScanEngines.Maester, ScanEngines.ScubaGear);
+
+        Assert.Equal(2, await both.RequestAsync([ready.Id]));
+
+        var latest = await both.GetLatestAsync();
+        Assert.Equal(ScanTrigger.Manual, latest[(ready.Id, ScanEngines.Maester)].Trigger);
+        Assert.Equal(ScanTrigger.Manual, latest[(ready.Id, ScanEngines.ScubaGear)].Trigger);
+        // A portal configured for Maester only neither shows nor queues ScubaGear.
+        Assert.Equal([ScanEngines.Maester], (await Service(store, admin).GetLatestAsync()).Keys.Select(k => k.Engine));
+    }
+
+    [Fact]
+    public void EngineSelectionDefaultsToMaesterAndRejectsUnknownNames()
+    {
+        Assert.Equal([ScanEngines.Maester], ScanEngineSelection.From(null).Engines);
+        Assert.Equal([ScanEngines.Maester, ScanEngines.ScubaGear], ScanEngineSelection.From(["Maester", "ScubaGear", "Maester"]).Engines);
+        Assert.Throws<InvalidOperationException>(() => ScanEngineSelection.From(["scubagear"]));
     }
 }

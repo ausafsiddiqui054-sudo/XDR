@@ -41,6 +41,7 @@ builder.Services.AddScoped<PostureService>();
 builder.Services.AddScoped<EndpointService>();
 builder.Services.AddScoped<PortalUserService>();
 builder.Services.AddScoped<AuditTrail>();
+builder.Services.AddSingleton(ScanEngineSelection.From(builder.Configuration.GetSection("Scans:Engines").Get<string[]>()));
 builder.Services.AddScoped<ScanRequestService>();
 
 // Tenant onboarding. Consent-link state is encrypted with data protection; in production,

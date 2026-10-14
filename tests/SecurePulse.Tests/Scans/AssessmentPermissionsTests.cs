@@ -16,7 +16,7 @@ public class AssessmentPermissionsTests
         Assert.All(AssessmentPermissions.Required, p =>
         {
             Assert.False(string.IsNullOrWhiteSpace(p.Purpose));
-            Assert.Contains(p.Group, new[] { AssessmentPermissions.DevicesGroup, AssessmentPermissions.SecurityChecksGroup });
+            Assert.Contains(p.Group, new[] { AssessmentPermissions.DevicesGroup, AssessmentPermissions.SecurityChecksGroup, AssessmentPermissions.CisaBaselineGroup });
         });
     }
 
@@ -44,5 +44,43 @@ public class AssessmentPermissionsTests
         Assert.Empty(AssessmentPermissions.MissingFrom(all.Select(p => p.ToUpperInvariant())));
         Assert.Equal(["Directory.Read.All"], AssessmentPermissions.MissingFrom(all.Where(p => p != "Directory.Read.All")));
         Assert.Equal(["Mail.Send", "User.ReadWrite.All"], AssessmentPermissions.NotReadOnly([.. all, "User.ReadWrite.All", "Mail.Send"]));
+    }
+
+    [Fact]
+    public void EachEngineHasItsOwnListWithinTheRequiredOnes()
+    {
+        var required = AssessmentPermissions.Required.Select(p => p.Name).ToHashSet();
+        var maester = AssessmentPermissions.RequiredFor(ScanEngines.Maester);
+        var scubaGear = AssessmentPermissions.RequiredFor(ScanEngines.ScubaGear);
+
+        Assert.Equal(25, maester.Count);
+        // ScubaGear 1.8.0's Entra ID (aad) list for service principals.
+        Assert.Equal(["Directory.Read.All", "Policy.Read.All", "PrivilegedAccess.Read.AzureADGroup", "PrivilegedEligibilitySchedule.Read.AzureADGroup",
+            "RoleManagement.Read.Directory", "RoleManagementPolicy.Read.AzureADGroup", "User.Read.All"], scubaGear);
+        Assert.All(maester.Concat(scubaGear), p => Assert.Contains(p, required));
+        // Every required permission is used by some engine (or the device sync, which Maester's list includes).
+        Assert.Empty(required.Except(maester).Except(scubaGear));
+        Assert.Equal(required.Order(), AssessmentPermissions.RequiredFor("SomethingElse").Order());
+        Assert.Equal(5, AssessmentPermissions.Required.Count(p => p.Group == AssessmentPermissions.CisaBaselineGroup));
+    }
+
+    [Fact]
+    public void ScubaGearsPrivilegedProductPermissionsAreNotRequested()
+    {
+        var names = AssessmentPermissions.Required.Select(p => p.Name).ToList();
+
+        Assert.DoesNotContain("Exchange.ManageAsApp", names);
+        Assert.DoesNotContain("Sites.FullControl.All", names);
+        Assert.False(AssessmentPermissions.IsReadOnly("Exchange.ManageAsApp"));
+    }
+
+    [Fact]
+    public void MissingFromCanCheckOneEngine()
+    {
+        var maesterOnly = AssessmentPermissions.RequiredFor(ScanEngines.Maester);
+
+        Assert.Empty(AssessmentPermissions.MissingFrom(maesterOnly, maesterOnly));
+        Assert.Equal(["PrivilegedAccess.Read.AzureADGroup", "PrivilegedEligibilitySchedule.Read.AzureADGroup", "RoleManagement.Read.Directory",
+            "RoleManagementPolicy.Read.AzureADGroup", "User.Read.All"], AssessmentPermissions.MissingFrom(maesterOnly, AssessmentPermissions.RequiredFor(ScanEngines.ScubaGear)));
     }
 }
