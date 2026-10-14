@@ -108,9 +108,19 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
 - State changes are conditional updates on the current status; one open action per device
   (`IX_device_actions_open`); claims use `FOR UPDATE SKIP LOCKED`. Writes are never retried.
 
+## Defender health invariants
+- Defender data comes through Graph with the assessment app's existing read-only permissions:
+  `windowsProtectionState` (DeviceManagementManagedDevices.Read.All) and advanced hunting
+  `DeviceInfo` (ThreatHunting.Read.All). Don't add the WindowsDefenderATP API: its permissions
+  would need a separate consent, and requiring them breaks consent for tenants without Defender for Endpoint.
+- The hunting query is a constant (`DefenderHealthMapper.DeviceInfoQuery`); never interpolate into KQL.
+- `DefenderHealthEvaluator` is the only place that turns raw data into `DefenderState`; the UI only displays it.
+- Defender reads never fail a sync: skip what failed, set `DeviceSyncResult.Warning`, and mark sensor data
+  unavailable so missing sensors aren't reported as "not onboarded".
+- Match Defender devices to Intune by Entra device ID; a host-name fallback only when unique on both sides.
+
 ## Next steps (in order)
-1. Defender health per device via the Defender for Endpoint API (not in Graph v1.0 managedDevice).
-2. Persist the data-protection key ring (shared store) before running more than one portal
+1. Persist the data-protection key ring (shared store) before running more than one portal
    instance: it protects consent-link state and the sign-in cookie.
-3. Audit retention: a maintenance role allowed to purge `audit_events` older than a configured
+2. Audit retention: a maintenance role allowed to purge `audit_events` older than a configured
    period (the trigger blocks the app). Optionally ship events to a SIEM (Sentinel) as well.

@@ -37,6 +37,24 @@ public sealed record EndpointFleet(IReadOnlyList<DeviceRow> Devices, DateTimeOff
 
     public ComplianceBreakdown Overall => ComplianceBreakdown.Of("All devices", Devices.Select(r => r.Device));
 
+    /// <summary>Tenants whose last sync succeeded but couldn't read everything (e.g. Defender for Endpoint).</summary>
+    public IEnumerable<(Tenant Tenant, DeviceSyncStatus Status)> SyncWarnings =>
+        Syncs.Where(s => s.Status.Succeeded && !string.IsNullOrWhiteSpace(s.Status.Warning));
+
+    public int CountDefender(DefenderState state) => Devices.Count(r => r.Device.Defender == state);
+
+    public int DefenderProtectedPercent => Devices.Count == 0 ? 0 : (int)Math.Round(100.0 * CountDefender(DefenderState.Protected) / Devices.Count);
+
+    /// <summary>The most common Defender issues across the fleet, most devices first.</summary>
+    public IReadOnlyList<(string Issue, int Devices)> TopDefenderIssues(int take = 5) =>
+        Devices.SelectMany(r => (r.Device.DefenderDetails?.Issues ?? []).Distinct())
+            .GroupBy(i => i)
+            .Select(g => (g.Key, g.Count()))
+            .OrderByDescending(x => x.Item2)
+            .ThenBy(x => x.Key, StringComparer.Ordinal)
+            .Take(take)
+            .ToList();
+
     public int NotEncrypted => Devices.Count(r => r.Device.IsEncrypted == false);
     public int Stale => Devices.Count(r => r.IsStale(AsOf));
 

@@ -152,6 +152,57 @@ public static class SecurePulseTheme
         _ => Color.Default
     };
 
+    public static string IconOf(DefenderState state) => state switch
+    {
+        DefenderState.Protected => Icons.Material.Rounded.GppGood,
+        DefenderState.Unhealthy => Icons.Material.Rounded.GppBad,
+        DefenderState.NotOnboarded => Icons.Material.Rounded.GppMaybe,
+        _ => Icons.Material.Rounded.Shield
+    };
+
+    public static string Label(DefenderOnboarding status) => status switch
+    {
+        DefenderOnboarding.Onboarded => "Onboarded",
+        DefenderOnboarding.CanBeOnboarded => "Not onboarded (discovered on the network)",
+        DefenderOnboarding.Unsupported => "Unsupported OS",
+        DefenderOnboarding.InsufficientInfo => "Insufficient information",
+        _ => "Unknown"
+    };
+
+    public static string Label(DefenderSensorHealth health) => health switch
+    {
+        DefenderSensorHealth.Active => "Active",
+        DefenderSensorHealth.Inactive => "Inactive",
+        DefenderSensorHealth.ImpairedCommunication => "Impaired communication",
+        DefenderSensorHealth.NoSensorData => "No sensor data",
+        _ => "Unknown"
+    };
+
+    public static Color ColorOf(DefenderSensorHealth health) => health switch
+    {
+        DefenderSensorHealth.Active => Color.Success,
+        DefenderSensorHealth.Unknown => Color.Default,
+        _ => Color.Error
+    };
+
+    public static string Label(DefenderThreatState state) => state switch
+    {
+        DefenderThreatState.Clean => "No active threats",
+        DefenderThreatState.FullScanPending => "Full scan pending",
+        DefenderThreatState.RebootPending => "Restart pending",
+        DefenderThreatState.ManualStepsPending => "Manual steps pending",
+        DefenderThreatState.OfflineScanPending => "Offline scan pending",
+        DefenderThreatState.Critical => "Critical",
+        _ => "Not reported"
+    };
+
+    public static Color ColorOf(DefenderThreatState state) => state switch
+    {
+        DefenderThreatState.Clean => Color.Success,
+        DefenderThreatState.Unknown => Color.Default,
+        _ => Color.Error
+    };
+
     public static string Label(OnboardingRequest request, DateTimeOffset now) => request.Status switch
     {
         _ when request.IsExpired(now) => "Link expired",

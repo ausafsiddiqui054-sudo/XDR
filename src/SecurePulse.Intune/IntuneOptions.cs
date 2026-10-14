@@ -14,7 +14,13 @@ public sealed class IntuneOptions
     /// <summary>Also read per-setting compliance results for devices that aren't compliant (one extra call per device).</summary>
     public bool FetchComplianceSettings { get; set; } = true;
 
-    /// <summary>Parallel Graph calls per tenant when reading compliance settings.</summary>
+    /// <summary>
+    /// Also read Defender health: Defender Antivirus state per Windows device (one extra call each)
+    /// and Defender for Endpoint sensor state (one advanced hunting query per tenant).
+    /// </summary>
+    public bool FetchDefenderHealth { get; set; } = true;
+
+    /// <summary>Parallel Graph calls per tenant when reading compliance settings and antivirus state.</summary>
     public int MaxConcurrentRequests { get; set; } = 4;
 
     /// <summary>Retries for throttled (429) or unavailable (503/504) responses.</summary>

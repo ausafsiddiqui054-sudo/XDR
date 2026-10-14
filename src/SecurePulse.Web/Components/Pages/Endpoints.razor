@@ -34,6 +34,14 @@ else
         </MudAlert>
     }
 
+    @foreach (var (tenant, status) in _fleet.SyncWarnings)
+    {
+        <MudAlert Severity="MudBlazor.Severity.Info" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px" data-testid="sync-warning">
+            <b>Some device data wasn't read for @tenant.DisplayName.</b> The inventory is current; the rest is shown as unknown.
+            <MudText Typo="Typo.caption" Class="d-block mt-1">@status.Warning</MudText>
+        </MudAlert>
+    }
+
     @if (_fleet.Devices.Count == 0)
     {
         <MudPaper Class="sp-card pa-8" Elevation="0" Outlined="true">
@@ -111,6 +119,63 @@ else
                 }
             </MudPaper>
         </MudItem>
+        <MudItem xs="12">
+            <MudPaper Class="sp-card pa-4" Elevation="0" Outlined="true" data-testid="defender-overview">
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="px-2 pb-3" Wrap="Wrap.Wrap">
+                    <div>
+                        <MudText Typo="Typo.h6">Microsoft Defender</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            Antivirus state from Intune and EDR sensor health from Defender for Endpoint · @_fleet.DefenderProtectedPercent% protected
+                        </MudText>
+                    </div>
+                </MudStack>
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" md="7">
+                        <MudGrid Spacing="2">
+                            @foreach (var state in DefenderStates)
+                            {
+                                <MudItem xs="6" sm="3">
+                                    <div class="@($"sp-defender-tile sp-tile-{TileColor(state)} {(_defender == state ? "sp-active" : "")}")"
+                                         role="button" tabindex="0" aria-pressed="@(_defender == state ? "true" : "false")"
+                                         data-testid="@($"defender-tile-{state}")"
+                                         @onclick="@(() => ToggleDefender(state))"
+                                         @onkeydown="@(e => { if (e.Key is "Enter" or " ") ToggleDefender(state); })">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                            <MudText Typo="Typo.body2" Style="font-weight:600">@SecurePulseTheme.Label(state)</MudText>
+                                            <MudIcon Icon="@SecurePulseTheme.IconOf(state)" Color="@SecurePulseTheme.ColorOf(state)" Size="Size.Small" />
+                                        </MudStack>
+                                        <div class="sp-kpi-value mt-2">@_fleet.CountDefender(state)</div>
+                                    </div>
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    </MudItem>
+                    <MudItem xs="12" md="5">
+                        <MudText Typo="Typo.overline" Color="Color.Secondary" Class="px-2">Most common issues</MudText>
+                        @if (_fleet.TopDefenderIssues() is { Count: > 0 } issues)
+                        {
+                            @foreach (var (issue, count) in issues)
+                            {
+                                <div class="@($"sp-breakdown-row sp-clickable-row {(_issue == issue ? "sp-active" : "")}")" style="padding:6px 12px"
+                                     @onclick="@(() => _issue = _issue == issue ? null : issue)">
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Spacing="2">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Style="min-width:0">
+                                            <MudIcon Icon="@Icons.Material.Rounded.ErrorOutline" Size="Size.Small" Color="Color.Error" />
+                                            <MudText Typo="Typo.body2">@issue</MudText>
+                                        </MudStack>
+                                        <MudText Typo="Typo.body2" Style="font-weight:600;white-space:nowrap">@count</MudText>
+                                    </MudStack>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="px-2 pt-1">No Defender issues reported.</MudText>
+                        }
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </MudItem>
     </MudGrid>
 
     <MudPaper Class="sp-card pa-4 mb-4" Elevation="0" Outlined="true">
@@ -131,7 +196,7 @@ else
                     }
                 </MudSelect>
             </MudItem>
-            <MudItem xs="6" md="3">
+            <MudItem xs="6" md="2">
                 <MudSelect T="DeviceComplianceState?" Label="Compliance" @bind-Value="_compliance" Clearable="true" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
                     @foreach (var s in Enum.GetValues<DeviceComplianceState>())
                     {
@@ -139,7 +204,15 @@ else
                     }
                 </MudSelect>
             </MudItem>
-            <MudItem xs="12" md="4">
+            <MudItem xs="6" md="2">
+                <MudSelect T="DefenderState?" Label="Defender" @bind-Value="_defender" Clearable="true" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
+                    @foreach (var s in DefenderStates)
+                    {
+                        <MudSelectItem T="DefenderState?" Value="@s">@SecurePulseTheme.Label(s)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="3">
                 <MudTextField T="string" @bind-Value="_search" Label="Search device, user or model" Variant="Variant.Outlined" Margin="Margin.Dense"
                               Immediate="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Clearable="true" />
             </MudItem>
@@ -151,6 +224,11 @@ else
                 <MudChip Value="@FlagStale" Text="No check-in for 30+ days" />
                 <MudChip Value="@FlagPersonal" Text="Personal devices" />
             </MudChipSet>
+            @if (_issue is { } issueFilter)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text" Icon="@Icons.Material.Rounded.ErrorOutline"
+                         OnClose="@(() => _issue = null)" data-testid="issue-filter">@issueFilter</MudChip>
+            }
             @if (HasFilters)
             {
                 <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Rounded.FilterAltOff" OnClick="ClearFilters">
@@ -201,8 +279,8 @@ else
                                 <MudTooltip Text="Encryption not reported"><MudIcon Icon="@Icons.Material.Rounded.HelpOutline" Size="Size.Small" Color="Color.Default" /></MudTooltip>
                                 break;
                         }
-                        <MudTooltip Text="@($"Defender: {SecurePulseTheme.Label(context.Device.Defender)}")">
-                            <MudIcon Icon="@Icons.Material.Rounded.Shield" Size="Size.Small" Color="@SecurePulseTheme.ColorOf(context.Device.Defender)" />
+                        <MudTooltip Text="@DefenderTooltip(context.Device)">
+                            <MudIcon Icon="@SecurePulseTheme.IconOf(context.Device.Defender)" Size="Size.Small" Color="@SecurePulseTheme.ColorOf(context.Device.Defender)" />
                         </MudTooltip>
                     </MudStack>
                 </MudTd>
@@ -234,18 +312,40 @@ else
     private DevicePlatform? _platform;
     private DeviceComplianceState? _compliance;
     private string? _search;
+    private DefenderState? _defender;
+    private string? _issue;
     private IReadOnlyCollection<string> _flags = [];
+
+    private static readonly DefenderState[] DefenderStates =
+        [DefenderState.Protected, DefenderState.Unhealthy, DefenderState.NotOnboarded, DefenderState.Unknown];
+
+    private static string TileColor(DefenderState state) => state switch
+    {
+        DefenderState.Protected => "success",
+        DefenderState.Unhealthy => "error",
+        DefenderState.NotOnboarded => "warning",
+        _ => "default"
+    };
+
+    private void ToggleDefender(DefenderState state) => _defender = _defender == state ? null : state;
+
+    private static string DefenderTooltip(ManagedDevice d) =>
+        d.DefenderDetails?.Issues is { Count: > 0 } issues
+            ? $"Defender: {SecurePulseTheme.Label(d.Defender)} · {issues[0]}{(issues.Count > 1 ? $" (+{issues.Count - 1} more)" : "")}"
+            : $"Defender: {SecurePulseTheme.Label(d.Defender)}";
 
     protected override async Task OnInitializedAsync() => _fleet = await EndpointData.GetFleetAsync();
 
-    private bool HasFilters => TenantId is not null || _platform is not null || _compliance is not null
-                               || !string.IsNullOrWhiteSpace(_search) || _flags.Count > 0;
+    private bool HasFilters => TenantId is not null || _platform is not null || _compliance is not null || _defender is not null
+                               || _issue is not null || !string.IsNullOrWhiteSpace(_search) || _flags.Count > 0;
 
     private void ClearFilters()
     {
         TenantId = null;
         _platform = null;
         _compliance = null;
+        _defender = null;
+        _issue = null;
         _search = null;
         _flags = [];
     }
@@ -257,6 +357,8 @@ else
             .Where(r => TenantId is null || r.Tenant.Id == TenantId)
             .Where(r => _platform is null || r.Device.Platform == _platform)
             .Where(r => _compliance is null || r.Device.ComplianceState == _compliance)
+            .Where(r => _defender is null || r.Device.Defender == _defender)
+            .Where(r => _issue is null || (r.Device.DefenderDetails?.Issues.Contains(_issue) ?? false))
             .Where(r => !_flags.Contains(FlagUnencrypted) || r.Device.IsEncrypted == false)
             .Where(r => !_flags.Contains(FlagStale) || r.IsStale(_fleet!.AsOf))
             .Where(r => !_flags.Contains(FlagPersonal) || r.Device.Ownership == DeviceOwnership.Personal)

@@ -2,30 +2,47 @@ using SecurePulse.Core.Models;
 
 namespace SecurePulse.Intune;
 
+/// <summary>Defender data read for one tenant's sync, keyed by Intune device ID.</summary>
+internal sealed record DefenderData(
+    IReadOnlyDictionary<string, DefenderAntivirusStatus> Antivirus,
+    IReadOnlyDictionary<string, DefenderSensorStatus> Sensors,
+    bool SensorDataAvailable);
+
 /// <summary>Converts Graph managedDevice data into normalized <see cref="ManagedDevice"/>s.</summary>
 internal static class IntuneDeviceMapper
 {
-    public static ManagedDevice Map(GraphManagedDevice d, Guid tenantId, IReadOnlyList<DeviceComplianceSetting>? settings = null) => new()
+    public static ManagedDevice Map(GraphManagedDevice d, Guid tenantId, IReadOnlyList<DeviceComplianceSetting>? settings = null,
+        DefenderData? defender = null)
     {
-        Id = d.Id ?? throw new ArgumentException("Graph device has no id.", nameof(d)),
-        TenantId = tenantId,
-        DeviceName = Clean(d.DeviceName) ?? d.Id,
-        UserDisplayName = Clean(d.UserDisplayName),
-        UserPrincipalName = Clean(d.UserPrincipalName),
-        Platform = MapPlatform(d.OperatingSystem),
-        OsVersion = Clean(d.OsVersion),
-        Manufacturer = Clean(d.Manufacturer),
-        Model = Clean(d.Model),
-        SerialNumber = Clean(d.SerialNumber),
-        Ownership = MapOwnership(d.ManagedDeviceOwnerType),
-        ComplianceState = MapCompliance(d.ComplianceState),
-        IsEncrypted = d.IsEncrypted,
-        // Defender health isn't on managedDevice in Graph v1.0; it needs the Defender for Endpoint API.
-        Defender = DefenderState.Unknown,
-        EnrolledAt = Clean(d.EnrolledDateTime),
-        LastSyncAt = Clean(d.LastSyncDateTime),
-        ComplianceSettings = settings ?? []
-    };
+        var platform = MapPlatform(d.OperatingSystem);
+        var id = d.Id ?? throw new ArgumentException("Graph device has no id.", nameof(d));
+        var (state, health) = defender is null
+            ? (DefenderState.Unknown, null)
+            : DefenderHealthEvaluator.Evaluate(platform, defender.Antivirus.GetValueOrDefault(id), defender.Sensors.GetValueOrDefault(id),
+                defender.SensorDataAvailable);
+
+        return new ManagedDevice
+        {
+            Id = id,
+            TenantId = tenantId,
+            DeviceName = Clean(d.DeviceName) ?? id,
+            UserDisplayName = Clean(d.UserDisplayName),
+            UserPrincipalName = Clean(d.UserPrincipalName),
+            Platform = platform,
+            OsVersion = Clean(d.OsVersion),
+            Manufacturer = Clean(d.Manufacturer),
+            Model = Clean(d.Model),
+            SerialNumber = Clean(d.SerialNumber),
+            Ownership = MapOwnership(d.ManagedDeviceOwnerType),
+            ComplianceState = MapCompliance(d.ComplianceState),
+            IsEncrypted = d.IsEncrypted,
+            Defender = state,
+            DefenderDetails = health,
+            EnrolledAt = Clean(d.EnrolledDateTime),
+            LastSyncAt = Clean(d.LastSyncDateTime),
+            ComplianceSettings = settings ?? []
+        };
+    }
 
     public static DevicePlatform MapPlatform(string? operatingSystem) => operatingSystem?.Trim().ToLowerInvariant() switch
     {

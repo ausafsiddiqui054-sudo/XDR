@@ -40,6 +40,7 @@ else
                 <MudText Typo="Typo.body2" Color="Color.Secondary">@d.Manufacturer @d.Model · @tenant.DisplayName</MudText>
                 <MudStack Row="true" Spacing="1" Class="mt-2" Wrap="Wrap.Wrap">
                     <ComplianceChip State="d.ComplianceState" />
+                    <DefenderChip State="d.Defender" />
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Text">@d.Ownership</MudChip>
                     <MudChip T="string" Size="Size.Small" Variant="Variant.Text">@SecurePulseTheme.Label(d.Platform)</MudChip>
                 </MudStack>
@@ -111,6 +112,112 @@ else
                     }
                 </MudPaper>
 
+                <MudPaper Class="sp-card pa-5" Elevation="0" Outlined="true" data-testid="defender-card">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap" Spacing="2">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                            <span class="sp-icon-badge">
+                                <MudIcon Icon="@SecurePulseTheme.IconOf(d.Defender)" Color="@SecurePulseTheme.ColorOf(d.Defender)" />
+                            </span>
+                            <div>
+                                <MudText Typo="Typo.h6">Microsoft Defender</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@DefenderSummary(d)</MudText>
+                            </div>
+                        </MudStack>
+                        <MudText Typo="Typo.body2" Style="font-weight:600" Color="@SecurePulseTheme.ColorOf(d.Defender)">@SecurePulseTheme.Label(d.Defender)</MudText>
+                    </MudStack>
+
+                    @if (d.DefenderDetails is not { } dh)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            Defender health hasn't been read for this device yet. It appears after the Worker's next device sync.
+                        </MudText>
+                    }
+                    else
+                    {
+                        @if (dh.Issues.Count > 0)
+                        {
+                            <MudList T="string" Dense="true" ReadOnly="true" Padding="false" Class="mb-3" data-testid="defender-issues">
+                                @foreach (var issue in dh.Issues)
+                                {
+                                    <MudListItem T="string" Icon="@Icons.Material.Rounded.ErrorOutline"
+                                                 IconColor="@(d.Defender == DefenderState.NotOnboarded ? Color.Warning : Color.Error)">
+                                        <MudText Typo="Typo.body2" Style="font-weight:600">@issue</MudText>
+                                    </MudListItem>
+                                }
+                            </MudList>
+                        }
+
+                        <MudGrid Spacing="4">
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.overline" Color="Color.Secondary">Antivirus</MudText>
+                                @if (dh.Antivirus is { } av)
+                                {
+                                    <dl class="sp-props mt-1">
+                                        <DefenderCheck Label="Antivirus" Value="av.MalwareProtectionEnabled" />
+                                        <DefenderCheck Label="Real-time protection" Value="av.RealTimeProtectionEnabled" />
+                                        <DefenderCheck Label="Tamper protection" Value="av.TamperProtectionEnabled" />
+                                        <DefenderCheck Label="Security intelligence" Value="@(av.SignaturesOutOfDate is { } old ? !old : null)" On="Up to date" Off="Out of date" />
+                                        <dt>Threats</dt>
+                                        <dd><MudText Typo="Typo.body2" Color="@SecurePulseTheme.ColorOf(av.ThreatState)">@SecurePulseTheme.Label(av.ThreatState)</MudText></dd>
+                                        <dt>Signatures</dt>
+                                        <dd>@(av.SignatureVersion ?? "—")</dd>
+                                        <dt>Engine</dt>
+                                        <dd>@(av.EngineVersion ?? "—")</dd>
+                                        <dt>Last quick scan</dt>
+                                        <dd>@(av.LastQuickScanAt is { } qs ? Dashboard.Ago(qs) : "—")@(av.QuickScanOverdue == true ? " · overdue" : "")</dd>
+                                        <dt>Reported</dt>
+                                        <dd>@(av.LastReportedAt is { } rep ? Dashboard.Ago(rep) : "—")@(av.RebootRequired == true ? " · restart required" : "")</dd>
+                                    </dl>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                                        @(d.Platform == DevicePlatform.Windows
+                                            ? "Intune hasn't reported Defender Antivirus state for this device yet."
+                                            : "Intune reports Defender Antivirus state for Windows devices only.")
+                                    </MudText>
+                                }
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.overline" Color="Color.Secondary">Endpoint detection and response</MudText>
+                                @if (!dh.SensorDataAvailable)
+                                {
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                                        Not checked: Defender for Endpoint data for @tenant.DisplayName couldn't be read on the last sync.
+                                    </MudText>
+                                }
+                                else if (dh.Sensor is not { } sensor)
+                                {
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                                        Defender for Endpoint has no record of this device in the last 30 days.
+                                    </MudText>
+                                }
+                                else
+                                {
+                                    <dl class="sp-props mt-1">
+                                        <dt>Onboarding</dt>
+                                        <dd>@SecurePulseTheme.Label(sensor.Onboarding)</dd>
+                                        @if (sensor.Onboarding == DefenderOnboarding.Onboarded)
+                                        {
+                                            <dt>Sensor</dt>
+                                            <dd><MudText Typo="Typo.body2" Color="@SecurePulseTheme.ColorOf(sensor.Health)">@SecurePulseTheme.Label(sensor.Health)</MudText></dd>
+                                        }
+                                        <dt>Exposure</dt>
+                                        <dd>@(sensor.ExposureLevel ?? "Not assessed")</dd>
+                                        <dt>Last seen</dt>
+                                        <dd>@(sensor.LastSeenAt is { } seen ? Dashboard.Ago(seen) : "—")</dd>
+                                        @if (sensor.MachineId is { } machine)
+                                        {
+                                            <dt>Defender ID</dt>
+                                            <dd style="font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:0.75rem">@machine</dd>
+                                        }
+                                    </dl>
+                                }
+                            </MudItem>
+                        </MudGrid>
+                    }
+                </MudPaper>
+
                 <MudPaper Class="sp-card pa-5" Elevation="0" Outlined="true">
                     <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-1" Wrap="Wrap.Wrap">
                         <div>
@@ -168,11 +275,13 @@ else
                         </MudStack>
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
                             <span class="sp-icon-badge">
-                                <MudIcon Icon="@Icons.Material.Rounded.Shield" Color="@SecurePulseTheme.ColorOf(d.Defender)" />
+                                <MudIcon Icon="@SecurePulseTheme.IconOf(d.Defender)" Color="@SecurePulseTheme.ColorOf(d.Defender)" />
                             </span>
                             <div>
                                 <MudText Typo="Typo.body2" Style="font-weight:600">Microsoft Defender</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">@SecurePulseTheme.Label(d.Defender)</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @SecurePulseTheme.Label(d.Defender)@(d.DefenderDetails?.Issues is { Count: > 0 } di ? $" · {di.Count} issue{(di.Count == 1 ? "" : "s")}" : "")
+                                </MudText>
                             </div>
                         </MudStack>
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
@@ -286,6 +395,14 @@ else
     private DeviceActionRequest? OpenAction => _history.Select(v => v.Request).FirstOrDefault(a => a.IsOpen);
 
     private bool CanRequest => CanRemediate && OpenAction is null;
+
+    private static string DefenderSummary(ManagedDevice d) => d.DefenderDetails is null ? "No Defender data for this device yet." : d.Defender switch
+    {
+        DefenderState.Protected => "Antivirus and EDR sensor are healthy.",
+        DefenderState.Unhealthy => "Defender is installed but not fully protecting this device.",
+        DefenderState.NotOnboarded => "Not onboarded to Defender for Endpoint, so threats on it aren't detected or investigated.",
+        _ => "No Defender data for this device."
+    };
 
     protected override async Task OnParametersSetAsync()
     {

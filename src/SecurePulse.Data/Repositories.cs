@@ -106,6 +106,7 @@ public sealed class EfDeviceRepository(IDbContextFactory<SecurePulseDbContext> f
         if (result.Succeeded)
         {
             status.LastSuccessAt = result.CompletedAt;
+            status.Warning = result.Warning is { Length: > MaxErrorLength } w ? w[..MaxErrorLength] : result.Warning;
             status.DeviceCount = result.Devices.DistinctBy(d => d.Id).Count();
         }
 

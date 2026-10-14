@@ -27,11 +27,46 @@ internal sealed class GraphManagedDevice
     public bool? IsEncrypted { get; set; }
     public DateTimeOffset? EnrolledDateTime { get; set; }
     public DateTimeOffset? LastSyncDateTime { get; set; }
+    public string? AzureADDeviceId { get; set; }
 
     /// <summary>The $select list matching the properties above.</summary>
     public const string Select =
         "id,deviceName,userDisplayName,userPrincipalName,operatingSystem,osVersion,manufacturer,model," +
-        "serialNumber,managedDeviceOwnerType,complianceState,isEncrypted,enrolledDateTime,lastSyncDateTime";
+        "serialNumber,managedDeviceOwnerType,complianceState,isEncrypted,enrolledDateTime,lastSyncDateTime,azureADDeviceId";
+}
+
+/// <summary>https://learn.microsoft.com/graph/api/resources/intune-devices-windowsprotectionstate</summary>
+internal sealed class GraphWindowsProtectionState
+{
+    public bool? MalwareProtectionEnabled { get; set; }
+    public bool? RealTimeProtectionEnabled { get; set; }
+    public bool? TamperProtectionEnabled { get; set; }
+    public bool? SignatureUpdateOverdue { get; set; }
+    public bool? QuickScanOverdue { get; set; }
+    public bool? RebootRequired { get; set; }
+    public string? DeviceState { get; set; }
+    public string? SignatureVersion { get; set; }
+    public string? EngineVersion { get; set; }
+    public DateTimeOffset? LastQuickScanDateTime { get; set; }
+    public DateTimeOffset? LastReportedDateTime { get; set; }
+}
+
+/// <summary>https://learn.microsoft.com/graph/api/resources/security-huntingqueryresults</summary>
+internal sealed class GraphHuntingResults<T>
+{
+    public List<T> Results { get; set; } = [];
+}
+
+/// <summary>One row of <see cref="DefenderHealthMapper.DeviceInfoQuery"/> (advanced hunting DeviceInfo).</summary>
+internal sealed class HuntingDeviceRow
+{
+    public string? DeviceId { get; set; }
+    public string? AadDeviceId { get; set; }
+    public string? DeviceName { get; set; }
+    public string? OnboardingStatus { get; set; }
+    public string? SensorHealthState { get; set; }
+    public string? ExposureLevel { get; set; }
+    public DateTimeOffset? Timestamp { get; set; }
 }
 
 /// <summary>https://learn.microsoft.com/graph/api/resources/intune-devices-devicecompliancepolicystate</summary>

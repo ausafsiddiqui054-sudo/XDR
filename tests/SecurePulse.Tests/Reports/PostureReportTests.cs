@@ -243,4 +243,53 @@ public class PostureReportTests
         Assert.Equal((30, 5, 1, 20, 4), (summary.Total, summary.Compliant, summary.InGracePeriod, summary.Noncompliant, summary.Unknown));
         Assert.Equal(["PC-20", "PC-19", "PC-18"], summary.NoncompliantDevices.Select(d => d.Name));
     }
+
+    private static ManagedDevice WithDefender(string name, DevicePlatform platform, DefenderAntivirusStatus? av, DefenderSensorStatus? sensor)
+    {
+        var (state, health) = DefenderHealthEvaluator.Evaluate(platform, av, sensor, sensorDataAvailable: true);
+        return new ManagedDevice
+        {
+            Id = name, TenantId = Tenant.Id, DeviceName = name, Platform = platform, ComplianceState = DeviceComplianceState.Compliant,
+            Defender = state, DefenderDetails = health
+        };
+    }
+
+    [Fact]
+    public void DeviceSummaryCountsDefenderStatesAndTopIssues()
+    {
+        var healthyAv = new DefenderAntivirusStatus { MalwareProtectionEnabled = true, RealTimeProtectionEnabled = true };
+        var active = new DefenderSensorStatus { Onboarding = DefenderOnboarding.Onboarded, Health = DefenderSensorHealth.Active };
+        var devices = new List<ManagedDevice>
+        {
+            WithDefender("PC-1", DevicePlatform.Windows, healthyAv, active),
+            WithDefender("PC-2", DevicePlatform.Windows, healthyAv with { RealTimeProtectionEnabled = false }, active),
+            WithDefender("PC-3", DevicePlatform.Windows, healthyAv with { RealTimeProtectionEnabled = false }, null),
+            WithDefender("MAC-1", DevicePlatform.MacOS, null, null),
+            WithDefender("IPHONE-1", DevicePlatform.iOS, null, null)
+        };
+
+        var summary = DeviceSummary.From(devices, At);
+
+        Assert.Equal(1, summary.Defender[DefenderState.Protected]);
+        Assert.Equal(2, summary.Defender[DefenderState.Unhealthy]);
+        Assert.Equal(1, summary.Defender[DefenderState.NotOnboarded]);
+        Assert.Equal(1, summary.Defender[DefenderState.Unknown]);
+        Assert.Equal([("Not onboarded to Defender for Endpoint.", 2), ("Real-time protection is off.", 2)], summary.DefenderIssues);
+    }
+
+    [Fact]
+    public void DefenderSectionAppearsOnlyWithDefenderData()
+    {
+        var without = ReportPdf.Text(Render(Data(devices: DeviceSummary.From(
+            [new ManagedDevice { Id = "1", TenantId = Tenant.Id, DeviceName = "PC-1", Platform = DevicePlatform.Windows, ComplianceState = DeviceComplianceState.Compliant }], At))));
+        Assert.Empty(DeviceSummary.From([], At).Defender);
+        Assert.DoesNotContain("Microsoft Defender", without);
+
+        var with = ReportPdf.Text(Render(Data(devices: DeviceSummary.From(
+            [WithDefender("PC-1", DevicePlatform.Windows, new DefenderAntivirusStatus { MalwareProtectionEnabled = true, RealTimeProtectionEnabled = false }, null)], At))));
+        Assert.Contains("Microsoft Defender", with);
+        Assert.Contains("Most common Defender issues", with);
+        Assert.Contains("Real-time protection is off.", with);
+        Assert.Contains("Not onboarded", with);
+    }
 }

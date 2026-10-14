@@ -208,6 +208,10 @@ namespace SecurePulse.Data.Migrations
                     b.Property<bool>("Succeeded")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("Warning")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
                     b.HasKey("TenantId");
 
                     b.ToTable("device_sync_status", (string)null);
@@ -665,7 +669,102 @@ namespace SecurePulse.Data.Migrations
                                 .HasForeignKey("ManagedDeviceEntityTenantId", "ManagedDeviceEntityId");
                         });
 
+                    b.OwnsOne("SecurePulse.Data.Entities.DefenderHealthEntity", "DefenderDetails", b1 =>
+                        {
+                            b1.Property<Guid>("ManagedDeviceEntityTenantId");
+
+                            b1.Property<string>("ManagedDeviceEntityId");
+
+                            b1.PrimitiveCollection<string>("Issues")
+                                .IsRequired();
+
+                            b1.Property<bool>("SensorDataAvailable");
+
+                            b1.HasKey("ManagedDeviceEntityTenantId", "ManagedDeviceEntityId");
+
+                            b1.ToTable("managed_devices");
+
+                            b1
+                                .ToJson("DefenderDetails")
+                                .HasColumnType("jsonb");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ManagedDeviceEntityTenantId", "ManagedDeviceEntityId");
+
+                            b1.OwnsOne("SecurePulse.Data.Entities.DefenderAntivirusEntity", "Antivirus", b2 =>
+                                {
+                                    b2.Property<Guid>("DefenderHealthEntityManagedDeviceEntityTenantId");
+
+                                    b2.Property<string>("DefenderHealthEntityManagedDeviceEntityId");
+
+                                    b2.Property<string>("EngineVersion");
+
+                                    b2.Property<DateTimeOffset?>("LastQuickScanAt");
+
+                                    b2.Property<DateTimeOffset?>("LastReportedAt");
+
+                                    b2.Property<bool?>("MalwareProtectionEnabled");
+
+                                    b2.Property<bool?>("QuickScanOverdue");
+
+                                    b2.Property<bool?>("RealTimeProtectionEnabled");
+
+                                    b2.Property<bool?>("RebootRequired");
+
+                                    b2.Property<string>("SignatureVersion");
+
+                                    b2.Property<bool?>("SignaturesOutOfDate");
+
+                                    b2.Property<bool?>("TamperProtectionEnabled");
+
+                                    b2.Property<string>("ThreatState")
+                                        .IsRequired()
+                                        .HasMaxLength(32);
+
+                                    b2.HasKey("DefenderHealthEntityManagedDeviceEntityTenantId", "DefenderHealthEntityManagedDeviceEntityId");
+
+                                    b2.ToTable("managed_devices");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("DefenderHealthEntityManagedDeviceEntityTenantId", "DefenderHealthEntityManagedDeviceEntityId");
+                                });
+
+                            b1.OwnsOne("SecurePulse.Data.Entities.DefenderSensorEntity", "Sensor", b2 =>
+                                {
+                                    b2.Property<Guid>("DefenderHealthEntityManagedDeviceEntityTenantId");
+
+                                    b2.Property<string>("DefenderHealthEntityManagedDeviceEntityId");
+
+                                    b2.Property<string>("ExposureLevel");
+
+                                    b2.Property<string>("Health")
+                                        .IsRequired()
+                                        .HasMaxLength(32);
+
+                                    b2.Property<DateTimeOffset?>("LastSeenAt");
+
+                                    b2.Property<string>("MachineId");
+
+                                    b2.Property<string>("Onboarding")
+                                        .IsRequired()
+                                        .HasMaxLength(32);
+
+                                    b2.HasKey("DefenderHealthEntityManagedDeviceEntityTenantId", "DefenderHealthEntityManagedDeviceEntityId");
+
+                                    b2.ToTable("managed_devices");
+
+                                    b2.WithOwner()
+                                        .HasForeignKey("DefenderHealthEntityManagedDeviceEntityTenantId", "DefenderHealthEntityManagedDeviceEntityId");
+                                });
+
+                            b1.Navigation("Antivirus");
+
+                            b1.Navigation("Sensor");
+                        });
+
                     b.Navigation("ComplianceSettings");
+
+                    b.Navigation("DefenderDetails");
                 });
 
             modelBuilder.Entity("SecurePulse.Data.Entities.OnboardingRequestEntity", b =>

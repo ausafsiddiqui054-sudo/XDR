@@ -251,3 +251,36 @@
     min-width: 0;
     overflow-wrap: anywhere;
 }
+
+/* Defender health tiles on the Endpoints page: tonal by state, clickable to filter. */
+.sp-defender-tile {
+    border-radius: 18px;
+    padding: 14px 16px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    background: color-mix(in srgb, var(--sp-tile-color) 10%, transparent);
+    transition: border-color 120ms ease, background-color 120ms ease;
+    height: 100%;
+}
+
+.sp-defender-tile:hover {
+    background: color-mix(in srgb, var(--sp-tile-color) 16%, transparent);
+}
+
+.sp-defender-tile.sp-active {
+    border-color: var(--sp-tile-color);
+}
+
+.sp-defender-tile:focus-visible {
+    outline: 2px solid var(--mud-palette-primary);
+    outline-offset: 2px;
+}
+
+.sp-defender-tile .sp-kpi-value {
+    color: var(--sp-tile-color);
+}
+
+.sp-tile-success { --sp-tile-color: var(--mud-palette-success); }
+.sp-tile-error { --sp-tile-color: var(--mud-palette-error); }
+.sp-tile-warning { --sp-tile-color: var(--mud-palette-warning); }
+.sp-tile-default { --sp-tile-color: var(--mud-palette-text-secondary); }

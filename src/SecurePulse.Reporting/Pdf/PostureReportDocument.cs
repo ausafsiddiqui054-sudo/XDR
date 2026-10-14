@@ -289,6 +289,7 @@ public sealed class PostureReportDocument(PostureReportData data) : IDocument
             Tile(row.RelativeItem(), (d.InGracePeriod + d.Unknown).ToString(Culture), "Grace period or unknown", Amber);
         });
         col.Item().PaddingTop(6).Text($"Intune inventory{(d.LastSyncAt is { } at ? $" as of {DateTime(at)}" : "")}.").FontSize(8.5f).FontColor(Muted);
+        if (d.Defender.Count > 0) col.Item().PaddingTop(14).Element(c => Defender(c, d));
         if (d.NoncompliantDevices.Count == 0) return;
 
         col.Item().PaddingTop(10).Text(d.Noncompliant > d.NoncompliantDevices.Count
@@ -313,6 +314,44 @@ public sealed class PostureReportDocument(PostureReportData data) : IDocument
                 BodyCell(table.Cell()).Text(name);
                 BodyCell(table.Cell()).Text(platform);
                 BodyCell(table.Cell()).Text(lastSync is { } at ? DateTime(at) : "Never").FontColor(Muted);
+            }
+        });
+    });
+
+    private void Defender(IContainer container, DeviceSummary d) => container.Column(col =>
+    {
+        col.Item().Text("Microsoft Defender").SemiBold();
+        col.Item().PaddingTop(4).Row(row =>
+        {
+            row.Spacing(10);
+            var protectedCount = d.Defender.GetValueOrDefault(DefenderState.Protected);
+            var unhealthy = d.Defender.GetValueOrDefault(DefenderState.Unhealthy);
+            var notOnboarded = d.Defender.GetValueOrDefault(DefenderState.NotOnboarded);
+            Tile(row.RelativeItem(), protectedCount.ToString(Culture), "Protected", Pass);
+            Tile(row.RelativeItem(), unhealthy.ToString(Culture), "Unhealthy", unhealthy > 0 ? Fail : Muted);
+            Tile(row.RelativeItem(), notOnboarded.ToString(Culture), "Not onboarded", notOnboarded > 0 ? Amber : Muted);
+            Tile(row.RelativeItem(), d.Defender.GetValueOrDefault(DefenderState.Unknown).ToString(Culture), "No Defender data", Muted);
+        });
+        col.Item().PaddingTop(6).Text("Antivirus state from Intune; EDR sensor health from Microsoft Defender for Endpoint.")
+            .FontSize(8.5f).FontColor(Muted);
+        if (d.DefenderIssues.Count == 0) return;
+
+        col.Item().PaddingTop(8).Table(table =>
+        {
+            table.ColumnsDefinition(c =>
+            {
+                c.RelativeColumn(5);
+                c.ConstantColumn(56);
+            });
+            table.Header(h =>
+            {
+                HeaderCell(h.Cell(), "Most common Defender issues");
+                HeaderCell(h.Cell(), "Devices", right: true);
+            });
+            foreach (var (issue, count) in d.DefenderIssues)
+            {
+                BodyCell(table.Cell()).Text(issue);
+                BodyCell(table.Cell()).AlignRight().Text(count.ToString(Culture)).FontColor(Fail);
             }
         });
     });

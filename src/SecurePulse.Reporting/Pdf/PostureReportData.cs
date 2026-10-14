@@ -27,6 +27,12 @@ public sealed record DeviceSummary
     public required int Unknown { get; init; }
     public DateTimeOffset? LastSyncAt { get; init; }
 
+    /// <summary>Devices per Defender state; empty when no device has Defender data yet.</summary>
+    public IReadOnlyDictionary<DefenderState, int> Defender { get; init; } = new Dictionary<DefenderState, int>();
+
+    /// <summary>The most common Defender issues (issue, devices), most devices first.</summary>
+    public IReadOnlyList<(string Issue, int Devices)> DefenderIssues { get; init; } = [];
+
     /// <summary>Non-compliant devices to list (name, platform, last check-in), most stale first.</summary>
     public IReadOnlyList<(string Name, string Platform, DateTimeOffset? LastSyncAt)> NoncompliantDevices { get; init; } = [];
 
@@ -38,6 +44,16 @@ public sealed record DeviceSummary
         Noncompliant = devices.Count(d => d.ComplianceState == DeviceComplianceState.Noncompliant),
         Unknown = devices.Count(d => d.ComplianceState == DeviceComplianceState.Unknown),
         LastSyncAt = lastSyncAt,
+        Defender = devices.Any(d => d.DefenderDetails is not null)
+            ? Enum.GetValues<DefenderState>().ToDictionary(s => s, s => devices.Count(d => d.Defender == s))
+            : new Dictionary<DefenderState, int>(),
+        DefenderIssues = devices.SelectMany(d => (d.DefenderDetails?.Issues ?? []).Distinct())
+            .GroupBy(i => i)
+            .Select(g => (g.Key, g.Count()))
+            .OrderByDescending(x => x.Item2)
+            .ThenBy(x => x.Key, StringComparer.Ordinal)
+            .Take(5)
+            .ToList(),
         NoncompliantDevices = devices.Where(d => d.ComplianceState == DeviceComplianceState.Noncompliant)
             .OrderBy(d => d.LastSyncAt ?? DateTimeOffset.MinValue)
             .ThenBy(d => d.DeviceName, StringComparer.OrdinalIgnoreCase)

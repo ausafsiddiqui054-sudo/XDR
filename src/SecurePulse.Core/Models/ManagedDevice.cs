@@ -64,6 +64,9 @@ public sealed record ManagedDevice
     public bool? IsEncrypted { get; init; }
     public DefenderState Defender { get; init; } = DefenderState.Unknown;
 
+    /// <summary>What <see cref="Defender"/> is based on. Null when Defender health wasn't read.</summary>
+    public DefenderHealth? DefenderDetails { get; init; }
+
     public DateTimeOffset? EnrolledAt { get; init; }
     public DateTimeOffset? LastSyncAt { get; init; }
 
@@ -83,6 +86,9 @@ public sealed record DeviceSyncResult
 
     public bool Succeeded { get; init; } = true;
     public string? Error { get; init; }
+
+    /// <summary>Parts of a successful sync that were skipped (e.g. Defender data unavailable).</summary>
+    public string? Warning { get; init; }
 }
 
 /// <summary>Latest device sync outcome for a tenant.</summary>
@@ -96,5 +102,9 @@ public sealed record DeviceSyncStatus
 
     public required bool Succeeded { get; init; }
     public string? Error { get; init; }
+
+    /// <summary>From the last successful sync: data it couldn't read (e.g. Defender for Endpoint).</summary>
+    public string? Warning { get; init; }
+
     public int DeviceCount { get; init; }
 }

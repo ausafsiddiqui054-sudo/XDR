@@ -28,8 +28,11 @@ public class AssessmentPermissionsTests
         foreach (var p in new[] { "Directory.Read.All", "Policy.Read.All", "Policy.Read.ConditionalAccess", "AuditLog.Read.All",
                      "RoleManagement.Read.All", "UserAuthenticationMethod.Read.All", "SharePointTenantSettings.Read.All" })
             Assert.Contains(p, names);
-        // Maester 2.3.0 lists 25 for unattended runs; the two device-management ones are also Intune's.
-        Assert.Equal(23, AssessmentPermissions.Required.Count(p => p.Group == AssessmentPermissions.SecurityChecksGroup));
+        // Maester 2.3.0 lists 25 for unattended runs; the two device-management ones and ThreatHunting.Read.All
+        // are listed under devices because the device sync uses them too.
+        Assert.Equal(22, AssessmentPermissions.Required.Count(p => p.Group == AssessmentPermissions.SecurityChecksGroup));
+        Assert.Equal(25, AssessmentPermissions.RequiredFor(ScanEngines.Maester).Count);
+        Assert.Contains("ThreatHunting.Read.All", AssessmentPermissions.RequiredFor(ScanEngines.Maester));
         Assert.Contains("DeviceManagementConfiguration.Read.All", names);
         Assert.Contains("DeviceManagementManagedDevices.Read.All", names);
         Assert.DoesNotContain("Sites.FullControl.All", names);

@@ -217,6 +217,7 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
     private static IReadOnlyList<ManagedDevice> GenerateDevices(Tenant tenant, double passRate)
     {
         var stable = StableRandom(tenant.DisplayName, salt: 101);
+        var defenderRandom = StableRandom(tenant.DisplayName, salt: 202);
         var prefix = string.Concat(tenant.DisplayName.Split(' ').Select(w => char.ToUpperInvariant(w[0])));
         var mailDomain = tenant.PrimaryDomain;
         var failChance = (1 - passRate) * 0.12;
@@ -257,6 +258,11 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
             var idBytes = new byte[16];
             stable.NextBytes(idBytes);
 
+            // Platforms without a Defender compliance setting draw one value here (kept so the rest of the sample stays the same).
+            var sensorRoll = defender.s is null ? stable.NextDouble() : defenderRandom.NextDouble();
+            var (defenderState, defenderHealth) = SampleDefender(platform.Platform,
+                defender.s is null ? null : settings[defender.idx].Compliant, sensorRoll, stale, now, defenderRandom);
+
             devices.Add(new ManagedDevice
             {
                 Id = new Guid(idBytes).ToString(),
@@ -277,9 +283,8 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
                 IsEncrypted = platform.Platform == DevicePlatform.iOS ? true
                     : encryption.s is null ? null
                     : settings[encryption.idx].Compliant,
-                Defender = defender.s is not null
-                    ? settings[defender.idx].Compliant ? DefenderState.Protected : DefenderState.Unhealthy
-                    : stable.NextDouble() < 0.7 ? DefenderState.Protected : DefenderState.NotOnboarded,
+                Defender = defenderState,
+                DefenderDetails = defenderHealth,
                 EnrolledAt = now.AddDays(-30 - stable.Next(670)),
                 LastSyncAt = stale ? now.AddDays(-31 - stable.Next(40)) : now.AddMinutes(-stable.Next(60 * 48)),
                 ComplianceSettings = settings
@@ -287,6 +292,59 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
         }
 
         return devices;
+    }
+
+    private static readonly string[] ExposureLevels = ["Low", "Low", "Medium", "Medium", "High"];
+
+    private static string MachineId(Random random)
+    {
+        var bytes = new byte[20];
+        random.NextBytes(bytes);
+        return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Defender data shaped like the Worker's (antivirus from Intune on Windows, sensor from advanced
+    /// hunting), with its state worked out by the same <see cref="DefenderHealthEvaluator"/>.
+    /// </summary>
+    private static (DefenderState, DefenderHealth) SampleDefender(DevicePlatform platform, bool? realTimeOn, double sensorRoll, bool stale,
+        DateTimeOffset now, Random random)
+    {
+        DefenderAntivirusStatus? antivirus = platform == DevicePlatform.Windows
+            ? new DefenderAntivirusStatus
+            {
+                MalwareProtectionEnabled = true,
+                RealTimeProtectionEnabled = realTimeOn ?? true,
+                TamperProtectionEnabled = random.NextDouble() >= 0.06,
+                SignaturesOutOfDate = stale || random.NextDouble() < 0.05,
+                QuickScanOverdue = stale || random.NextDouble() < 0.1,
+                RebootRequired = random.NextDouble() < 0.08,
+                ThreatState = random.NextDouble() < 0.03 ? DefenderThreatState.RebootPending : DefenderThreatState.Clean,
+                SignatureVersion = $"1.419.{150 + random.Next(80)}.0",
+                EngineVersion = "1.1.24090.11",
+                LastQuickScanAt = now.AddHours(-2 - random.Next(70)),
+                LastReportedAt = now.AddHours(-random.Next(30))
+            }
+            : null;
+
+        // Most Windows PCs are onboarded; Macs, Linux and phones less often.
+        var onboardedShare = platform == DevicePlatform.Windows ? 0.9 : 0.7;
+        DefenderSensorStatus? sensor = sensorRoll < onboardedShare
+            ? new DefenderSensorStatus
+            {
+                MachineId = MachineId(random),
+                Onboarding = DefenderOnboarding.Onboarded,
+                Health = stale ? DefenderSensorHealth.Inactive
+                    : random.NextDouble() < 0.04 ? DefenderSensorHealth.ImpairedCommunication
+                    : DefenderSensorHealth.Active,
+                ExposureLevel = ExposureLevels[random.Next(ExposureLevels.Length)],
+                LastSeenAt = stale ? now.AddDays(-20 - random.Next(9)) : now.AddHours(-random.Next(24))
+            }
+            : platform == DevicePlatform.Windows && sensorRoll < 0.95
+                ? new DefenderSensorStatus { Onboarding = DefenderOnboarding.CanBeOnboarded, LastSeenAt = now.AddDays(-random.Next(5)) }
+                : null;
+
+        return DefenderHealthEvaluator.Evaluate(platform, antivirus, sensor, sensorDataAvailable: true);
     }
 
     public Task<IReadOnlyList<Tenant>> GetAllAsync(CancellationToken ct = default)
@@ -323,6 +381,7 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
             LastSuccessAt = result.Succeeded ? result.CompletedAt : previous?.LastSuccessAt,
             Succeeded = result.Succeeded,
             Error = result.Error,
+            Warning = result.Succeeded ? result.Warning : previous?.Warning,
             DeviceCount = _devices.TryGetValue(result.TenantId, out var d) ? d.Count : 0
         };
         return Task.CompletedTask;

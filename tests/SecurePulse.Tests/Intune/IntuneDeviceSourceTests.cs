@@ -68,7 +68,8 @@ public class IntuneDeviceSourceTests
     private static (IntuneDeviceSource Source, StubHandler Handler, FakeTokens Tokens) Create(
         StubHandler handler, IntuneOptions? options = null, FakeTokens? tokens = null)
     {
-        options ??= new IntuneOptions { GraphBaseUrl = Graph };
+        // Defender reads add requests; the tests below that count requests leave them out, the Defender tests turn them on.
+        options ??= new IntuneOptions { GraphBaseUrl = Graph, FetchDefenderHealth = false };
         tokens ??= new FakeTokens();
         var source = new IntuneDeviceSource(new HttpClient(handler), tokens, options, NullLogger<IntuneDeviceSource>.Instance);
         return (source, handler, tokens);
@@ -200,7 +201,7 @@ public class IntuneDeviceSourceTests
     public async Task ComplianceSettingsCanBeTurnedOff()
     {
         var (source, handler, _) = Create(new StubHandler(_ => Json(Page([Device("a", "noncompliant")]))),
-            new IntuneOptions { GraphBaseUrl = Graph, FetchComplianceSettings = false });
+            new IntuneOptions { GraphBaseUrl = Graph, FetchComplianceSettings = false, FetchDefenderHealth = false });
 
         var result = await source.GetDevicesAsync(OnboardedTenant());
 
@@ -288,4 +289,212 @@ public class IntuneDeviceSourceTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => source.GetDevicesAsync(OnboardedTenant(), cts.Token));
     }
+
+    // --- Defender health ---------------------------------------------------------------------
+
+    private const string HuntingPath = "/v1.0/security/runHuntingQuery";
+    private static readonly IntuneOptions WithDefender = new() { GraphBaseUrl = Graph };
+    private static readonly Guid PcEntraId = Guid.Parse("6f7c1d5e-0a3b-4c2d-9e8f-112233445566");
+
+    private static object WindowsPc(string id) => new
+    {
+        id, deviceName = "PC-01", operatingSystem = "Windows", complianceState = "compliant", azureADDeviceId = PcEntraId.ToString()
+    };
+
+    private static object Mac(string id) => new { id, deviceName = "MAC-01", operatingSystem = "macOS", complianceState = "compliant" };
+
+    private static object Phone(string id) => new { id, deviceName = "IPHONE-01", operatingSystem = "iOS", complianceState = "compliant" };
+
+    private static HttpResponseMessage HealthyProtectionState() => Json(new
+    {
+        malwareProtectionEnabled = true, realTimeProtectionEnabled = true, tamperProtectionEnabled = true, signatureUpdateOverdue = false,
+        deviceState = "clean", signatureVersion = "1.419.200.0", engineVersion = "1.1.24090.11"
+    });
+
+    // Advanced hunting returns PascalCase or camelCase column keys; both must parse.
+    private static HttpResponseMessage HuntingRows(params object[] rows) => Json(new { schema = Array.Empty<object>(), results = rows });
+
+    private static object PcRow(string health = "Active") => new
+    {
+        DeviceId = "machine-1", AadDeviceId = PcEntraId.ToString(), DeviceName = "pc-01.contoso.local", OnboardingStatus = "Onboarded",
+        SensorHealthState = health, ExposureLevel = "Low", Timestamp = "2026-10-14T07:00:00Z"
+    };
+
+    [Fact]
+    public async Task ReadsAntivirusForWindowsAndSensorsForAll()
+    {
+        string? huntingBody = null;
+        var (source, handler, _) = Create(new StubHandler(r => r.RequestUri!.AbsolutePath switch
+        {
+            "/v1.0/deviceManagement/managedDevices" => Json(Page([WindowsPc("w"), Mac("m"), Phone("p")])),
+            "/v1.0/deviceManagement/managedDevices/w/windowsProtectionState" => HealthyProtectionState(),
+            HuntingPath => Capture(r, b => huntingBody = b, HuntingRows(PcRow())),
+            _ => Status(HttpStatusCode.NotFound)
+        }), WithDefender);
+
+        var result = await source.GetDevicesAsync(OnboardedTenant());
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Null(result.Warning);
+
+        var pc = result.Devices.Single(d => d.Id == "w");
+        Assert.Equal(DefenderState.Protected, pc.Defender);
+        Assert.Equal(true, pc.DefenderDetails!.Antivirus!.RealTimeProtectionEnabled);
+        Assert.Equal("1.419.200.0", pc.DefenderDetails.Antivirus.SignatureVersion);
+        Assert.Equal("machine-1", pc.DefenderDetails.Sensor!.MachineId);
+        Assert.Equal(DefenderSensorHealth.Active, pc.DefenderDetails.Sensor.Health);
+
+        var mac = result.Devices.Single(d => d.Id == "m");
+        Assert.Equal(DefenderState.NotOnboarded, mac.Defender);
+        Assert.Null(mac.DefenderDetails!.Antivirus);
+
+        Assert.Equal(DefenderState.Unknown, result.Devices.Single(d => d.Id == "p").Defender);
+
+        // One antivirus call for the Windows device only, and one hunting query for the tenant.
+        Assert.Single(handler.Requests, r => r.RequestUri!.AbsolutePath.EndsWith("/windowsProtectionState"));
+        var hunting = Assert.Single(handler.Requests, r => r.RequestUri!.AbsolutePath == HuntingPath);
+        Assert.Equal(HttpMethod.Post, hunting.Method);
+        Assert.Equal("test-token", hunting.Headers.Authorization?.Parameter);
+        using var body = JsonDocument.Parse(huntingBody!);
+        Assert.Equal(DefenderHealthMapper.DeviceInfoQuery, body.RootElement.GetProperty("Query").GetString());
+        Assert.Equal("P30D", body.RootElement.GetProperty("Timespan").GetString());
+        Assert.Contains("azureADDeviceId", handler.Requests.First().RequestUri!.Query);
+    }
+
+    private static HttpResponseMessage Capture(HttpRequestMessage request, Action<string> capture, HttpResponseMessage response)
+    {
+        capture(request.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+        return response;
+    }
+
+    [Fact]
+    public async Task CamelCaseHuntingColumns_Parse()
+    {
+        var (source, _, _) = Create(new StubHandler(r => r.RequestUri!.AbsolutePath switch
+        {
+            "/v1.0/deviceManagement/managedDevices" => Json(Page([WindowsPc("w")])),
+            "/v1.0/deviceManagement/managedDevices/w/windowsProtectionState" => HealthyProtectionState(),
+            HuntingPath => HuntingRows(new
+            {
+                deviceId = "machine-1", aadDeviceId = PcEntraId.ToString(), deviceName = "pc-01", onboardingStatus = "Onboarded",
+                sensorHealthState = "Inactive", timestamp = "2026-10-14T07:00:00Z"
+            }),
+            _ => Status(HttpStatusCode.NotFound)
+        }), WithDefender);
+
+        var pc = Assert.Single((await source.GetDevicesAsync(OnboardedTenant())).Devices);
+
+        Assert.Equal(DefenderState.Unhealthy, pc.Defender);
+        Assert.Equal(DefenderSensorHealth.Inactive, pc.DefenderDetails!.Sensor!.Health);
+    }
+
+    [Fact]
+    public async Task HuntingForbidden_KeepsTheSyncAndWarns()
+    {
+        var (source, _, _) = Create(new StubHandler(r => r.RequestUri!.AbsolutePath switch
+        {
+            "/v1.0/deviceManagement/managedDevices" => Json(Page([WindowsPc("w"), Mac("m")])),
+            "/v1.0/deviceManagement/managedDevices/w/windowsProtectionState" => HealthyProtectionState(),
+            HuntingPath => Json(new { error = new { code = "Forbidden", message = "Missing role" } }, HttpStatusCode.Forbidden),
+            _ => Status(HttpStatusCode.NotFound)
+        }), WithDefender);
+
+        var result = await source.GetDevicesAsync(OnboardedTenant());
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Contains("Defender for Endpoint sensor health wasn't read", result.Warning);
+        Assert.Contains("403", result.Warning);
+        Assert.Contains("ThreatHunting.Read.All", result.Warning);
+        Assert.DoesNotContain("DeviceManagementConfiguration", result.Warning);
+
+        var pc = result.Devices.Single(d => d.Id == "w");
+        Assert.Equal(DefenderState.Protected, pc.Defender); // antivirus alone
+        Assert.False(pc.DefenderDetails!.SensorDataAvailable);
+        Assert.Equal(DefenderState.Unknown, result.Devices.Single(d => d.Id == "m").Defender); // not "not onboarded": nothing is known
+    }
+
+    [Fact]
+    public async Task HuntingIsRetriedWhenThrottled()
+    {
+        var huntingCalls = 0;
+        var (source, handler, _) = Create(new StubHandler(r => r.RequestUri!.AbsolutePath switch
+        {
+            "/v1.0/deviceManagement/managedDevices" => Json(Page([Mac("m")])),
+            HuntingPath => Interlocked.Increment(ref huntingCalls) == 1 ? Status(HttpStatusCode.TooManyRequests, 0) : HuntingRows(),
+            _ => Status(HttpStatusCode.NotFound)
+        }), WithDefender);
+
+        var result = await source.GetDevicesAsync(OnboardedTenant());
+
+        Assert.Null(result.Warning);
+        Assert.Equal(2, huntingCalls);
+        Assert.Equal(DefenderState.NotOnboarded, Assert.Single(result.Devices).Defender);
+        Assert.All(handler.Requests.Where(r => r.RequestUri!.AbsolutePath == HuntingPath), r => Assert.NotNull(r.Content));
+    }
+
+    [Fact]
+    public async Task AntivirusNotReported_IsNotAWarning()
+    {
+        var (source, _, _) = Create(new StubHandler(r => r.RequestUri!.AbsolutePath switch
+        {
+            "/v1.0/deviceManagement/managedDevices" => Json(Page([WindowsPc("w")])),
+            HuntingPath => HuntingRows(PcRow()),
+            _ => Status(HttpStatusCode.NotFound)
+        }), WithDefender);
+
+        var result = await source.GetDevicesAsync(OnboardedTenant());
+
+        Assert.Null(result.Warning);
+        var pc = Assert.Single(result.Devices);
+        Assert.Null(pc.DefenderDetails!.Antivirus);
+        Assert.Equal(DefenderState.Protected, pc.Defender); // the active sensor alone
+    }
+
+    [Fact]
+    public async Task AntivirusErrors_KeepTheSyncAndWarnWithCounts()
+    {
+        var (source, _, _) = Create(new StubHandler(r => r.RequestUri!.AbsolutePath switch
+        {
+            "/v1.0/deviceManagement/managedDevices" => Json(Page([WindowsPc("w"), new { id = "w2", deviceName = "PC-02", operatingSystem = "Windows" }])),
+            "/v1.0/deviceManagement/managedDevices/w/windowsProtectionState" => Status(HttpStatusCode.InternalServerError),
+            "/v1.0/deviceManagement/managedDevices/w2/windowsProtectionState" => HealthyProtectionState(),
+            HuntingPath => HuntingRows(PcRow()),
+            _ => Status(HttpStatusCode.NotFound)
+        }), WithDefender);
+
+        var result = await source.GetDevicesAsync(OnboardedTenant());
+
+        Assert.True(result.Succeeded, result.Error);
+        Assert.Contains("Defender Antivirus state wasn't read for 1 of 2 Windows devices", result.Warning);
+        Assert.Null(result.Devices.Single(d => d.Id == "w").DefenderDetails!.Antivirus);
+        Assert.NotNull(result.Devices.Single(d => d.Id == "w2").DefenderDetails!.Antivirus);
+    }
+
+    [Fact]
+    public async Task DeviceIdsAreEscapedInProtectionStateUrl()
+    {
+        var (source, handler, _) = Create(new StubHandler(r => r.RequestUri!.AbsolutePath == "/v1.0/deviceManagement/managedDevices"
+            ? Json(Page([new { id = "a/../b", deviceName = "PC", operatingSystem = "Windows" }]))
+            : r.RequestUri!.AbsolutePath == HuntingPath ? HuntingRows() : Status(HttpStatusCode.NotFound)), WithDefender);
+
+        await source.GetDevicesAsync(OnboardedTenant());
+
+        Assert.Contains(handler.Requests, r => r.RequestUri!.AbsoluteUri == $"{DevicesUrl}/a%2F..%2Fb/windowsProtectionState");
+    }
+
+    [Fact]
+    public async Task DefenderHealthCanBeTurnedOff()
+    {
+        var (source, handler, _) = Create(new StubHandler(_ => Json(Page([WindowsPc("w")]))),
+            new IntuneOptions { GraphBaseUrl = Graph, FetchDefenderHealth = false });
+
+        var pc = Assert.Single((await source.GetDevicesAsync(OnboardedTenant())).Devices);
+
+        Assert.Single(handler.Requests);
+        Assert.Equal(DefenderState.Unknown, pc.Defender);
+        Assert.Null(pc.DefenderDetails);
+    }
+
+    [Fact]
+    public void DefenderHealthIsReadByDefault() => Assert.True(new IntuneOptions().FetchDefenderHealth);
 }

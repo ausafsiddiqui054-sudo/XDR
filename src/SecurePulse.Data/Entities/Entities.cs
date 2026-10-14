@@ -60,9 +60,43 @@ public sealed class ManagedDeviceEntity
     public DeviceComplianceState ComplianceState { get; set; }
     public bool? IsEncrypted { get; set; }
     public DefenderState Defender { get; set; }
+    public DefenderHealthEntity? DefenderDetails { get; set; }
     public DateTimeOffset? EnrolledAt { get; set; }
     public DateTimeOffset? LastSyncAt { get; set; }
     public List<ComplianceSettingEntity> ComplianceSettings { get; set; } = [];
+}
+
+/// <summary>Stored as JSON inside the device row.</summary>
+public sealed class DefenderHealthEntity
+{
+    public DefenderAntivirusEntity? Antivirus { get; set; }
+    public DefenderSensorEntity? Sensor { get; set; }
+    public bool SensorDataAvailable { get; set; }
+    public List<string> Issues { get; set; } = [];
+}
+
+public sealed class DefenderAntivirusEntity
+{
+    public bool? MalwareProtectionEnabled { get; set; }
+    public bool? RealTimeProtectionEnabled { get; set; }
+    public bool? TamperProtectionEnabled { get; set; }
+    public bool? SignaturesOutOfDate { get; set; }
+    public bool? QuickScanOverdue { get; set; }
+    public bool? RebootRequired { get; set; }
+    public DefenderThreatState ThreatState { get; set; }
+    public string? SignatureVersion { get; set; }
+    public string? EngineVersion { get; set; }
+    public DateTimeOffset? LastQuickScanAt { get; set; }
+    public DateTimeOffset? LastReportedAt { get; set; }
+}
+
+public sealed class DefenderSensorEntity
+{
+    public string? MachineId { get; set; }
+    public DefenderOnboarding Onboarding { get; set; }
+    public DefenderSensorHealth Health { get; set; }
+    public string? ExposureLevel { get; set; }
+    public DateTimeOffset? LastSeenAt { get; set; }
 }
 
 /// <summary>Stored as JSON inside the device row.</summary>
@@ -81,6 +115,7 @@ public sealed class DeviceSyncStatusEntity
     public DateTimeOffset? LastSuccessAt { get; set; }
     public bool Succeeded { get; set; }
     public string? Error { get; set; }
+    public string? Warning { get; set; }
     public int DeviceCount { get; set; }
 }
 

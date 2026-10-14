@@ -66,13 +66,49 @@ timeout) in `src/SecurePulse.Worker/appsettings.json`.
 
 Graph application permissions (read-only, admin consent in each client tenant):
 
-- `DeviceManagementManagedDevices.Read.All`: device inventory and compliance state
+- `DeviceManagementManagedDevices.Read.All`: device inventory, compliance state and Defender
+  Antivirus state
 - `DeviceManagementConfiguration.Read.All`: per-setting compliance results for devices that
   aren't compliant (one extra call per such device; turn off with `Intune:FetchComplianceSettings`)
+- `ThreatHunting.Read.All`: Defender for Endpoint sensor health (one advanced hunting query per
+  tenant). Maester needs it too, so connected tenants already have it.
 
 A failed sync keeps the tenant's last good inventory and shows a warning on the Endpoints
-page. Defender health is not available from Graph v1.0 `managedDevice` and shows as
-"Unknown" for synced devices.
+page.
+
+### Defender health
+
+Each sync also reads Microsoft Defender health for every device, with no extra consent:
+
+- **Antivirus** (Windows): Intune's `windowsProtectionState` per device (Graph v1.0): antivirus
+  and real-time protection on, tamper protection, security intelligence up to date, threat state,
+  versions and last scan.
+- **EDR sensor** (all platforms): the latest `DeviceInfo` row per device from advanced hunting
+  (`POST /security/runHuntingQuery`, last 30 days): onboarding status, sensor health and
+  exposure level. Devices are matched by Entra device ID, falling back to the host name only
+  when the name is unique on both sides. The KQL is a fixed constant; nothing from a tenant is
+  put into it.
+
+`DefenderHealthEvaluator` (in Core) turns that into the device's state, and the sample data
+uses the same rules:
+
+| State | When |
+|---|---|
+| Unhealthy | Antivirus or real-time protection off, tamper protection off, signatures out of date, a threat waiting on remediation, or an onboarded sensor that isn't active |
+| Not onboarded | Defender for Endpoint data was read and a Windows, macOS or Linux device isn't onboarded (or a device was only discovered on the network). Phones aren't flagged: mobile onboarding is optional |
+| Protected | No issues, and antivirus is confirmed on or the sensor is active |
+| Unknown | Nothing to go on (e.g. a phone without mobile Defender, or no data yet) |
+
+Defender data never fails a sync. If the tenant has no Defender for Endpoint licence, or the
+hunting query fails, the inventory is still saved, a missing sensor counts as "not checked"
+rather than "not onboarded", and the Endpoints page shows the sync's warning. Antivirus calls
+that return 404 (not reported yet) aren't errors. Turn the extra calls off with
+`Intune:FetchDefenderHealth`.
+
+The Endpoints page shows Protected / Unhealthy / Not onboarded / Unknown tiles and the most
+common issues. Click a tile or an issue to filter the device list. Each device page has a
+Defender card with the issues, antivirus settings and sensor details. PDF reports include the
+same counts and top issues.
 
 To run the PostgreSQL repository tests, point `SECUREPULSE_TEST_POSTGRES` at a server
 (no `Database=`) with a role that can create databases. Each test class creates and drops its
@@ -356,7 +392,7 @@ on a client viewer's Overview download a branded PDF for one tenant:
 - a cover with the brand, tenant, score ring and grade;
 - a summary (open findings by severity, pass rate, device compliance);
 - the ten things to fix first, linked to their details;
-- results by area, with Intune device compliance and the longest-unseen non-compliant devices;
+- results by area, with Intune device compliance, Defender health and the longest-unseen non-compliant devices;
 - every finding to fix, with evidence, remediation and a link to the check's documentation (https only);
 - the checks that pass, and how the score is calculated (weights read from `RiskScoreCalculator`).
 
@@ -407,6 +443,7 @@ checks are excluded. Any open **Critical** caps the grade at C.
 | Maester engine runner | Built; tested with a stand-in `pwsh`; needs a real tenant + certificate to exercise |
 | Portal (Overview, Findings, Tenants) | Built; sample data or PostgreSQL |
 | Endpoints (Intune device inventory, device detail) | Built |
+| Defender health per device (Intune antivirus state, Defender for Endpoint sensor via advanced hunting) | Built; tested with stubbed Graph and against PostgreSQL 16; needs a real tenant with Defender for Endpoint to exercise |
 | Device remote actions (remediation consent, approval queue, Worker sending via Graph) | Built; tested with stubbed Graph and against PostgreSQL 16; needs the remediation app registration and a real tenant to exercise |
 | PostgreSQL persistence (`SecurePulse.Data`) | Built; tested against PostgreSQL 16 |
 | Worker: Intune device sync | Built and tested against stubbed Graph; needs a real tenant + certificate to exercise |

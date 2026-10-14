@@ -60,6 +60,12 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
             e.Property(x => x.DeviceName).HasMaxLength(256);
             e.Property(x => x.UserPrincipalName).HasMaxLength(320);
             e.OwnsMany(x => x.ComplianceSettings, s => s.ToJson());
+            e.OwnsOne(x => x.DefenderDetails, h =>
+            {
+                h.ToJson();
+                h.OwnsOne(x => x.Antivirus);
+                h.OwnsOne(x => x.Sensor);
+            });
             e.HasOne<TenantEntity>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -68,6 +74,7 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
             e.ToTable("device_sync_status");
             e.HasKey(x => x.TenantId);
             e.Property(x => x.Error).HasMaxLength(2000);
+            e.Property(x => x.Warning).HasMaxLength(2000);
             e.HasOne<TenantEntity>().WithOne().HasForeignKey<DeviceSyncStatusEntity>(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
         });
 

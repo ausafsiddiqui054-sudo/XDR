@@ -87,6 +87,7 @@ internal static class EntityMapping
         ComplianceState = e.ComplianceState,
         IsEncrypted = e.IsEncrypted,
         Defender = e.Defender,
+        DefenderDetails = e.DefenderDetails?.ToModel(),
         EnrolledAt = e.EnrolledAt,
         LastSyncAt = e.LastSyncAt,
         ComplianceSettings = e.ComplianceSettings
@@ -110,11 +111,68 @@ internal static class EntityMapping
         ComplianceState = m.ComplianceState,
         IsEncrypted = m.IsEncrypted,
         Defender = m.Defender,
+        DefenderDetails = m.DefenderDetails?.ToEntity(),
         EnrolledAt = m.EnrolledAt,
         LastSyncAt = m.LastSyncAt,
         ComplianceSettings = m.ComplianceSettings
             .Select(s => new ComplianceSettingEntity { Policy = s.Policy, Setting = s.Setting, Compliant = s.Compliant, Detail = s.Detail })
             .ToList()
+    };
+
+    public static DefenderHealth ToModel(this DefenderHealthEntity e) => new()
+    {
+        Antivirus = e.Antivirus is { } av ? new DefenderAntivirusStatus
+        {
+            MalwareProtectionEnabled = av.MalwareProtectionEnabled,
+            RealTimeProtectionEnabled = av.RealTimeProtectionEnabled,
+            TamperProtectionEnabled = av.TamperProtectionEnabled,
+            SignaturesOutOfDate = av.SignaturesOutOfDate,
+            QuickScanOverdue = av.QuickScanOverdue,
+            RebootRequired = av.RebootRequired,
+            ThreatState = av.ThreatState,
+            SignatureVersion = av.SignatureVersion,
+            EngineVersion = av.EngineVersion,
+            LastQuickScanAt = av.LastQuickScanAt,
+            LastReportedAt = av.LastReportedAt
+        } : null,
+        Sensor = e.Sensor is { } s ? new DefenderSensorStatus
+        {
+            MachineId = s.MachineId,
+            Onboarding = s.Onboarding,
+            Health = s.Health,
+            ExposureLevel = s.ExposureLevel,
+            LastSeenAt = s.LastSeenAt
+        } : null,
+        SensorDataAvailable = e.SensorDataAvailable,
+        Issues = [.. e.Issues]
+    };
+
+    public static DefenderHealthEntity ToEntity(this DefenderHealth m) => new()
+    {
+        Antivirus = m.Antivirus is { } av ? new DefenderAntivirusEntity
+        {
+            MalwareProtectionEnabled = av.MalwareProtectionEnabled,
+            RealTimeProtectionEnabled = av.RealTimeProtectionEnabled,
+            TamperProtectionEnabled = av.TamperProtectionEnabled,
+            SignaturesOutOfDate = av.SignaturesOutOfDate,
+            QuickScanOverdue = av.QuickScanOverdue,
+            RebootRequired = av.RebootRequired,
+            ThreatState = av.ThreatState,
+            SignatureVersion = av.SignatureVersion,
+            EngineVersion = av.EngineVersion,
+            LastQuickScanAt = av.LastQuickScanAt,
+            LastReportedAt = av.LastReportedAt
+        } : null,
+        Sensor = m.Sensor is { } s ? new DefenderSensorEntity
+        {
+            MachineId = s.MachineId,
+            Onboarding = s.Onboarding,
+            Health = s.Health,
+            ExposureLevel = s.ExposureLevel,
+            LastSeenAt = s.LastSeenAt
+        } : null,
+        SensorDataAvailable = m.SensorDataAvailable,
+        Issues = [.. m.Issues]
     };
 
     public static DeviceSyncStatus ToModel(this DeviceSyncStatusEntity e) => new()
@@ -124,6 +182,7 @@ internal static class EntityMapping
         LastSuccessAt = e.LastSuccessAt,
         Succeeded = e.Succeeded,
         Error = e.Error,
+        Warning = e.Warning,
         DeviceCount = e.DeviceCount
     };
 

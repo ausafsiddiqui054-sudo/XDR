@@ -84,8 +84,9 @@ public static class AssessmentPermissions
 
     public static readonly IReadOnlyList<GraphPermission> Required =
     [
-        new("DeviceManagementManagedDevices.Read.All", "Read Intune device inventory and compliance state", DevicesGroup),
+        new("DeviceManagementManagedDevices.Read.All", "Read Intune device inventory, compliance and Defender Antivirus state", DevicesGroup),
         new("DeviceManagementConfiguration.Read.All", "Read device configuration and compliance policies", DevicesGroup),
+        new("ThreatHunting.Read.All", "Read Defender for Endpoint sensor health with read-only advanced hunting queries", DevicesGroup),
 
         new("AuditLog.Read.All", "Read sign-in and audit logs", SecurityChecksGroup),
         new("DeviceManagementRBAC.Read.All", "Read Intune role assignments", SecurityChecksGroup),
@@ -108,7 +109,6 @@ public static class AssessmentPermissions
         new("SecurityIdentitiesSensors.Read.All", "Read Defender for Identity sensors", SecurityChecksGroup),
         new("SecurityIdentitiesHealth.Read.All", "Read Defender for Identity health", SecurityChecksGroup),
         new("SharePointTenantSettings.Read.All", "Read SharePoint tenant settings", SecurityChecksGroup),
-        new("ThreatHunting.Read.All", "Run read-only advanced hunting queries", SecurityChecksGroup),
         new("UserAuthenticationMethod.Read.All", "Read users' registered sign-in methods", SecurityChecksGroup),
 
         new("PrivilegedAccess.Read.AzureADGroup", "Read PIM for Groups settings", CisaBaselineGroup),

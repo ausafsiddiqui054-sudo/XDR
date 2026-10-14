@@ -99,6 +99,56 @@ public class RepositoryTests(PostgresDatabase db) : IClassFixture<PostgresDataba
     }
 
     [PostgresFact]
+    public async Task DeviceSync_StoresDefenderHealth()
+    {
+        var t = await NewTenantAsync();
+        var (state, health) = DefenderHealthEvaluator.Evaluate(DevicePlatform.Windows,
+            new DefenderAntivirusStatus
+            {
+                MalwareProtectionEnabled = true, RealTimeProtectionEnabled = false, TamperProtectionEnabled = true, SignaturesOutOfDate = false,
+                QuickScanOverdue = true, RebootRequired = false, ThreatState = DefenderThreatState.RebootPending, SignatureVersion = "1.419.200.0",
+                EngineVersion = "1.1.24090.11", LastQuickScanAt = T0.AddHours(-3), LastReportedAt = T0.AddHours(-1)
+            },
+            new DefenderSensorStatus
+            {
+                MachineId = "4f1c0de8b5a2e6f4c3d2b1a09f8e7d6c5b4a3f2e", Onboarding = DefenderOnboarding.Onboarded,
+                Health = DefenderSensorHealth.ImpairedCommunication, ExposureLevel = "High", LastSeenAt = T0.AddHours(-2)
+            },
+            sensorDataAvailable: true);
+        var device = Device(t, "d1") with { Defender = state, DefenderDetails = health };
+
+        await Devices.SaveSyncAsync(Sync(t, T0, device, Device(t, "d2")));
+
+        var loaded = (await Devices.GetAsync(t.Id, "d1"))!;
+        Assert.Equal(DefenderState.Unhealthy, loaded.Defender);
+        Assert.Equal(health.Antivirus, loaded.DefenderDetails!.Antivirus);
+        Assert.Equal(health.Sensor, loaded.DefenderDetails.Sensor);
+        Assert.True(loaded.DefenderDetails.SensorDataAvailable);
+        Assert.Equal(health.Issues, loaded.DefenderDetails.Issues);
+        Assert.Equal(3, loaded.DefenderDetails.Issues.Count);
+        Assert.Null((await Devices.GetAsync(t.Id, "d2"))!.DefenderDetails); // not read: stays null, not an empty record
+    }
+
+    [PostgresFact]
+    public async Task DeviceSync_KeepsTheLastSuccessfulSyncsWarning()
+    {
+        var t = await NewTenantAsync();
+
+        await Devices.SaveSyncAsync(Sync(t, T0, Device(t, "d1")) with { Warning = "Defender for Endpoint sensor health wasn't read: 403" });
+        Assert.Equal("Defender for Endpoint sensor health wasn't read: 403", (await Devices.GetSyncStatusAsync(t.Id))!.Warning);
+
+        // A failed sync replaces nothing, the warning included (it describes the inventory still shown).
+        await Devices.SaveSyncAsync(Sync(t, T0.AddHours(1)) with { Succeeded = false, Error = "timed out" });
+        Assert.Equal("Defender for Endpoint sensor health wasn't read: 403", (await Devices.GetSyncStatusAsync(t.Id))!.Warning);
+
+        await Devices.SaveSyncAsync(Sync(t, T0.AddHours(2), Device(t, "d1")));
+        Assert.Null((await Devices.GetSyncStatusAsync(t.Id))!.Warning);
+
+        await Devices.SaveSyncAsync(Sync(t, T0.AddHours(3), Device(t, "d1")) with { Warning = new string('w', 2500) });
+        Assert.Equal(2000, (await Devices.GetSyncStatusAsync(t.Id))!.Warning!.Length);
+    }
+
+    [PostgresFact]
     public async Task DeviceSync_ReplacesInventorySoRemovedDevicesDisappear()
     {
         var t = await NewTenantAsync();
