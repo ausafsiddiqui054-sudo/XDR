@@ -5,6 +5,12 @@ public sealed class OnboardingOptions
     /// <summary>Client ID of SecurePulse's multi-tenant Entra app registration (not a secret).</summary>
     public string AppClientId { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Client ID of the separate remediation app, which holds only the Intune permission remote
+    /// device actions need. Empty: remediation can't be turned on.
+    /// </summary>
+    public string RemediationAppClientId { get; set; } = string.Empty;
+
     /// <summary>Entra authority. Use https://login.microsoftonline.us for US Government clouds.</summary>
     public string AuthorityHost { get; set; } = "https://login.microsoftonline.com";
 

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using SecurePulse.Core.Models;
 using SecurePulse.Data.Entities;
 
 namespace SecurePulse.Data;
@@ -15,6 +16,7 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
     public DbSet<PortalUserEntity> PortalUsers => Set<PortalUserEntity>();
     public DbSet<AuditEventEntity> AuditEvents => Set<AuditEventEntity>();
     public DbSet<ScanRunEntity> ScanRuns => Set<ScanRunEntity>();
+    public DbSet<DeviceActionEntity> DeviceActions => Set<DeviceActionEntity>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder builder)
     {
@@ -34,6 +36,7 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
             e.Property(x => x.PartnerName).HasMaxLength(256);
             e.Property(x => x.Industry).HasMaxLength(128);
             e.Property(x => x.CredentialReference).HasMaxLength(256);
+            e.Property(x => x.RemediationCredentialReference).HasMaxLength(256);
         });
 
         b.Entity<FindingEntity>(e =>
@@ -126,6 +129,27 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
             // No foreign keys: the record must survive deleted tenants and users.
         });
     
+        b.Entity<DeviceActionEntity>(e =>
+        {
+            e.ToTable("device_actions");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.DeviceId).HasMaxLength(64);
+            e.Property(x => x.DeviceName).HasMaxLength(256);
+            e.Property(x => x.Reason).HasMaxLength(DeviceActionPolicy.MaxReasonLength);
+            e.Property(x => x.RequestedByName).HasMaxLength(512);
+            e.Property(x => x.DecidedByName).HasMaxLength(512);
+            e.Property(x => x.DecisionNote).HasMaxLength(DeviceActionPolicy.MaxNoteLength);
+            e.Property(x => x.CancelledBy).HasMaxLength(512);
+            e.Property(x => x.Error).HasMaxLength(2000);
+            // At most one open (pending, approved or sending) action per device; requests rely on this.
+            e.HasIndex(x => new { x.TenantId, x.DeviceId }).IsUnique()
+                .HasFilter("\"Status\" IN ('PendingApproval', 'Approved', 'Sending')")
+                .HasDatabaseName("IX_device_actions_open");
+            e.HasIndex(x => new { x.Status, x.DecidedAt });
+            e.HasIndex(x => new { x.TenantId, x.RequestedAt });
+            e.HasOne<TenantEntity>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
         b.Entity<ScanRunEntity>(e =>
         {
             e.ToTable("scan_runs");

@@ -1,0 +1,16 @@
+<MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@ColorOf(Status)" data-testid="action-status">
+    @DeviceActionRequestService.Label(Status)
+</MudChip>
+
+@code {
+    [Parameter, EditorRequired] public DeviceActionStatus Status { get; set; }
+
+    private static Color ColorOf(DeviceActionStatus status) => status switch
+    {
+        DeviceActionStatus.PendingApproval => Color.Warning,
+        DeviceActionStatus.Approved or DeviceActionStatus.Sending => Color.Info,
+        DeviceActionStatus.Sent => Color.Success,
+        DeviceActionStatus.Failed or DeviceActionStatus.Rejected => Color.Error,
+        _ => Color.Default
+    };
+}

@@ -16,6 +16,7 @@ public sealed class EfOnboardingRepository(IDbContextFactory<SecurePulseDbContex
         db.OnboardingRequests.Add(new OnboardingRequestEntity
         {
             Id = request.Id,
+            Kind = request.Kind,
             DisplayName = request.DisplayName,
             PrimaryDomain = request.PrimaryDomain,
             PartnerName = request.PartnerName,
@@ -107,6 +108,8 @@ public sealed class EfOnboardingRepository(IDbContextFactory<SecurePulseDbContex
             ?? throw new InvalidOperationException($"Onboarding request {id} not found.");
         if (request.Status != OnboardingStatus.Verifying)
             throw new InvalidOperationException($"Onboarding request {id} is {request.Status}, not Verifying.");
+        if (request.Kind != OnboardingKind.Assessment)
+            throw new InvalidOperationException($"Onboarding request {id} is a {request.Kind} request; use CompleteRemediationAsync.");
         if (tenant.EntraTenantId != request.EntraTenantId)
             throw new ArgumentException("Tenant does not match the onboarding request's Entra tenant.", nameof(tenant));
 
@@ -134,6 +137,53 @@ public sealed class EfOnboardingRepository(IDbContextFactory<SecurePulseDbContex
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return stored.ToModel();
+    }
+
+    public async Task<Tenant?> CompleteRemediationAsync(Guid id, string remediationCredentialReference, IReadOnlyList<string> grantedPermissions,
+        DateTimeOffset at, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        var request = await db.OnboardingRequests.FirstOrDefaultAsync(r => r.Id == id, ct)
+            ?? throw new InvalidOperationException($"Onboarding request {id} not found.");
+        if (request.Status != OnboardingStatus.Verifying || request.Kind != OnboardingKind.Remediation)
+            throw new InvalidOperationException($"Onboarding request {id} isn't a remediation request being verified.");
+
+        var stored = await db.Tenants.FirstOrDefaultAsync(t => t.EntraTenantId == request.EntraTenantId
+            && (t.ConsentState == TenantConsentState.ReadOnlyGranted || t.ConsentState == TenantConsentState.RemediationGranted), ct);
+        if (stored is null)
+        {
+            // Remediation is only added to a connected tenant; it never connects one on its own.
+            request.Status = OnboardingStatus.Failed;
+            request.LastError = "The tenant isn't connected for assessment any more, so remediation access can't be added.";
+            request.ProtectedState = null;
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return null;
+        }
+
+        stored.ConsentState = TenantConsentState.RemediationGranted;
+        stored.RemediationCredentialReference = remediationCredentialReference;
+        request.Status = OnboardingStatus.Completed;
+        request.CompletedAt = at;
+        request.TenantId = stored.Id;
+        request.LastError = null;
+        request.GrantedPermissions = [.. grantedPermissions];
+        request.ProtectedState = null;
+
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return stored.ToModel();
+    }
+
+    public async Task<bool> DisableRemediationAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.Tenants.Where(t => t.Id == tenantId && t.ConsentState == TenantConsentState.RemediationGranted)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(t => t.ConsentState, TenantConsentState.ReadOnlyGranted)
+                .SetProperty(t => t.RemediationCredentialReference, (string?)null), ct) > 0;
     }
 
     public async Task CancelAsync(Guid id, CancellationToken ct = default)

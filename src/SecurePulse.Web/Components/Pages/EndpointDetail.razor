@@ -4,7 +4,7 @@
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
 @inject IUserContextAccessor Current
-@inject AuditTrail Audit
+@inject DeviceActionRequestService Actions
 
 <PageTitle>@(_detail?.Device.DeviceName ?? "Device") · SecurePulse</PageTitle>
 
@@ -51,9 +51,9 @@ else
         {
         <MudStack Row="true" Spacing="2">
             <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@DeviceActions.Icon(DeviceAction.Sync)"
-                       Disabled="!CanRemediate" OnClick="@(() => RequestAsync(DeviceAction.Sync))">Sync</MudButton>
+                       Disabled="!CanRequest" OnClick="@(() => RequestAsync(DeviceAction.Sync))">Sync</MudButton>
             <MudMenu Label="More actions" EndIcon="@Icons.Material.Rounded.KeyboardArrowDown" Variant="Variant.Outlined"
-                     Color="Color.Primary" Disabled="!CanRemediate" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                     Color="Color.Primary" Disabled="!CanRequest" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                 @foreach (var action in new[] { DeviceAction.Restart, DeviceAction.Retire, DeviceAction.Wipe })
                 {
                     <MudMenuItem Icon="@DeviceActions.Icon(action)"
@@ -71,6 +71,13 @@ else
                   Icon="@Icons.Material.Rounded.Lock">
             SecurePulse has read-only access to @tenant.DisplayName. Remote actions need remediation consent from the
             tenant's admin, and each one then goes through approval.
+        </MudAlert>
+    }
+    else if (OpenAction is { } open)
+    {
+        <MudAlert Severity="MudBlazor.Severity.Info" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px" data-testid="open-action">
+            @DeviceActions.Label(open.Action) requested by @open.RequestedByName is @DeviceActionRequestService.Label(open.Status).ToLowerInvariant().
+            New actions can be requested once it's finished or cancelled.
         </MudAlert>
     }
 
@@ -182,6 +189,58 @@ else
                     </MudStack>
                 </MudPaper>
 
+                @if (_history.Count > 0 || CanRemediate)
+                {
+                    <MudPaper Class="sp-card pa-5" Elevation="0" Outlined="true" data-testid="action-history">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-2">
+                            <MudText Typo="Typo.h6">Remote actions</MudText>
+                            @if (_isOperator)
+                            {
+                                <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" Href="devices/actions">All requests</MudButton>
+                            }
+                        </MudStack>
+                        @if (_history.Count == 0)
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">None requested yet.</MudText>
+                        }
+                        <MudStack Spacing="3">
+                            @foreach (var v in _history)
+                            {
+                                var a = v.Request;
+                                <div>
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Spacing="2">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                            <MudIcon Icon="@DeviceActions.Icon(a.Action)" Size="Size.Small"
+                                                     Color="@(DeviceActions.IsDestructive(a.Action) ? Color.Error : Color.Primary)" />
+                                            <MudText Typo="Typo.body2" Style="font-weight:600">@DeviceActions.Label(a.Action)</MudText>
+                                        </MudStack>
+                                        <DeviceActionStatusChip Status="a.Status" />
+                                    </MudStack>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                                        Requested by @a.RequestedByName @Dashboard.Ago(a.RequestedAt).ToLowerInvariant(): “@a.Reason”
+                                    </MudText>
+                                    @if (a.DecidedByName is { } decider)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                                            @(a.Status == DeviceActionStatus.Rejected ? "Rejected" : "Approved") by @decider@(a.DecisionNote is { } n ? $": “{n}”" : "")
+                                        </MudText>
+                                    }
+                                    @if (a.Error is { } err && a.Status is DeviceActionStatus.Failed or DeviceActionStatus.Expired or DeviceActionStatus.Cancelled)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="@(a.Status == DeviceActionStatus.Failed ? Color.Error : Color.Secondary)"
+                                                 Class="d-block" Style="overflow-wrap:anywhere">@err</MudText>
+                                    }
+                                    @if (v.CanCancel)
+                                    {
+                                        <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Default" Class="px-0 mt-1"
+                                                   OnClick="@(() => CancelAsync(a.Id))">Cancel request</MudButton>
+                                    }
+                                </div>
+                            }
+                        </MudStack>
+                    </MudPaper>
+                }
+
                 <MudPaper Class="sp-card pa-5" Elevation="0" Outlined="true">
                     <MudText Typo="Typo.h6" Class="mb-3">Device</MudText>
                     <dl class="sp-props">
@@ -220,12 +279,19 @@ else
 
     private bool _isOperator;
 
-    private bool CanRemediate => _isOperator && _detail?.Tenant.ConsentState == TenantConsentState.RemediationGranted;
+    private IReadOnlyList<DeviceActionView> _history = [];
+
+    private bool CanRemediate => _isOperator && _detail?.Tenant.CanRemediate == true;
+
+    private DeviceActionRequest? OpenAction => _history.Select(v => v.Request).FirstOrDefault(a => a.IsOpen);
+
+    private bool CanRequest => CanRemediate && OpenAction is null;
 
     protected override async Task OnParametersSetAsync()
     {
         _isOperator = (await Current.GetAsync()).IsOperator;
         _detail = await EndpointData.GetDeviceAsync(TenantId, DeviceId);
+        _history = _detail is null ? [] : await Actions.GetForDeviceAsync(TenantId, _detail.Device.Id);
         _breadcrumbs =
         [
             new("Endpoints", href: "endpoints"),
@@ -250,15 +316,16 @@ else
 
         if ((await dialog.Result) is { Canceled: false, Data: string reason })
         {
-            var label = DeviceActions.Label(action).ToLowerInvariant();
-            await Audit.RecordAsync(AuditActions.DeviceActionRequested, AuditOutcome.Failure,
-                $"Requested {label} of {_detail.Device.DeviceName}; not sent (approval workflow not built yet)",
-                _detail.Tenant.Id, "ManagedDevice", _detail.Device.Id,
-                new Dictionary<string, string> { ["action"] = action.ToString(), ["device"] = _detail.Device.DeviceName, ["reason"] = reason });
-
-            // No approval queue or Graph write path exists yet, so be explicit that nothing happened.
-            Snackbar.Add($"The approval workflow isn't built yet, so the {DeviceActions.Label(action).ToLowerInvariant()} request " +
-                         $"for {_detail.Device.DeviceName} wasn't sent.", MudBlazor.Severity.Info);
+            var outcome = await Actions.RequestAsync(_detail.Tenant.Id, _detail.Device.Id, action, reason);
+            Snackbar.Add(outcome.Message, outcome.Ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
+            _history = await Actions.GetForDeviceAsync(TenantId, _detail.Device.Id);
         }
+    }
+
+    private async Task CancelAsync(Guid id)
+    {
+        var outcome = await Actions.CancelAsync(id);
+        Snackbar.Add(outcome.Message, outcome.Ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
+        if (_detail is not null) _history = await Actions.GetForDeviceAsync(TenantId, _detail.Device.Id);
     }
 }

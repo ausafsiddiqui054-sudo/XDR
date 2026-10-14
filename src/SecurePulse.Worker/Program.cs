@@ -65,6 +65,17 @@ builder.Services.AddOptions<DeviceSyncOptions>()
 builder.Services.AddSingleton<DeviceSyncService>();
 builder.Services.AddHostedService<DeviceSyncWorker>();
 
+// Remote device actions go through a separate remediation app with its own certificate.
+var remediation = builder.Configuration.GetSection("Remediation").Get<RemediationOptions>() ?? new RemediationOptions();
+builder.Services.AddIntuneRemoteActions(remediation);
+builder.Services.AddOptions<DeviceActionOptions>()
+    .Bind(builder.Configuration.GetSection("DeviceActions"))
+    .Validate(o => o.PollInterval >= TimeSpan.FromSeconds(5), "DeviceActions:PollInterval must be at least 5 seconds.")
+    .Validate(o => o.StuckSendingAfter > remediation.SendTimeout, "DeviceActions:StuckSendingAfter must be longer than Remediation:SendTimeout.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<DeviceActionService>();
+builder.Services.AddHostedService<DeviceActionWorker>();
+
 builder.Services.AddOptions<OnboardingVerificationOptions>()
     .Bind(builder.Configuration.GetSection("Onboarding"))
     .Validate(o => o.PollInterval >= TimeSpan.FromSeconds(5), "Onboarding:PollInterval must be at least 5 seconds.")

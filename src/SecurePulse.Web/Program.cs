@@ -35,10 +35,12 @@ else
     builder.Services.AddSingleton<IPortalUserRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IAuditLog>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IScanRunRepository>(sp => sp.GetRequiredService<SampleDataStore>());
+    builder.Services.AddSingleton<IDeviceActionRepository>(sp => sp.GetRequiredService<SampleDataStore>());
 }
 builder.Services.AddSingleton(new PortalMode(useDatabase));
 builder.Services.AddScoped<PostureService>();
 builder.Services.AddScoped<EndpointService>();
+builder.Services.AddScoped<DeviceActionRequestService>();
 builder.Services.AddScoped<PortalUserService>();
 builder.Services.AddScoped<AuditTrail>();
 builder.Services.AddSingleton(ScanEngineSelection.From(builder.Configuration.GetSection("Scans:Engines").Get<string[]>()));

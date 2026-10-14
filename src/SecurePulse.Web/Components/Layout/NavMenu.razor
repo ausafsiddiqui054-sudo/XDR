@@ -4,6 +4,7 @@
     <MudNavLink Href="endpoints" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Rounded.Devices">Endpoints</MudNavLink>
     <MudNavLink Href="tenants" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Rounded.Apartment">Tenants</MudNavLink>
     <AuthorizeView Policy="@Policies.Operator">
+        <DeviceActionsNavLink />
         <MudNavLink Href="settings/users" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Rounded.Group">People</MudNavLink>
         <MudNavLink Href="settings/audit" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Rounded.ManageSearch">Audit log</MudNavLink>
     </AuthorizeView>

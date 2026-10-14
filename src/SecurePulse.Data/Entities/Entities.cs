@@ -18,6 +18,10 @@ public sealed class TenantEntity
     public string? CredentialReference { get; set; }
 
     public TenantConsentState ConsentState { get; set; }
+
+    /// <summary>Remediation app certificate thumbprint. A reference only, never a secret.</summary>
+    public string? RemediationCredentialReference { get; set; }
+
     public DateTimeOffset? LastScanAt { get; set; }
 }
 
@@ -83,6 +87,7 @@ public sealed class DeviceSyncStatusEntity
 public sealed class OnboardingRequestEntity
 {
     public Guid Id { get; set; }
+    public OnboardingKind Kind { get; set; }
     public string DisplayName { get; set; } = "";
     public string PrimaryDomain { get; set; } = "";
     public string? PartnerName { get; set; }
@@ -150,5 +155,30 @@ public sealed class ScanRunEntity
     public DateTimeOffset? CompletedAt { get; set; }
     public string? RequestedBy { get; set; }
     public int? FindingCount { get; set; }
+    public string? Error { get; set; }
+}
+
+public sealed class DeviceActionEntity
+{
+    public Guid Id { get; set; }
+    public Guid TenantId { get; set; }
+    public string DeviceId { get; set; } = "";
+    public string DeviceName { get; set; } = "";
+    public DeviceAction Action { get; set; }
+    public string Reason { get; set; } = "";
+    public DeviceActionStatus Status { get; set; }
+    public DateTimeOffset RequestedAt { get; set; }
+    public Guid RequestedByUserId { get; set; }
+    public string RequestedByName { get; set; } = "";
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? DecidedAt { get; set; }
+    public Guid? DecidedByUserId { get; set; }
+    public string? DecidedByName { get; set; }
+    public PortalRole? DecidedByRole { get; set; }
+    public string? DecisionNote { get; set; }
+    public DateTimeOffset? CancelledAt { get; set; }
+    public string? CancelledBy { get; set; }
+    public DateTimeOffset? SentAt { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
     public string? Error { get; set; }
 }

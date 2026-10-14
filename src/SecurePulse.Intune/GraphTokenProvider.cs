@@ -55,13 +55,23 @@ public sealed class CertificateGraphTokenProvider(IntuneOptions options, ICertif
         if (!Thumbprints.IsValid(tenant.CredentialReference))
             throw new GraphAuthException("Tenant credential reference is not a valid certificate thumbprint.");
 
+        return await AppOnlyToken.AcquireAsync(tenant.EntraTenantId, clientId, tenant.CredentialReference!, certificates, options, cancellationToken);
+    }
+}
+
+/// <summary>Client-credential token acquisition with a certificate from the store, shared by both apps.</summary>
+internal static class AppOnlyToken
+{
+    public static async Task<string> AcquireAsync(Guid entraTenantId, Guid clientId, string thumbprint, ICertificateLoader certificates,
+        IntuneOptions options, CancellationToken cancellationToken)
+    {
         // A new credential per call means no token cache, so each token reflects the
-        // permissions granted right now (onboarding verification depends on that).
-        using var certificate = certificates.Find(tenant.CredentialReference!)
-            ?? throw new GraphAuthException($"Certificate {tenant.CredentialReference} with a private key was not found in the certificate store.");
+        // permissions granted right now (verification and the checks before writes depend on that).
+        using var certificate = certificates.Find(thumbprint)
+            ?? throw new GraphAuthException($"Certificate {thumbprint} with a private key was not found in the certificate store.");
 
         var credential = new ClientCertificateCredential(
-            tenant.EntraTenantId.ToString(), clientId.ToString(), certificate,
+            entraTenantId.ToString(), clientId.ToString(), certificate,
             new ClientCertificateCredentialOptions { AuthorityHost = new Uri(options.AuthorityHost) });
 
         try

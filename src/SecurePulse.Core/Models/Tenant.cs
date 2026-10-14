@@ -24,6 +24,14 @@ public sealed record Tenant
 
     public TenantConsentState ConsentState { get; init; } = TenantConsentState.Pending;
 
+    /// <summary>
+    /// Thumbprint of the remediation app's certificate, set when the tenant grants remediation
+    /// (write) consent to that separate app. A reference only, like <see cref="CredentialReference"/>.
+    /// </summary>
+    public string? RemediationCredentialReference { get; init; }
+
+    public bool CanRemediate => ConsentState == TenantConsentState.RemediationGranted && !string.IsNullOrWhiteSpace(RemediationCredentialReference);
+
     public DateTimeOffset? LastScanAt { get; init; }
 }
 

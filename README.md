@@ -113,6 +113,63 @@ App registration setup (one multi-tenant app):
 The consent callback and result page are the only portal pages that work without signing in;
 the result page shows no tenant data.
 
+## Device remote actions
+
+Sync, restart, retire and wipe for Intune devices, from a device's page. They are write actions,
+so each one needs three things: remediation consent on the tenant, a second person's approval,
+and audit entries from request to result.
+
+**Remediation consent (a separate app).** Device actions use a second Entra app registration that
+holds only `DeviceManagementManagedDevices.PrivilegedOperations.All` (Graph, application), with its
+own certificate. The read-only assessment app never gets write permissions. On a connected tenant,
+an Owner chooses **Enable remediation**, which creates a consent link for the remediation app (the
+same single-use, expiring, tenant-bound link as onboarding). After the admin approves, the Worker
+gets a token for the remediation app and checks its `roles`: it must hold that one permission and
+nothing else, or verification fails. Only then does the tenant become *Remediation access*, with
+the remediation certificate's thumbprint stored as a reference next to the read-only one.
+**Turn off remediation** (Owner) moves the tenant back to read-only and cancels open requests; the
+tenant's admin should also remove the remediation app under Enterprise applications.
+
+**Request and approval.**
+
+| | Who |
+|---|---|
+| Request (with a reason) | Owner or MSP admin, on a tenant with remediation access |
+| Approve sync or restart | Another Owner or MSP admin |
+| Approve retire or wipe | Another Owner (typing the device name to confirm) |
+| Reject (with a reason) | Another Owner or MSP admin |
+| Cancel | Any Owner or MSP admin, until the Worker starts sending |
+
+Nobody approves their own request. A device has one open request at a time. Requests not approved
+within 24 hours expire, and approved ones not sent within an hour expire rather than going out
+late. Approval is fail-closed: its audit entry is written first, and if that fails the approval
+isn't applied. Pending requests appear under **Device actions**, with a count of the ones waiting
+for you in the menu.
+
+**Sending (Worker).** Every 15 seconds (`DeviceActions:PollInterval`) the Worker claims approved
+actions (`FOR UPDATE SKIP LOCKED`, so several Workers never send one twice) and for each:
+
+1. re-checks that the tenant still has remediation access and that the stored approval meets the
+   policy above (it doesn't trust the queue alone);
+2. gets a fresh token for the remediation app and checks its tenant and `roles` again;
+3. writes the *sending* audit entry, and sends nothing if that write fails;
+4. calls Graph v1.0 once (`syncDevice`, `rebootNow`, `retire`, or `wipe` with no data kept).
+
+Failures are recorded with the reason and never retried; request it again if it's still needed.
+A timeout or a Worker that stopped mid-call is reported as *outcome unknown: check the device in
+Intune*, since the action may have reached it. *Sent* means Intune accepted it; it runs when the
+device next checks in.
+
+Setup:
+
+- **Remediation app registration:** multi-tenant, the same redirect URI as the main app, API
+  permission `DeviceManagementManagedDevices.PrivilegedOperations.All` (Application) only, and a
+  certificate of its own (private key only on the Worker).
+- **Portal:** `Onboarding:RemediationAppClientId` (must differ from `Onboarding:AppClientId`).
+- **Worker:** `Remediation:AppClientId`, `Remediation:CertificateThumbprint` (in the Worker user's
+  store), optionally `Remediation:SendTimeout` (60 seconds), `DeviceActions:Enabled`,
+  `DeviceActions:PollInterval` and `DeviceActions:StuckSendingAfter` (10 minutes).
+
 ## Security scans
 
 The Worker runs [Maester](https://maester.dev) and, on a Windows Worker,
@@ -271,7 +328,7 @@ filters).
 | Sign-in | Sign-ins (incl. people without access, as *Denied*), invitation accepted, sign-outs |
 | People | Invited, role changed, access removed, including refused attempts (*Denied*) and last-Owner refusals (*Failure*) |
 | Onboarding | Consent link created or cancelled; consent received, declined, from the wrong tenant, or on an expired/used link; tenant connected or verification failed (Worker) |
-| Devices | Remote action requests (currently recorded as not sent) |
+| Devices | Remote actions: requested, approved (or an approval that didn't apply), rejected, cancelled, expired, *sending* (written by the Worker before the Graph call) and the result |
 | Scans | Scan requested from the portal (scheduled scans are in `scan_runs`, not the audit log) |
 | Audit log | Each CSV export |
 | Reports | Each PDF report download |
@@ -349,7 +406,8 @@ checks are excluded. Any open **Critical** caps the grade at C.
 | Core models, scoring, Maester parser | Built; covered by `SecurePulse.Tests` |
 | Maester engine runner | Built; tested with a stand-in `pwsh`; needs a real tenant + certificate to exercise |
 | Portal (Overview, Findings, Tenants) | Built; sample data or PostgreSQL |
-| Endpoints (Intune device inventory, device detail) | Built; remote actions disabled until approval + audit log exist |
+| Endpoints (Intune device inventory, device detail) | Built |
+| Device remote actions (remediation consent, approval queue, Worker sending via Graph) | Built; tested with stubbed Graph and against PostgreSQL 16; needs the remediation app registration and a real tenant to exercise |
 | PostgreSQL persistence (`SecurePulse.Data`) | Built; tested against PostgreSQL 16 |
 | Worker: Intune device sync | Built and tested against stubbed Graph; needs a real tenant + certificate to exercise |
 | Tenant onboarding (admin consent, verification, first sync) | Built; tested with stubbed Entra; needs the app registration to exercise |
@@ -365,7 +423,9 @@ checks are excluded. Any open **Critical** caps the grade at C.
 - `Tenant.CredentialReference` holds only a certificate thumbprint / vault reference.
 - Engines run **out of process** with arguments passed via `ArgumentList`, so tenant data
   can't inject PowerShell and a hung scan can't crash the portal.
-- Request **read-only** Graph permissions for assessment; remediation is a separate consent.
+- Request **read-only** Graph permissions for assessment; remediation is a separate app with one
+  write permission, its own certificate and its own consent, and every action needs a second
+  person's approval.
 - Portal access comes from SecurePulse's own user table, never from token role claims.
 - Security events are kept in an append-only audit table the app can't modify.
 - Check each engine's license before redistributing modified versions (Wazuh is GPLv2).

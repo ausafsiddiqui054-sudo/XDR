@@ -11,6 +11,18 @@ namespace SecurePulse.Tests.Onboarding;
 public class OnboardingVerificationServiceTests
 {
     private const string Thumbprint = "0123456789ABCDEF0123456789ABCDEF01234567";
+    private const string RemediationThumbprint = "FEDCBA9876543210FEDCBA9876543210FEDCBA98";
+
+    public sealed class RemediationTokens(Func<Guid, string> issue) : IRemediationTokenProvider
+    {
+        public List<(Guid TenantId, string Thumbprint)> Requests { get; } = [];
+
+        public Task<string> GetTokenAsync(Guid entraTenantId, string thumbprint, CancellationToken cancellationToken = default)
+        {
+            Requests.Add((entraTenantId, thumbprint));
+            return Task.FromResult(issue(entraTenantId));
+        }
+    }
     private static readonly DateTimeOffset T0 = new(2026, 10, 1, 9, 0, 0, TimeSpan.Zero);
     private static readonly string[] Required = AssessmentPermissions.Required.Select(p => p.Name).ToArray();
 
@@ -48,8 +60,10 @@ public class OnboardingVerificationServiceTests
         public Source Source { get; } = new();
         public OnboardingVerificationOptions Options { get; } = new() { CertificateThumbprint = Thumbprint };
         public required Tokens Tokens { get; init; }
+        public RemediationTokens RemediationTokens { get; init; } = new(_ => throw new InvalidOperationException("No remediation token expected."));
+        public RemediationOptions Remediation { get; } = new() { AppClientId = Guid.NewGuid().ToString(), CertificateThumbprint = RemediationThumbprint };
 
-        public OnboardingVerificationService Service => new(Store, Tokens,
+        public OnboardingVerificationService Service => new(Store, Tokens, RemediationTokens, Remediation,
             new DeviceSyncService(Store, Store, Source, Microsoft.Extensions.Options.Options.Create(new DeviceSyncOptions()), NullLogger<DeviceSyncService>.Instance),
             Store, Microsoft.Extensions.Options.Options.Create(Options), Time, NullLogger<OnboardingVerificationService>.Instance);
 
@@ -282,4 +296,122 @@ public class OnboardingVerificationServiceTests
     [InlineData("", false)]
     public void IsReadOnly(string permission, bool expected) =>
         Assert.Equal(expected, AssessmentPermissions.IsReadOnly(permission));
+
+    // --- Remediation consent -------------------------------------------------------------
+
+    private static async Task<OnboardingRequest> RemediationRequestAsync(Harness h, Guid entraTenantId)
+    {
+        var request = new OnboardingRequest
+        {
+            Id = Guid.NewGuid(), Kind = OnboardingKind.Remediation, DisplayName = "Palm Dental Studio", PrimaryDomain = "palmdental.example",
+            EntraTenantId = entraTenantId, Status = OnboardingStatus.AwaitingConsent, CreatedAt = T0.AddMinutes(-5), ExpiresAt = T0.AddDays(7)
+        };
+        IOnboardingRepository repo = h.Store;
+        await repo.AddAsync(request, Guid.NewGuid().ToString("N"));
+        Assert.True(await repo.MarkConsentReceivedAsync(request.Id, T0));
+        return (await repo.GetAsync(request.Id))!;
+    }
+
+    private static Tokens NoAssessmentTokens() => new(_ => throw new InvalidOperationException("The assessment app must not be used for remediation."));
+
+    private static async Task<Tenant> ConnectedTenantAsync(Harness h) =>
+        (await h.Store.GetAllAsync()).First(t => t.ConsentState == TenantConsentState.ReadOnlyGranted);
+
+    [Fact]
+    public async Task RemediationConsentWithExactlyThePrivilegedPermissionEnablesRemediation()
+    {
+        var h = new Harness
+        {
+            Tokens = NoAssessmentTokens(),
+            RemediationTokens = new RemediationTokens(tid => Jwt.With(tid, [RemediationPermissions.PrivilegedOperations]))
+        };
+        var tenant = await ConnectedTenantAsync(h);
+        var request = await RemediationRequestAsync(h, tenant.EntraTenantId);
+
+        Assert.True(await h.Service.VerifyAsync(request));
+
+        var updated = (await h.Store.GetAsync(tenant.Id))!;
+        Assert.Equal(TenantConsentState.RemediationGranted, updated.ConsentState);
+        Assert.Equal(RemediationThumbprint, updated.RemediationCredentialReference);
+        Assert.Equal(tenant.CredentialReference, updated.CredentialReference); // the read-only credential is untouched
+        Assert.True(updated.CanRemediate);
+        Assert.Equal([(tenant.EntraTenantId, RemediationThumbprint)], h.RemediationTokens.Requests);
+        var done = (await h.ReloadAsync(request))!;
+        Assert.Equal(OnboardingStatus.Completed, done.Status);
+        Assert.Equal([RemediationPermissions.PrivilegedOperations], done.GrantedPermissions);
+        Assert.Empty(h.Source.Synced); // remediation consent doesn't re-run onboarding's first sync
+        var e = await Audit.AuditAssert.SingleAsync(h.Store, AuditActions.RemediationEnabled, AuditOutcome.Success);
+        Assert.Equal(tenant.Id, e.TenantId);
+    }
+
+    [Fact]
+    public async Task RemediationAppWithAnyExtraPermissionIsRefused()
+    {
+        var h = new Harness
+        {
+            Tokens = NoAssessmentTokens(),
+            RemediationTokens = new RemediationTokens(tid => Jwt.With(tid, [RemediationPermissions.PrivilegedOperations, "DeviceManagementManagedDevices.Read.All"]))
+        };
+        var tenant = await ConnectedTenantAsync(h);
+        var request = await RemediationRequestAsync(h, tenant.EntraTenantId);
+
+        Assert.False(await h.Service.VerifyAsync(request));
+
+        var failed = (await h.ReloadAsync(request))!;
+        Assert.Equal(OnboardingStatus.Failed, failed.Status);
+        Assert.Contains("DeviceManagementManagedDevices.Read.All", failed.LastError);
+        Assert.Equal(TenantConsentState.ReadOnlyGranted, (await h.Store.GetAsync(tenant.Id))!.ConsentState);
+        await Audit.AuditAssert.SingleAsync(h.Store, AuditActions.VerificationFailed, AuditOutcome.Denied);
+    }
+
+    [Fact]
+    public async Task RemediationTokenWithoutThePermissionIsRetriedUntilTheWindowCloses()
+    {
+        var h = new Harness { Tokens = NoAssessmentTokens(), RemediationTokens = new RemediationTokens(tid => Jwt.With(tid, [])) };
+        var tenant = await ConnectedTenantAsync(h);
+        var request = await RemediationRequestAsync(h, tenant.EntraTenantId);
+
+        Assert.False(await h.Service.VerifyAsync(request));
+        Assert.Equal(OnboardingStatus.Verifying, (await h.ReloadAsync(request))!.Status);
+
+        h.Time.Advance(h.Options.VerificationWindow + TimeSpan.FromMinutes(1));
+        Assert.False(await h.Service.VerifyAsync((await h.ReloadAsync(request))!));
+        Assert.Equal(OnboardingStatus.Failed, (await h.ReloadAsync(request))!.Status);
+        Assert.Equal(TenantConsentState.ReadOnlyGranted, (await h.Store.GetAsync(tenant.Id))!.ConsentState);
+    }
+
+    [Fact]
+    public async Task RemediationNeverConnectsATenantOnItsOwn()
+    {
+        var h = new Harness
+        {
+            Tokens = NoAssessmentTokens(),
+            RemediationTokens = new RemediationTokens(tid => Jwt.With(tid, [RemediationPermissions.PrivilegedOperations]))
+        };
+        var unknown = Guid.NewGuid();
+        var before = (await h.Store.GetAllAsync()).Count;
+        var request = await RemediationRequestAsync(h, unknown);
+
+        Assert.False(await h.Service.VerifyAsync(request));
+
+        Assert.Equal(before, (await h.Store.GetAllAsync()).Count);
+        Assert.Equal(OnboardingStatus.Failed, (await h.ReloadAsync(request))!.Status);
+    }
+
+    [Fact]
+    public async Task RemediationTokenForAnotherTenantIsDenied()
+    {
+        var h = new Harness
+        {
+            Tokens = NoAssessmentTokens(),
+            RemediationTokens = new RemediationTokens(_ => Jwt.With(Guid.NewGuid(), [RemediationPermissions.PrivilegedOperations]))
+        };
+        var tenant = await ConnectedTenantAsync(h);
+        var request = await RemediationRequestAsync(h, tenant.EntraTenantId);
+
+        Assert.False(await h.Service.VerifyAsync(request));
+
+        Assert.Equal(OnboardingStatus.Failed, (await h.ReloadAsync(request))!.Status);
+        Assert.Equal(TenantConsentState.ReadOnlyGranted, (await h.Store.GetAsync(tenant.Id))!.ConsentState);
+    }
 }

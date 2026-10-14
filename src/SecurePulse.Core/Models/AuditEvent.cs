@@ -68,6 +68,18 @@ public static class AuditActions
     public const string VerificationFailed = "onboarding.verification-failed";
 
     public const string DeviceActionRequested = "device.action-requested";
+    public const string DeviceActionApproved = "device.action-approved";
+    public const string DeviceActionRejected = "device.action-rejected";
+    public const string DeviceActionCancelled = "device.action-cancelled";
+    public const string DeviceActionExpired = "device.action-expired";
+
+    /// <summary>Written by the Worker before the Graph call; if it can't be written, nothing is sent.</summary>
+    public const string DeviceActionSending = "device.action-sending";
+
+    public const string DeviceActionResult = "device.action-result";
+
+    public const string RemediationEnabled = "onboarding.remediation-enabled";
+    public const string RemediationDisabled = "onboarding.remediation-disabled";
 
     public const string AuditExported = "audit.exported";
 
@@ -105,6 +117,14 @@ public static class AuditActions
         TenantConnected => "Tenant connected",
         VerificationFailed => "Verification failed",
         DeviceActionRequested => "Device action requested",
+        DeviceActionApproved => "Device action approved",
+        DeviceActionRejected => "Device action rejected",
+        DeviceActionCancelled => "Device action cancelled",
+        DeviceActionExpired => "Device action expired",
+        DeviceActionSending => "Device action sending",
+        DeviceActionResult => "Device action result",
+        RemediationEnabled => "Remediation access granted",
+        RemediationDisabled => "Remediation access turned off",
         AuditExported => "Audit log exported",
         ScanRequested => "Scan requested",
         ReportDownloaded => "Report downloaded",

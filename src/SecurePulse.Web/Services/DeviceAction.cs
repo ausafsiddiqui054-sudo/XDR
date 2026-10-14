@@ -1,19 +1,9 @@
 using MudBlazor;
+using SecurePulse.Core.Models;
 
 namespace SecurePulse.Web.Services;
 
-/// <summary>
-/// Intune remote actions offered on a device. These are write actions: they need remediation
-/// consent on the tenant, an approval step and an audit log entry (CLAUDE.md rule 5).
-/// </summary>
-public enum DeviceAction
-{
-    Sync,
-    Restart,
-    Retire,
-    Wipe
-}
-
+/// <summary>How <see cref="DeviceAction"/>s are shown in the portal.</summary>
 public static class DeviceActions
 {
     public static string Label(DeviceAction action) => action switch
@@ -40,6 +30,6 @@ public static class DeviceActions
         _ => "Resets the device to factory settings. All data on it is erased."
     };
 
-    /// <summary>Destructive actions need the device name typed to confirm.</summary>
-    public static bool IsDestructive(DeviceAction action) => action is DeviceAction.Retire or DeviceAction.Wipe;
+    /// <summary>Destructive actions need the device name typed to confirm, and an Owner's approval.</summary>
+    public static bool IsDestructive(DeviceAction action) => DeviceActionPolicy.IsDestructive(action);
 }

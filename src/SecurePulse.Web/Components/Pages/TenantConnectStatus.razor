@@ -34,16 +34,32 @@ else
     var now = Time.GetUtcNow();
     var expired = r.IsExpired(now);
     var consentUrl = Onboarding.GetConsentUrl(r, Nav.BaseUri);
+    var remediation = r.Kind == OnboardingKind.Remediation;
 
     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
         <div>
             <MudText Typo="Typo.h4">@r.DisplayName</MudText>
             <MudText Typo="Typo.body2" Color="Color.Secondary">@r.PrimaryDomain · @(r.PartnerName ?? "Direct client") · @r.Industry</MudText>
         </div>
-        <MudChip T="string" Variant="Variant.Outlined" Color="@SecurePulseTheme.ColorOf(r, now)">@SecurePulseTheme.Label(r, now)</MudChip>
+        <MudStack Row="true" Spacing="1">
+            @if (remediation)
+            {
+                <MudChip T="string" Variant="Variant.Outlined" Color="Color.Warning" Icon="@Icons.Material.Rounded.Build">Remediation access</MudChip>
+            }
+            <MudChip T="string" Variant="Variant.Outlined" Color="@SecurePulseTheme.ColorOf(r, now)">@SecurePulseTheme.Label(r, now)</MudChip>
+        </MudStack>
     </MudStack>
 
-    @if (_reconsentFor is { } existingTenant && r.Status is OnboardingStatus.AwaitingConsent or OnboardingStatus.Verifying)
+    @if (remediation && r.Status is OnboardingStatus.AwaitingConsent or OnboardingStatus.Verifying)
+    {
+        <MudAlert Severity="MudBlazor.Severity.Warning" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px" data-testid="remediation-explainer">
+            This grants SecurePulse's separate remediation app permission to sync, restart, retire and wipe this tenant's Intune devices
+            (DeviceManagementManagedDevices.PrivilegedOperations.All, nothing else). Each action still needs a reason, a second admin's
+            approval (an Owner's for retire and wipe) and is written to the audit log.
+        </MudAlert>
+    }
+
+    @if (!remediation && _reconsentFor is { } existingTenant && r.Status is OnboardingStatus.AwaitingConsent or OnboardingStatus.Verifying)
     {
         <MudAlert Severity="MudBlazor.Severity.Info" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px">
             Re-consent: @existingTenant.DisplayName is already connected. Approving again updates the permissions SecurePulse has there;
@@ -70,7 +86,7 @@ else
                 {
                     <MudText Typo="Typo.h6">Send this link to the client's admin</MudText>
                     <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
-                        A Global Administrator of @r.PrimaryDomain signs in and approves read-only access.
+                        A Global Administrator of @r.PrimaryDomain signs in and approves @(remediation ? "remediation" : "read-only") access.
                         If that's you, open it yourself. It expires @r.ExpiresAt.ToLocalTime().ToString("d MMM yyyy, HH:mm").
                     </MudText>
 
@@ -117,7 +133,7 @@ else
                     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Class="mb-3">
                         <span class="sp-icon-badge"><MudIcon Icon="@Icons.Material.Rounded.CheckCircle" Color="Color.Success" /></span>
                         <div>
-                            <MudText Typo="Typo.h6">Connected</MudText>
+                            <MudText Typo="Typo.h6">@(remediation ? "Remediation access granted" : "Connected")</MudText>
                             <MudText Typo="Typo.body2" Color="Color.Secondary">Verified @Dashboard.Ago(r.CompletedAt).ToLowerInvariant()</MudText>
                         </div>
                     </MudStack>
@@ -265,11 +281,20 @@ else
 
         yield return r.Status switch
         {
-            OnboardingStatus.Completed => new(3, "Access verified", $"{r.GrantedPermissions.Count} read-only permissions", "sp-done"),
+            OnboardingStatus.Completed => new(3, "Access verified",
+                r.Kind == OnboardingKind.Remediation ? "Device actions permission only" : $"{r.GrantedPermissions.Count} read-only permissions", "sp-done"),
             OnboardingStatus.Verifying => new(3, "Verifying access", r.VerificationAttempts > 0 ? $"Attempt {r.VerificationAttempts + 1}" : "Checking with Microsoft Entra", "sp-current"),
             OnboardingStatus.Failed when consented => new(3, "Verify access", "Verification failed", "sp-failed"),
             _ => new(3, "Verify access", "SecurePulse confirms the permissions it was given", "")
         };
+
+        if (r.Kind == OnboardingKind.Remediation)
+        {
+            yield return r.Status == OnboardingStatus.Completed
+                ? new(4, "Device actions available", "Request them from a device's page", "sp-done")
+                : new(4, "Device actions available", "As soon as access is verified", "");
+            yield break;
+        }
 
         yield return (r.Status, _sync) switch
         {
@@ -303,6 +328,15 @@ else
     {
         if (_request is null) return;
         await Onboarding.CancelAsync(_request.Id);
+        if (_request.Kind == OnboardingKind.Remediation)
+        {
+            var again = _reconsentFor is { } tenant ? await Onboarding.StartRemediationAsync(tenant.Id) : new StartOnboardingResult(null, "The tenant isn't connected any more.");
+            if (again.Request is { } nextRemediation)
+                Nav.NavigateTo($"tenants/connect/{nextRemediation.Id}");
+            else
+                Snackbar.Add(again.Error ?? "Couldn't create a new link.", MudBlazor.Severity.Error);
+            return;
+        }
         var result = await Onboarding.StartAsync(new ConnectTenantForm
         {
             DisplayName = _request.DisplayName,

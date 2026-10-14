@@ -6,6 +6,7 @@
 @inject ScanRequestService Scans
 @inject IUserContextAccessor Current
 @inject ISnackbar Snackbar
+@inject IDialogService Dialogs
 @implements IAsyncDisposable
 
 <PageTitle>Tenants · SecurePulse</PageTitle>
@@ -41,7 +42,9 @@ else
                         <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start">
                             <div style="min-width:0">
                                 <MudText Typo="Typo.subtitle1" Style="font-weight:600">@r.DisplayName</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">@r.PrimaryDomain</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @r.PrimaryDomain@(r.Kind == OnboardingKind.Remediation ? " · remediation access" : "")
+                                </MudText>
                             </div>
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@SecurePulseTheme.ColorOf(r, now)">
                                 @SecurePulseTheme.Label(r, now)
@@ -164,6 +167,16 @@ else
                             <MudButton Variant="Variant.Text" Color="Color.Default" Class="px-0" StartIcon="@Icons.Material.Rounded.VerifiedUser"
                                        Href="@ReconsentUrl(t.Tenant)">Re-consent</MudButton>
                         }
+                        @if (_isOwner && t.Tenant.ConsentState == TenantConsentState.ReadOnlyGranted && Onboarding.IsRemediationConfigured)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Warning" Class="px-0" StartIcon="@Icons.Material.Rounded.Build"
+                                       OnClick="@(() => EnableRemediationAsync(t.Tenant))" data-testid="enable-remediation">Enable remediation</MudButton>
+                        }
+                        @if (_isOwner && t.Tenant.ConsentState == TenantConsentState.RemediationGranted)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Default" Class="px-0" StartIcon="@Icons.Material.Rounded.BuildCircle"
+                                       OnClick="@(() => DisableRemediationAsync(t.Tenant))" data-testid="disable-remediation">Turn off remediation</MudButton>
+                        }
                     </MudStack>
                 </MudPaper>
             </MudItem>
@@ -178,12 +191,36 @@ else
 
     private IReadOnlyDictionary<(Guid TenantId, string Engine), ScanRun> _scans = new Dictionary<(Guid, string), ScanRun>();
     private bool _isOperator;
+    private bool _isOwner;
+
+    private async Task EnableRemediationAsync(Tenant tenant)
+    {
+        var result = await Onboarding.StartRemediationAsync(tenant.Id);
+        if (result.Request is { } request)
+            Nav.NavigateTo($"tenants/connect/{request.Id}{(result.Reused ? "?reused=true" : "")}");
+        else
+            Snackbar.Add(result.Error ?? "Couldn't create a remediation consent link.", MudBlazor.Severity.Error);
+    }
+
+    private async Task DisableRemediationAsync(Tenant tenant)
+    {
+        var confirmed = await Dialogs.ShowMessageBox($"Turn off remediation for {tenant.DisplayName}?",
+            "SecurePulse stops sending device actions to this tenant, and open requests are cancelled. Ask the tenant's admin to also " +
+            "remove the remediation app in Microsoft Entra (Enterprise applications).",
+            yesText: "Turn off", cancelText: "Keep it on");
+        if (confirmed != true) return;
+        var done = await Onboarding.DisableRemediationAsync(tenant.Id);
+        Snackbar.Add(done ? $"Remediation turned off for {tenant.DisplayName}." : "Remediation was already off.", MudBlazor.Severity.Info);
+        _portfolio = await Posture.GetPortfolioAsync();
+    }
     private PeriodicTimer? _timer;
     private readonly CancellationTokenSource _cts = new();
 
     protected override async Task OnInitializedAsync()
     {
-        _isOperator = (await Current.GetAsync()).IsOperator;
+        var me = await Current.GetAsync();
+        _isOperator = me.IsOperator;
+        _isOwner = me.IsOwner;
         _portfolio = await Posture.GetPortfolioAsync();
         _pending = await Onboarding.GetOpenAsync();
         _scans = await Scans.GetLatestAsync();

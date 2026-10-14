@@ -83,6 +83,17 @@ public interface IOnboardingRepository
     /// </summary>
     Task<Tenant> CompleteAsync(Guid id, Tenant tenant, IReadOnlyList<string> grantedPermissions, DateTimeOffset at, CancellationToken ct = default);
 
+    /// <summary>
+    /// Completes a remediation request: the connected tenant with the request's Entra tenant ID gets
+    /// remediation access with <paramref name="remediationCredentialReference"/>. Returns the tenant,
+    /// or null if no connected tenant matches (the request is then marked failed).
+    /// </summary>
+    Task<Tenant?> CompleteRemediationAsync(Guid id, string remediationCredentialReference, IReadOnlyList<string> grantedPermissions,
+        DateTimeOffset at, CancellationToken ct = default);
+
+    /// <summary>Turns remediation off for a tenant: back to read-only, remediation credential cleared. False if it wasn't on.</summary>
+    Task<bool> DisableRemediationAsync(Guid tenantId, CancellationToken ct = default);
+
     Task CancelAsync(Guid id, CancellationToken ct = default);
 }
 
@@ -118,6 +129,53 @@ public interface IAuditLog
 
     /// <summary>Newest first.</summary>
     Task<IReadOnlyList<AuditEvent>> QueryAsync(AuditQuery query, CancellationToken ct = default);
+}
+
+/// <summary>
+/// The remote action queue. State changes are conditional updates, so two people deciding at once,
+/// or two Workers sending at once, can't both succeed.
+/// </summary>
+public interface IDeviceActionRepository
+{
+    /// <summary>
+    /// Adds a pending request, unless the device already has an open one (pending, approved or
+    /// sending), which is returned with <c>Created = false</c>.
+    /// </summary>
+    Task<(DeviceActionRequest Request, bool Created)> AddAsync(DeviceActionRequest request, CancellationToken ct = default);
+
+    Task<DeviceActionRequest?> GetAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>Newest first.</summary>
+    Task<IReadOnlyList<DeviceActionRequest>> QueryAsync(DeviceActionQuery query, CancellationToken ct = default);
+
+    /// <summary>
+    /// Approves or rejects a request that is still pending and unexpired at <paramref name="at"/>.
+    /// Returns the updated request, or null if it was no longer pending (someone else decided, it was
+    /// cancelled, or it expired). Policy checks happen before this call.
+    /// </summary>
+    Task<DeviceActionRequest?> DecideAsync(Guid id, bool approve, Guid deciderId, string deciderName, PortalRole deciderRole, string? note,
+        DateTimeOffset at, CancellationToken ct = default);
+
+    /// <summary>Cancels a request that is pending or approved but not yet claimed for sending.</summary>
+    Task<DeviceActionRequest?> CancelAsync(Guid id, string cancelledBy, string? reason, DateTimeOffset at, CancellationToken ct = default);
+
+    /// <summary>Cancels every open-but-unsent request for a tenant (remediation access turned off). Returns them.</summary>
+    Task<IReadOnlyList<DeviceActionRequest>> CancelOpenForTenantAsync(Guid tenantId, string cancelledBy, string reason, DateTimeOffset at,
+        CancellationToken ct = default);
+
+    /// <summary>Moves the oldest approved request to Sending and returns it; null if none.</summary>
+    Task<DeviceActionRequest?> ClaimNextApprovedAsync(DateTimeOffset at, CancellationToken ct = default);
+
+    /// <summary>Records the outcome of a request that is Sending.</summary>
+    Task CompleteAsync(Guid id, bool succeeded, string? error, DateTimeOffset at, CancellationToken ct = default);
+
+    /// <summary>
+    /// Expires pending requests past their deadline and approved ones not sent within
+    /// <paramref name="sendWindow"/>, and fails ones stuck in Sending since before
+    /// <paramref name="sendingBefore"/>. Returns the requests changed.
+    /// </summary>
+    Task<IReadOnlyList<DeviceActionRequest>> ExpireAsync(DateTimeOffset at, TimeSpan sendWindow, DateTimeOffset sendingBefore,
+        CancellationToken ct = default);
 }
 
 /// <summary>The scan queue. Safe for several Workers: a run is claimed by exactly one of them.</summary>

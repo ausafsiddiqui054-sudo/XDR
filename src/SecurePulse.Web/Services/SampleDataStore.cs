@@ -9,8 +9,10 @@ namespace SecurePulse.Web.Services;
 /// portal can be designed and demoed before real scans exist. Replace with EF Core
 /// repositories once the Worker starts writing real scan results.
 /// </summary>
-public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDeviceRepository, IOnboardingRepository, IPortalUserRepository, IAuditLog, IScanRunRepository
+public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDeviceRepository, IOnboardingRepository, IPortalUserRepository, IAuditLog,
+    IScanRunRepository, IDeviceActionRepository
 {
+    private readonly List<DeviceActionRequest> _actions = [];
     private readonly List<ScanRun> _scanRuns = [];
     private readonly List<AuditEvent> _audit = [];
     private readonly List<PortalUser> _users = [];
@@ -98,6 +100,8 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
             Industry = industry,
             PartnerName = partner,
             ConsentState = consent,
+            // A sample thumbprint so the remediation tenant can take device action requests in demos.
+            RemediationCredentialReference = consent == TenantConsentState.RemediationGranted ? "FEDCBA9876543210FEDCBA9876543210FEDCBA98" : null,
             LastScanAt = daysSinceScan is null ? null : DateTimeOffset.UtcNow.AddDays(-daysSinceScan.Value).AddHours(-3)
         };
 
@@ -394,6 +398,8 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
         {
             if (!_onboarding.TryGetValue(id, out var e) || e.Request.Status != OnboardingStatus.Verifying)
                 throw new InvalidOperationException($"Onboarding request {id} is not verifying.");
+            if (e.Request.Kind != OnboardingKind.Assessment)
+                throw new InvalidOperationException($"Onboarding request {id} is a {e.Request.Kind} request; use CompleteRemediationAsync.");
 
             var index = _tenants.FindIndex(t => t.EntraTenantId == tenant.EntraTenantId);
             Tenant stored;
@@ -419,6 +425,48 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
                 GrantedPermissions = grantedPermissions, ProtectedState = null
             }, e.StateHash);
             return Task.FromResult(stored);
+        }
+    }
+
+    public Task<Tenant?> CompleteRemediationAsync(Guid id, string remediationCredentialReference, IReadOnlyList<string> grantedPermissions,
+        DateTimeOffset at, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            if (!_onboarding.TryGetValue(id, out var e) || e.Request.Status != OnboardingStatus.Verifying || e.Request.Kind != OnboardingKind.Remediation)
+                throw new InvalidOperationException($"Onboarding request {id} isn't a remediation request being verified.");
+
+            var index = _tenants.FindIndex(t => t.EntraTenantId == e.Request.EntraTenantId
+                && t.ConsentState is TenantConsentState.ReadOnlyGranted or TenantConsentState.RemediationGranted);
+            if (index < 0)
+            {
+                _onboarding[id] = (e.Request with
+                {
+                    Status = OnboardingStatus.Failed, ProtectedState = null,
+                    LastError = "The tenant isn't connected for assessment any more, so remediation access can't be added."
+                }, e.StateHash);
+                return Task.FromResult<Tenant?>(null);
+            }
+
+            var stored = _tenants[index] with { ConsentState = TenantConsentState.RemediationGranted, RemediationCredentialReference = remediationCredentialReference };
+            _tenants[index] = stored;
+            _onboarding[id] = (e.Request with
+            {
+                Status = OnboardingStatus.Completed, CompletedAt = at, TenantId = stored.Id, LastError = null,
+                GrantedPermissions = grantedPermissions, ProtectedState = null
+            }, e.StateHash);
+            return Task.FromResult<Tenant?>(stored);
+        }
+    }
+
+    public Task<bool> DisableRemediationAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            var index = _tenants.FindIndex(t => t.Id == tenantId && t.ConsentState == TenantConsentState.RemediationGranted);
+            if (index < 0) return Task.FromResult(false);
+            _tenants[index] = _tenants[index] with { ConsentState = TenantConsentState.ReadOnlyGranted, RemediationCredentialReference = null };
+            return Task.FromResult(true);
         }
     }
 
@@ -623,5 +671,114 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
             _findings[result.TenantId] = _findings.GetValueOrDefault(result.TenantId, [])
                 .Where(f => f.Source != result.Source).Concat(result.Findings).ToList();
         return Task.CompletedTask;
+    }
+
+    // --- Device actions (same rules as the database: conditional transitions, one open action per device) ---
+
+    public Task<(DeviceActionRequest Request, bool Created)> AddAsync(DeviceActionRequest request, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            if (_actions.FirstOrDefault(a => a.TenantId == request.TenantId && a.DeviceId == request.DeviceId && a.IsOpen) is { } open)
+                return Task.FromResult((open, false));
+            _actions.Add(request);
+            return Task.FromResult((request, true));
+        }
+    }
+
+    Task<DeviceActionRequest?> IDeviceActionRepository.GetAsync(Guid id, CancellationToken ct)
+    {
+        lock (_gate) return Task.FromResult(_actions.FirstOrDefault(a => a.Id == id));
+    }
+
+    public Task<IReadOnlyList<DeviceActionRequest>> QueryAsync(DeviceActionQuery query, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            return Task.FromResult<IReadOnlyList<DeviceActionRequest>>(_actions
+                .Where(a => (query.TenantId is null || a.TenantId == query.TenantId)
+                            && (query.DeviceId is null || a.DeviceId == query.DeviceId)
+                            && (!query.OpenOnly || a.IsOpen))
+                .OrderByDescending(a => a.RequestedAt).ThenBy(a => a.Id)
+                .Take(Math.Clamp(query.Limit, 1, 1000))
+                .ToList());
+        }
+    }
+
+    public Task<DeviceActionRequest?> DecideAsync(Guid id, bool approve, Guid deciderId, string deciderName, PortalRole deciderRole, string? note,
+        DateTimeOffset at, CancellationToken ct = default) =>
+        Transition(id, a => a.Status == DeviceActionStatus.PendingApproval && a.ExpiresAt > at, a => a with
+        {
+            Status = approve ? DeviceActionStatus.Approved : DeviceActionStatus.Rejected,
+            DecidedAt = at, DecidedByUserId = deciderId, DecidedByName = deciderName, DecidedByRole = deciderRole, DecisionNote = note
+        });
+
+    public Task<DeviceActionRequest?> CancelAsync(Guid id, string cancelledBy, string? reason, DateTimeOffset at, CancellationToken ct = default) =>
+        Transition(id, a => a.Status is DeviceActionStatus.PendingApproval or DeviceActionStatus.Approved,
+            a => a with { Status = DeviceActionStatus.Cancelled, CancelledAt = at, CancelledBy = cancelledBy, Error = reason });
+
+    public Task<IReadOnlyList<DeviceActionRequest>> CancelOpenForTenantAsync(Guid tenantId, string cancelledBy, string reason, DateTimeOffset at,
+        CancellationToken ct = default) =>
+        TransitionAll(a => a.TenantId == tenantId && a.Status is DeviceActionStatus.PendingApproval or DeviceActionStatus.Approved,
+            a => a with { Status = DeviceActionStatus.Cancelled, CancelledAt = at, CancelledBy = cancelledBy, Error = reason });
+
+    public Task<DeviceActionRequest?> ClaimNextApprovedAsync(DateTimeOffset at, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            var next = _actions.Where(a => a.Status == DeviceActionStatus.Approved).OrderBy(a => a.DecidedAt).FirstOrDefault();
+            if (next is null) return Task.FromResult<DeviceActionRequest?>(null);
+            var claimed = next with { Status = DeviceActionStatus.Sending, SentAt = at };
+            _actions[_actions.IndexOf(next)] = claimed;
+            return Task.FromResult<DeviceActionRequest?>(claimed);
+        }
+    }
+
+    public async Task CompleteAsync(Guid id, bool succeeded, string? error, DateTimeOffset at, CancellationToken ct = default) =>
+        await Transition(id, a => a.Status == DeviceActionStatus.Sending,
+            a => a with { Status = succeeded ? DeviceActionStatus.Sent : DeviceActionStatus.Failed, CompletedAt = at, Error = error });
+
+    public async Task<IReadOnlyList<DeviceActionRequest>> ExpireAsync(DateTimeOffset at, TimeSpan sendWindow, DateTimeOffset sendingBefore,
+        CancellationToken ct = default)
+    {
+        var expired = await TransitionAll(
+            a => (a.Status == DeviceActionStatus.PendingApproval && a.ExpiresAt <= at)
+                 || (a.Status == DeviceActionStatus.Approved && a.DecidedAt < at - sendWindow),
+            a => a with
+            {
+                Status = DeviceActionStatus.Expired, CompletedAt = at,
+                Error = a.Status == DeviceActionStatus.PendingApproval
+                    ? SecurePulse.Data.EfDeviceActionRepository.ExpiredPendingMessage
+                    : SecurePulse.Data.EfDeviceActionRepository.ExpiredApprovedMessage
+            });
+        var stuck = await TransitionAll(a => a.Status == DeviceActionStatus.Sending && a.SentAt < sendingBefore,
+            a => a with { Status = DeviceActionStatus.Failed, CompletedAt = at, Error = SecurePulse.Data.EfDeviceActionRepository.StuckSendingMessage });
+        return [.. expired, .. stuck];
+    }
+
+    private Task<DeviceActionRequest?> Transition(Guid id, Func<DeviceActionRequest, bool> when, Func<DeviceActionRequest, DeviceActionRequest> change)
+    {
+        lock (_gate)
+        {
+            var index = _actions.FindIndex(a => a.Id == id && when(a));
+            if (index < 0) return Task.FromResult<DeviceActionRequest?>(null);
+            _actions[index] = change(_actions[index]);
+            return Task.FromResult<DeviceActionRequest?>(_actions[index]);
+        }
+    }
+
+    private Task<IReadOnlyList<DeviceActionRequest>> TransitionAll(Func<DeviceActionRequest, bool> when, Func<DeviceActionRequest, DeviceActionRequest> change)
+    {
+        lock (_gate)
+        {
+            var changed = new List<DeviceActionRequest>();
+            for (var i = 0; i < _actions.Count; i++)
+            {
+                if (!when(_actions[i])) continue;
+                _actions[i] = change(_actions[i]);
+                changed.Add(_actions[i]);
+            }
+            return Task.FromResult<IReadOnlyList<DeviceActionRequest>>(changed);
+        }
     }
 }

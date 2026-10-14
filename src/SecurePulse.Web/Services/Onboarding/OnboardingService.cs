@@ -38,6 +38,7 @@ public enum ConsentCallbackOutcome
 public sealed partial class OnboardingService(
     IOnboardingRepository requests,
     ITenantRepository tenants,
+    IDeviceActionRepository deviceActions,
     IEntraTenantResolver resolver,
     IDataProtectionProvider protection,
     OnboardingOptions options,
@@ -54,6 +55,9 @@ public sealed partial class OnboardingService(
     private IDataProtector Protector => protection.CreateProtector("SecurePulse.Onboarding.ConsentState.v1");
 
     public bool IsConfigured => Guid.TryParse(options.AppClientId, out var id) && id != Guid.Empty;
+
+    public bool IsRemediationConfigured => Guid.TryParse(options.RemediationAppClientId, out var id) && id != Guid.Empty
+                                           && !string.Equals(options.RemediationAppClientId, options.AppClientId, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The connected tenant this request would update (re-consent), if any.</summary>
     public async Task<Tenant?> GetConnectedTenantAsync(OnboardingRequest request, CancellationToken ct = default) =>
@@ -81,12 +85,92 @@ public sealed partial class OnboardingService(
             targetType: "OnboardingRequest", targetId: id.ToString(), details: Details(request), actor: actor);
     }
 
-    private static Dictionary<string, string> Details(OnboardingRequest r) => new()
+    private static Dictionary<string, string> Details(OnboardingRequest r)
     {
-        ["domain"] = r.PrimaryDomain,
-        ["entraTenantId"] = r.EntraTenantId.ToString(),
-        ["clientName"] = r.DisplayName
-    };
+        var details = new Dictionary<string, string>
+        {
+            ["domain"] = r.PrimaryDomain,
+            ["entraTenantId"] = r.EntraTenantId.ToString(),
+            ["clientName"] = r.DisplayName
+        };
+        if (r.Kind == OnboardingKind.Remediation) details["kind"] = "remediation";
+        return details;
+    }
+
+    private async Task<UserContext> RequireOwnerAsync()
+    {
+        var user = await users.GetAsync();
+        return user.IsOwner ? user : throw new UnauthorizedAccessException("Only Owners can change remediation access.");
+    }
+
+    /// <summary>
+    /// Starts write consent to the separate remediation app for a connected tenant (Owners only).
+    /// Like assessment consent, the callback alone changes nothing: the Worker verifies the grant.
+    /// </summary>
+    public async Task<StartOnboardingResult> StartRemediationAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        var actor = await RequireOwnerAsync();
+        if (!IsRemediationConfigured)
+            return new(null, "Onboarding:RemediationAppClientId isn't set to the remediation app's client ID (a different app from the assessment one).");
+        if (await tenants.GetAsync(tenantId, ct) is not { } tenant)
+            return new(null, "Tenant not found.");
+        if (tenant.ConsentState != TenantConsentState.ReadOnlyGranted)
+            return new(null, tenant.ConsentState == TenantConsentState.RemediationGranted
+                ? $"{tenant.DisplayName} already has remediation access."
+                : $"{tenant.DisplayName} has to be connected for assessment first.");
+
+        var now = time.GetUtcNow();
+        var inProgress = (await requests.GetOpenAsync(ct)).FirstOrDefault(r => r.Kind == OnboardingKind.Remediation
+            && r.EntraTenantId == tenant.EntraTenantId && r.Status is OnboardingStatus.AwaitingConsent or OnboardingStatus.Verifying && !r.IsExpired(now));
+        if (inProgress is not null)
+            return new(inProgress, null, Reused: true);
+
+        var state = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
+        var request = new OnboardingRequest
+        {
+            Id = Guid.NewGuid(),
+            Kind = OnboardingKind.Remediation,
+            DisplayName = tenant.DisplayName,
+            PrimaryDomain = tenant.PrimaryDomain,
+            PartnerName = tenant.PartnerName,
+            Industry = tenant.Industry,
+            EntraTenantId = tenant.EntraTenantId,
+            Status = OnboardingStatus.AwaitingConsent,
+            CreatedAt = now,
+            ExpiresAt = now + options.LinkLifetime,
+            ProtectedState = Protector.Protect(state),
+            StartedBy = actor.Name
+        };
+        await requests.AddAsync(request, HashState(state), ct);
+        logger.LogInformation("Remediation consent {RequestId} started for {Tenant} by {User}", request.Id, tenant.DisplayName, actor.Name);
+        await audit.RecordAsync(AuditActions.LinkCreated, AuditOutcome.Success, $"Created a remediation consent link for {tenant.DisplayName}",
+            tenant.Id, "OnboardingRequest", request.Id.ToString(),
+            new Dictionary<string, string>(Details(request)) { ["expiresAt"] = request.ExpiresAt.ToString("O") }, actor);
+        return new(request, null);
+    }
+
+    /// <summary>
+    /// Turns remediation off (Owners only): the tenant goes back to read-only, the remediation
+    /// credential reference is cleared and open device actions are cancelled. The client's admin
+    /// should also remove the remediation app in Entra; SecurePulse stops using it either way.
+    /// </summary>
+    public async Task<bool> DisableRemediationAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        var actor = await RequireOwnerAsync();
+        if (await tenants.GetAsync(tenantId, ct) is not { } tenant || !await requests.DisableRemediationAsync(tenantId, ct))
+            return false;
+
+        var cancelled = await deviceActions.CancelOpenForTenantAsync(tenantId, actor.Name, "Remediation access was turned off.", time.GetUtcNow(), ct);
+        await audit.RecordAsync(AuditActions.RemediationDisabled, AuditOutcome.Success, $"Turned off remediation access for {tenant.DisplayName}",
+            tenant.Id, "Tenant", tenant.Id.ToString(), new Dictionary<string, string> { ["cancelledActions"] = cancelled.Count.ToString() }, actor);
+        foreach (var a in cancelled)
+        {
+            await audit.RecordAsync(AuditActions.DeviceActionCancelled, AuditOutcome.Success,
+                $"{a.Action} of {a.DeviceName} cancelled: remediation access was turned off", tenant.Id, "DeviceAction", a.Id.ToString(),
+                new Dictionary<string, string> { ["action"] = a.Action.ToString(), ["deviceId"] = a.DeviceId }, actor);
+        }
+        return true;
+    }
 
     private async Task<UserContext> RequireOperatorAsync()
     {
@@ -129,8 +213,8 @@ public sealed partial class OnboardingService(
         // completion updates that tenant instead of creating another.
 
         var now = time.GetUtcNow();
-        var inProgress = (await requests.GetOpenAsync(ct)).FirstOrDefault(r =>
-            r.EntraTenantId == tid && r.Status is OnboardingStatus.AwaitingConsent or OnboardingStatus.Verifying && !r.IsExpired(now));
+        var inProgress = (await requests.GetOpenAsync(ct)).FirstOrDefault(r => r.Kind == OnboardingKind.Assessment
+            && r.EntraTenantId == tid && r.Status is OnboardingStatus.AwaitingConsent or OnboardingStatus.Verifying && !r.IsExpired(now));
         if (inProgress is not null)
             return new(inProgress, null, Reused: true);
 
@@ -176,7 +260,7 @@ public sealed partial class OnboardingService(
         var url = $"{options.AuthorityHost.TrimEnd('/')}/{request.EntraTenantId}/v2.0/adminconsent";
         return QueryHelpers.AddQueryString(url, new Dictionary<string, string?>
         {
-            ["client_id"] = options.AppClientId,
+            ["client_id"] = request.Kind == OnboardingKind.Remediation ? options.RemediationAppClientId : options.AppClientId,
             ["scope"] = $"{options.GraphBaseUrl.TrimEnd('/')}/.default",
             ["redirect_uri"] = GetRedirectUri(portalBaseUri),
             ["state"] = state

@@ -1,5 +1,15 @@
 namespace SecurePulse.Core.Models;
 
+/// <summary>What a consent link asks for.</summary>
+public enum OnboardingKind
+{
+    /// <summary>Read-only assessment consent to the main app; connects the tenant.</summary>
+    Assessment,
+
+    /// <summary>Write consent to the separate remediation app, for an already connected tenant.</summary>
+    Remediation
+}
+
 public enum OnboardingStatus
 {
     /// <summary>Link created; waiting for the client's admin to grant consent.</summary>
@@ -20,6 +30,7 @@ public enum OnboardingStatus
 public sealed record OnboardingRequest
 {
     public required Guid Id { get; init; }
+    public OnboardingKind Kind { get; init; } = OnboardingKind.Assessment;
     public required string DisplayName { get; init; }
     public required string PrimaryDomain { get; init; }
     public string? PartnerName { get; init; }

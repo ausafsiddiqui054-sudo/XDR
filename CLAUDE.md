@@ -96,11 +96,21 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
 - Fonts are embedded (`ReportFonts`: Lato + Noto Sans Arabic); QuestPDF 2026.9+ ignores system fonts.
   Missing glyphs print placeholders (`ThrowOnMissingTextGlyphs = false`) instead of failing a report.
 
+## Device action invariants
+- Writes go only through the separate remediation app (`Remediation:*`, `IRemediationTokenProvider`),
+  which may hold exactly `RemediationPermissions.Required`. The assessment app never gets a write
+  permission, and remediation consent never connects a tenant (`CompleteRemediationAsync`).
+- `DeviceActionPolicy` is the approval policy: never the requester; retire/wipe need an Owner. The
+  portal enforces it in `DeviceActionRequestService`, and the Worker re-checks it, plus remediation
+  access and the token's roles, before every send.
+- Approval and sending are fail-closed: the audit entry is written first (`RecordOrThrowAsync` in
+  the portal, `IAuditLog` before the Graph call in the Worker) and nothing happens if that fails.
+- State changes are conditional updates on the current status; one open action per device
+  (`IX_device_actions_open`); claims use `FOR UPDATE SKIP LOCKED`. Writes are never retried.
+
 ## Next steps (in order)
-1. Device remote actions (sync/restart/retire/wipe): approval queue + audit log, then a
-   separate write-consent app and Graph client. The UI dialog is built and disabled until then.
-2. Defender health per device via the Defender for Endpoint API (not in Graph v1.0 managedDevice).
-3. Persist the data-protection key ring (shared store) before running more than one portal
+1. Defender health per device via the Defender for Endpoint API (not in Graph v1.0 managedDevice).
+2. Persist the data-protection key ring (shared store) before running more than one portal
    instance: it protects consent-link state and the sign-in cookie.
-4. Audit retention: a maintenance role allowed to purge `audit_events` older than a configured
+3. Audit retention: a maintenance role allowed to purge `audit_events` older than a configured
    period (the trigger blocks the app). Optionally ship events to a SIEM (Sentinel) as well.

@@ -15,6 +15,7 @@ internal static class EntityMapping
         Industry = e.Industry,
         CredentialReference = e.CredentialReference,
         ConsentState = e.ConsentState,
+        RemediationCredentialReference = e.RemediationCredentialReference,
         LastScanAt = e.LastScanAt
     };
 
@@ -28,6 +29,7 @@ internal static class EntityMapping
         Industry = m.Industry,
         CredentialReference = m.CredentialReference,
         ConsentState = m.ConsentState,
+        RemediationCredentialReference = m.RemediationCredentialReference,
         LastScanAt = m.LastScanAt
     };
 
@@ -128,6 +130,7 @@ internal static class EntityMapping
     public static OnboardingRequest ToModel(this OnboardingRequestEntity e) => new()
     {
         Id = e.Id,
+        Kind = e.Kind,
         DisplayName = e.DisplayName,
         PrimaryDomain = e.PrimaryDomain,
         PartnerName = e.PartnerName,
@@ -189,5 +192,55 @@ internal static class EntityMapping
         RequestedBy = e.RequestedBy,
         FindingCount = e.FindingCount,
         Error = e.Error
+    };
+
+    public static DeviceActionRequest ToModel(this DeviceActionEntity e) => new()
+    {
+        Id = e.Id,
+        TenantId = e.TenantId,
+        DeviceId = e.DeviceId,
+        DeviceName = e.DeviceName,
+        Action = e.Action,
+        Reason = e.Reason,
+        Status = e.Status,
+        RequestedAt = e.RequestedAt,
+        RequestedByUserId = e.RequestedByUserId,
+        RequestedByName = e.RequestedByName,
+        ExpiresAt = e.ExpiresAt,
+        DecidedAt = e.DecidedAt,
+        DecidedByUserId = e.DecidedByUserId,
+        DecidedByName = e.DecidedByName,
+        DecidedByRole = e.DecidedByRole,
+        DecisionNote = e.DecisionNote,
+        CancelledAt = e.CancelledAt,
+        CancelledBy = e.CancelledBy,
+        SentAt = e.SentAt,
+        CompletedAt = e.CompletedAt,
+        Error = e.Error
+    };
+
+    public static DeviceActionEntity ToEntity(this DeviceActionRequest m) => new()
+    {
+        Id = m.Id,
+        TenantId = m.TenantId,
+        DeviceId = m.DeviceId,
+        DeviceName = m.DeviceName,
+        Action = m.Action,
+        Reason = m.Reason,
+        Status = m.Status,
+        RequestedAt = m.RequestedAt,
+        RequestedByUserId = m.RequestedByUserId,
+        RequestedByName = m.RequestedByName,
+        ExpiresAt = m.ExpiresAt,
+        DecidedAt = m.DecidedAt,
+        DecidedByUserId = m.DecidedByUserId,
+        DecidedByName = m.DecidedByName,
+        DecidedByRole = m.DecidedByRole,
+        DecisionNote = m.DecisionNote,
+        CancelledAt = m.CancelledAt,
+        CancelledBy = m.CancelledBy,
+        SentAt = m.SentAt,
+        CompletedAt = m.CompletedAt,
+        Error = m.Error
     };
 }
