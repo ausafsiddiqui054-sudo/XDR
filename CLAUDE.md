@@ -69,16 +69,23 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
 - Portal events record after the action and log Critical if the write fails. Remote/write
   actions must be fail-closed: write the audit entry first and abort if it fails.
 
+## Scan invariants
+- The portal only queues scans (`IScanRunRepository.EnqueueAsync`, operators only, audited);
+  the Worker claims and runs them. Never run an engine from the portal.
+- One queued-or-running run per tenant and engine (unique index `IX_scan_runs_active`); claims
+  use `FOR UPDATE SKIP LOCKED`, so keep both if you change the queue.
+- Before each scan the Worker checks the token's `roles` (same rules as onboarding). Adding a
+  permission to `AssessmentPermissions.Required` means existing tenants must re-consent.
+- A failed scan never replaces stored findings; only `SaveScanAsync` on success does.
+
 ## Next steps (in order)
-1. Worker: scheduled engine scans calling `IScanEngine` and `IFindingRepository.SaveScanAsync`
-   (add Quartz.NET when per-tenant schedules are needed; device sync uses a PeriodicTimer).
-   Add the Maester permissions to `AssessmentPermissions.Required` when scans go live.
-2. ScubaGear adapter (check current OS/PowerShell requirements; may need a Windows worker).
-3. Branded PDF report (QuestPDF; check its license tier).
-4. Device remote actions (sync/restart/retire/wipe): approval queue + audit log, then a
+1. ScubaGear adapter as another `IScanEngine` (add it to `ScanEngines.All`; check current
+   OS/PowerShell requirements, it may need a Windows worker).
+2. Branded PDF report (QuestPDF; check its license tier).
+3. Device remote actions (sync/restart/retire/wipe): approval queue + audit log, then a
    separate write-consent app and Graph client. The UI dialog is built and disabled until then.
-5. Defender health per device via the Defender for Endpoint API (not in Graph v1.0 managedDevice).
-6. Persist the data-protection key ring (shared store) before running more than one portal
+4. Defender health per device via the Defender for Endpoint API (not in Graph v1.0 managedDevice).
+5. Persist the data-protection key ring (shared store) before running more than one portal
    instance: it protects consent-link state and the sign-in cookie.
-7. Audit retention: a maintenance role allowed to purge `audit_events` older than a configured
+6. Audit retention: a maintenance role allowed to purge `audit_events` older than a configured
    period (the trigger blocks the app). Optionally ship events to a SIEM (Sentinel) as well.

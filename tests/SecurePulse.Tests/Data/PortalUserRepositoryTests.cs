@@ -63,6 +63,23 @@ public class PortalUserRepositoryTests(PostgresDatabase db) : IClassFixture<Post
     }
 
     [PostgresFact]
+    public async Task RacingFirstSignInsFromDifferentAccountsBindOnlyOne()
+    {
+        var tid = Guid.NewGuid();
+        var invite = await InviteAsync(PortalRole.MspAdmin, tid, "reused@msp.example");
+        var accounts = Enumerable.Range(0, 6).Select(_ => Guid.NewGuid()).ToList();
+
+        var results = await Task.WhenAll(accounts.Select(oid => Task.Run(() => Users.SignInAsync(tid, oid, "reused@msp.example", null, DateTimeOffset.UtcNow))));
+
+        var winner = Assert.Single(results, r => r is not null);
+        Assert.Equal(invite.Id, winner!.Id);
+        // The invitation stays bound to the account that won; later sign-ins by the others are refused.
+        Assert.Equal(winner.ObjectId, (await Users.GetAsync(invite.Id))!.ObjectId);
+        foreach (var other in accounts.Where(a => a != winner.ObjectId))
+            Assert.Null(await Users.SignInAsync(tid, other, "reused@msp.example", null, DateTimeOffset.UtcNow));
+    }
+
+    [PostgresFact]
     public async Task DuplicateInvitationThrows()
     {
         var tid = Guid.NewGuid();

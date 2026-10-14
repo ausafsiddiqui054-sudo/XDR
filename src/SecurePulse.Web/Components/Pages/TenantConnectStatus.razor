@@ -43,6 +43,13 @@ else
         <MudChip T="string" Variant="Variant.Outlined" Color="@SecurePulseTheme.ColorOf(r, now)">@SecurePulseTheme.Label(r, now)</MudChip>
     </MudStack>
 
+    @if (_reconsentFor is { } existingTenant && r.Status is OnboardingStatus.AwaitingConsent or OnboardingStatus.Verifying)
+    {
+        <MudAlert Severity="MudBlazor.Severity.Info" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px">
+            Re-consent: @existingTenant.DisplayName is already connected. Approving again updates the permissions SecurePulse has there;
+            nothing else about the tenant changes.
+        </MudAlert>
+    }
     @if (Reused)
     {
         <MudAlert Severity="MudBlazor.Severity.Info" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px">
@@ -216,9 +223,12 @@ else
         if (firstRender) _ = PollAsync();
     }
 
+    private Tenant? _reconsentFor;
+
     private async Task LoadAsync()
     {
         _request = await Onboarding.GetAsync(Id);
+        _reconsentFor = _request is null ? null : await Onboarding.GetConnectedTenantAsync(_request);
         _sync = _request?.TenantId is { } tenantId ? await Devices.GetSyncStatusAsync(tenantId) : null;
     }
 

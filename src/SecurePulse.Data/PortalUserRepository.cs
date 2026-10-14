@@ -35,28 +35,34 @@ public sealed class EfPortalUserRepository(IDbContextFactory<SecurePulseDbContex
         for (var attempt = 0; attempt < 2; attempt++)
         {
             await using var db = await factory.CreateDbContextAsync(ct);
-
-            var user = await db.PortalUsers.FirstOrDefaultAsync(u => u.EntraTenantId == entraTenantId && u.ObjectId == objectId, ct);
-            if (user is null && Normalize(userPrincipalName) is { } upn)
-            {
-                // First sign-in: claim the invitation issued for this sign-in name in this tenant.
-                user = await db.PortalUsers.FirstOrDefaultAsync(
-                    u => u.EntraTenantId == entraTenantId && u.UserPrincipalName == upn && u.ObjectId == null, ct);
-                if (user is not null) user.ObjectId = objectId;
-            }
-            if (user is null) return null;
-
-            user.LastSignInAt = at;
-            if (!string.IsNullOrWhiteSpace(displayName)) user.DisplayName = displayName.Trim();
-
             try
             {
+                var user = await db.PortalUsers.FirstOrDefaultAsync(u => u.EntraTenantId == entraTenantId && u.ObjectId == objectId, ct);
+                if (user is null && Normalize(userPrincipalName) is { } upn)
+                {
+                    // First sign-in: claim the invitation issued for this sign-in name in this tenant. The
+                    // conditional update binds it at most once, so a racing sign-in can't rebind it.
+                    var claimed = await db.PortalUsers
+                        .Where(u => u.EntraTenantId == entraTenantId && u.UserPrincipalName == upn && u.ObjectId == null)
+                        .ExecuteUpdateAsync(s => s.SetProperty(u => u.ObjectId, objectId), ct);
+                    // Nothing to claim: another sign-in may have just bound it (perhaps to us), so look again.
+                    if (claimed == 0) continue;
+                    user = await db.PortalUsers.FirstOrDefaultAsync(u => u.EntraTenantId == entraTenantId && u.ObjectId == objectId, ct);
+                }
+                if (user is null) return null;
+
+                user.LastSignInAt = at;
+                if (!string.IsNullOrWhiteSpace(displayName)) user.DisplayName = displayName.Trim();
                 await db.SaveChangesAsync(ct);
                 return user.ToModel();
             }
             catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
             {
-                // Two sign-ins raced to bind the same identity; the other won. Read the bound row.
+                // This identity is already bound to another row; read that one.
+            }
+            catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+            {
+                // Same, raised by the conditional update.
             }
         }
         return await FindByObjectIdAsync(entraTenantId, objectId, ct);

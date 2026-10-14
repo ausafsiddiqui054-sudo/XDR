@@ -174,16 +174,17 @@ public class OnboardingServiceTests
     }
 
     [Fact]
-    public async Task Start_RefusesATenantThatIsAlreadyConnected()
+    public async Task Start_AllowsReconsentForAConnectedTenant()
     {
+        // E.g. after the app gained permissions: the admin approves again and the tenant is updated.
         var store = new SampleDataStore();
         var connected = (await store.GetAllAsync()).First(t => t.ConsentState == TenantConsentState.ReadOnlyGranted);
         var h = new HarnessWith(store, new Resolver(_ => connected.EntraTenantId));
 
         var result = await h.Service.StartAsync(Form());
 
-        Assert.Null(result.Request);
-        Assert.Contains($"already connected as {connected.DisplayName}", result.Error);
+        Assert.Null(result.Error);
+        Assert.Equal(connected.Id, (await h.Service.GetConnectedTenantAsync(result.Request!))?.Id);
     }
 
     [Fact]

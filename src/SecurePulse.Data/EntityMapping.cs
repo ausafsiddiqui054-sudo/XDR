@@ -175,4 +175,19 @@ internal static class EntityMapping
         Details = e.Details,
         IpAddress = e.IpAddress
     };
+
+    public static ScanRun ToModel(this ScanRunEntity e) => new()
+    {
+        Id = e.Id,
+        TenantId = e.TenantId,
+        Engine = e.Engine,
+        Trigger = e.Trigger,
+        Status = e.Status,
+        QueuedAt = e.QueuedAt,
+        StartedAt = e.StartedAt,
+        CompletedAt = e.CompletedAt,
+        RequestedBy = e.RequestedBy,
+        FindingCount = e.FindingCount,
+        Error = e.Error
+    };
 }

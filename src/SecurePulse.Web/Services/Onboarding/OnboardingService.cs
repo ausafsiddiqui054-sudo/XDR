@@ -55,6 +55,11 @@ public sealed partial class OnboardingService(
 
     public bool IsConfigured => Guid.TryParse(options.AppClientId, out var id) && id != Guid.Empty;
 
+    /// <summary>The connected tenant this request would update (re-consent), if any.</summary>
+    public async Task<Tenant?> GetConnectedTenantAsync(OnboardingRequest request, CancellationToken ct = default) =>
+        (await tenants.GetAllAsync(ct)).FirstOrDefault(t => t.EntraTenantId == request.EntraTenantId
+            && t.ConsentState is TenantConsentState.ReadOnlyGranted or TenantConsentState.RemediationGranted);
+
     // Onboarding is for operators only. Pages enforce that with a policy; these checks keep
     // the service safe if it's ever called from somewhere else.
 
@@ -120,9 +125,8 @@ public sealed partial class OnboardingService(
         if (entraTenantId is not { } tid)
             return new(null, $"{domain} isn't a Microsoft 365 / Entra domain. Check the spelling, or use the tenant's .onmicrosoft.com domain.");
 
-        var existing = (await tenants.GetAllAsync(ct)).FirstOrDefault(t => t.EntraTenantId == tid);
-        if (existing is { ConsentState: TenantConsentState.ReadOnlyGranted or TenantConsentState.RemediationGranted })
-            return new(null, $"This Microsoft 365 tenant is already connected as {existing.DisplayName}.");
+        // An already-connected tenant may consent again (e.g. after the app gained permissions);
+        // completion updates that tenant instead of creating another.
 
         var now = time.GetUtcNow();
         var inProgress = (await requests.GetOpenAsync(ct)).FirstOrDefault(r =>

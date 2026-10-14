@@ -14,6 +14,7 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
     public DbSet<OnboardingRequestEntity> OnboardingRequests => Set<OnboardingRequestEntity>();
     public DbSet<PortalUserEntity> PortalUsers => Set<PortalUserEntity>();
     public DbSet<AuditEventEntity> AuditEvents => Set<AuditEventEntity>();
+    public DbSet<ScanRunEntity> ScanRuns => Set<ScanRunEntity>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder builder)
     {
@@ -123,6 +124,22 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
             e.HasIndex(x => new { x.Category, x.OccurredAt });
             e.HasIndex(x => new { x.TenantId, x.OccurredAt });
             // No foreign keys: the record must survive deleted tenants and users.
+        });
+    
+        b.Entity<ScanRunEntity>(e =>
+        {
+            e.ToTable("scan_runs");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Engine).HasMaxLength(64);
+            e.Property(x => x.RequestedBy).HasMaxLength(512);
+            e.Property(x => x.Error).HasMaxLength(2000);
+            // At most one queued-or-running run per tenant and engine; enqueue relies on this.
+            e.HasIndex(x => new { x.TenantId, x.Engine }).IsUnique()
+                .HasFilter("\"Status\" IN ('Queued', 'Running')")
+                .HasDatabaseName("IX_scan_runs_active");
+            e.HasIndex(x => new { x.Status, x.QueuedAt });
+            e.HasIndex(x => new { x.TenantId, x.Engine, x.QueuedAt });
+            e.HasOne<TenantEntity>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

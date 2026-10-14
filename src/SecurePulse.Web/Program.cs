@@ -34,12 +34,14 @@ else
     builder.Services.AddSingleton<IOnboardingRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IPortalUserRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IAuditLog>(sp => sp.GetRequiredService<SampleDataStore>());
+    builder.Services.AddSingleton<IScanRunRepository>(sp => sp.GetRequiredService<SampleDataStore>());
 }
 builder.Services.AddSingleton(new PortalMode(useDatabase));
 builder.Services.AddScoped<PostureService>();
 builder.Services.AddScoped<EndpointService>();
 builder.Services.AddScoped<PortalUserService>();
 builder.Services.AddScoped<AuditTrail>();
+builder.Services.AddScoped<ScanRequestService>();
 
 // Tenant onboarding. Consent-link state is encrypted with data protection; in production,
 // persist the key ring somewhere shared (PersistKeysTo...) so links survive restarts and scale-out.

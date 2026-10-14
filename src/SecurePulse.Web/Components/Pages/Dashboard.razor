@@ -3,6 +3,8 @@
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject IUserContextAccessor Current
+@inject ScanRequestService Scans
+@inject SecurePulse.Web.Services.Onboarding.PortalMode Mode
 
 <PageTitle>Overview · SecurePulse</PageTitle>
 
@@ -15,7 +17,7 @@
     </div>
     <AuthorizeView Policy="@Policies.Operator">
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Refresh"
-                   OnClick="RunScan">Run scan</MudButton>
+                   OnClick="RunScan" Disabled="_queueing">Run scan</MudButton>
     </AuthorizeView>
 </MudStack>
 
@@ -130,8 +132,31 @@ else
 
     private void OpenTenant(TenantPosture t) => Nav.NavigateTo($"findings?tenant={t.Tenant.Id}");
 
-    private void RunScan() =>
-        Snackbar.Add("Scanning runs from the Worker service, which arrives in the next build step.", MudBlazor.Severity.Info);
+    private bool _queueing;
+
+    private async Task RunScan()
+    {
+        if (_queueing) return;
+        _queueing = true;
+        try
+        {
+            var ready = _portfolio?.Tenants.Count(t => ScanRequestService.IsOnboarded(t.Tenant)) ?? 0;
+            var queued = await Scans.RequestAllAsync();
+            var (message, severity) = (queued, ready) switch
+            {
+                (_, 0) => ("No tenants are ready to scan yet: each needs consent and a certificate.", MudBlazor.Severity.Warning),
+                (0, _) => ("Scans are already queued or running for every tenant.", MudBlazor.Severity.Info),
+                _ => ($"Queued {queued} scan{(queued == 1 ? "" : "s")}. Results appear as each one finishes.", MudBlazor.Severity.Success)
+            };
+            if (queued > 0 && !Mode.UsesDatabase)
+                message += " (Sample data mode: no Worker runs them.)";
+            Snackbar.Add(message, severity);
+        }
+        finally
+        {
+            _queueing = false;
+        }
+    }
 
     private static string GradeOf(int score) => score switch { >= 90 => "A", >= 80 => "B", >= 70 => "C", >= 60 => "D", _ => "F" };
 

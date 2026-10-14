@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using SecurePulse.Core.Abstractions;
 using SecurePulse.Core.Models;
@@ -20,6 +22,12 @@ public sealed class MaesterOptions
     public string WorkRoot { get; set; } = Path.Combine(Path.GetTempPath(), "securepulse-scans");
 
     public TimeSpan Timeout { get; set; } = TimeSpan.FromMinutes(20);
+
+    /// <summary>
+    /// Exact Maester module version to load (e.g. "2.3.0"). Empty loads the newest installed one;
+    /// pin it so a module update can't change scan results without you knowing.
+    /// </summary>
+    public string ModuleVersion { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -40,13 +48,15 @@ public sealed partial class MaesterEngine(MaesterOptions options) : IScanEngine
             [Parameter(Mandatory)][string]$ClientId,
             [Parameter(Mandatory)][string]$Thumbprint,
             [Parameter(Mandatory)][string]$TestsPath,
-            [Parameter(Mandatory)][string]$OutputJson
+            [Parameter(Mandatory)][string]$OutputJson,
+            [string]$ModuleVersion = ''
         )
         $ErrorActionPreference = 'Stop'
-        Import-Module Maester
+        if ($ModuleVersion) { Import-Module Maester -RequiredVersion $ModuleVersion } else { Import-Module Maester }
         Connect-MgGraph -TenantId $TenantId -ClientId $ClientId -CertificateThumbprint $Thumbprint -NoWelcome
         try {
-            Invoke-Maester -Path $TestsPath -OutputJsonFile $OutputJson -NonInteractive -SkipVersionCheck | Out-Null
+            # Parameters verified against Maester 2.3.0. Telemetry off: scans cover client tenants.
+            Invoke-Maester -Path $TestsPath -OutputJsonFile $OutputJson -NonInteractive -SkipVersionCheck -DisableTelemetry -NoLogo | Out-Null
         }
         finally {
             Disconnect-MgGraph | Out-Null
@@ -63,9 +73,23 @@ public sealed partial class MaesterEngine(MaesterOptions options) : IScanEngine
         var thumbprint = tenant.CredentialReference ?? string.Empty;
         if (!ThumbprintPattern().IsMatch(thumbprint))
             return Fail(tenant, started, "Tenant credential reference is not a valid certificate thumbprint.");
+        if (tenant.EntraTenantId == Guid.Empty)
+            return Fail(tenant, started, "Tenant has no Entra tenant ID.");
+        if (!Guid.TryParse(options.AppClientId, out var clientId) || clientId == Guid.Empty)
+            return Fail(tenant, started, "Maester:AppClientId is not configured as a valid GUID.");
+        if (!string.IsNullOrEmpty(options.ModuleVersion) && !Version.TryParse(options.ModuleVersion, out _))
+            return Fail(tenant, started, "Maester:ModuleVersion is not a valid version number.");
+        var testsPath = Path.GetFullPath(options.TestsPath);
+        if (!Directory.Exists(testsPath))
+            return Fail(tenant, started, $"Maester tests folder not found at {testsPath}. Run Install-MaesterTests there first.");
 
-        var workDir = Path.Combine(options.WorkRoot, $"{tenant.Id:N}-{started:yyyyMMddHHmmss}");
-        Directory.CreateDirectory(workDir);
+        // A unique folder per run; deleted afterwards because it holds the tenant's results.
+        var workDir = Path.Combine(options.WorkRoot, $"{tenant.Id:N}-{started:yyyyMMddHHmmss}-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(options.WorkRoot);
+        if (OperatingSystem.IsWindows())
+            Directory.CreateDirectory(workDir);
+        else
+            Directory.CreateDirectory(workDir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute); // owner only
         var scriptPath = Path.Combine(workDir, "scan.ps1");
         var outputJson = Path.Combine(workDir, "maester-results.json");
         await File.WriteAllTextAsync(scriptPath, ScanScript, cancellationToken);
@@ -81,13 +105,18 @@ public sealed partial class MaesterEngine(MaesterOptions options) : IScanEngine
                  {
                      "-NoProfile", "-NonInteractive", "-File", scriptPath,
                      "-TenantId", tenant.EntraTenantId.ToString(),
-                     "-ClientId", options.AppClientId,
+                     "-ClientId", clientId.ToString(),
                      "-Thumbprint", thumbprint,
-                     "-TestsPath", Path.GetFullPath(options.TestsPath),
+                     "-TestsPath", testsPath,
                      "-OutputJson", outputJson
                  })
         {
             psi.ArgumentList.Add(arg);
+        }
+        if (!string.IsNullOrEmpty(options.ModuleVersion))
+        {
+            psi.ArgumentList.Add("-ModuleVersion");
+            psi.ArgumentList.Add(options.ModuleVersion);
         }
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -95,7 +124,16 @@ public sealed partial class MaesterEngine(MaesterOptions options) : IScanEngine
 
         try
         {
-            using var process = Process.Start(psi) ?? throw new InvalidOperationException("Could not start pwsh.");
+            Process process;
+            try
+            {
+                process = Process.Start(psi) ?? throw new InvalidOperationException("Could not start pwsh.");
+            }
+            catch (Win32Exception ex)
+            {
+                return Fail(tenant, started, $"Could not start PowerShell 7 at '{options.PwshPath}': {ex.Message}");
+            }
+            using var _process = process;
             var stderrTask = process.StandardError.ReadToEndAsync(timeout.Token);
             _ = process.StandardOutput.ReadToEndAsync(timeout.Token); // drain to avoid blocking
 
@@ -116,18 +154,28 @@ public sealed partial class MaesterEngine(MaesterOptions options) : IScanEngine
             }
 
             var json = await File.ReadAllTextAsync(outputJson, cancellationToken);
+            IReadOnlyList<Finding> findings;
+            try
+            {
+                findings = MaesterResultParser.Parse(json, tenant.Id, started);
+            }
+            catch (JsonException ex)
+            {
+                return Fail(tenant, started, $"Maester results weren't valid JSON: {ex.Message}");
+            }
+
             return new ScanResult
             {
                 TenantId = tenant.Id,
                 Source = Name,
                 StartedAt = started,
                 CompletedAt = DateTimeOffset.UtcNow,
-                Findings = MaesterResultParser.Parse(json, tenant.Id, started)
+                Findings = findings
             };
         }
         finally
         {
-            TryDelete(scriptPath);
+            TryDeleteDirectory(workDir);
         }
     }
 
@@ -144,9 +192,9 @@ public sealed partial class MaesterEngine(MaesterOptions options) : IScanEngine
 
     private static string Trim(string s) => s.Length > 500 ? s[..500] + "…" : s;
 
-    private static void TryDelete(string path)
+    private static void TryDeleteDirectory(string path)
     {
-        try { File.Delete(path); } catch { /* best effort */ }
+        try { Directory.Delete(path, recursive: true); } catch { /* best effort */ }
     }
 
     [GeneratedRegex("^[A-Fa-f0-9]{40}$")]

@@ -19,9 +19,9 @@ SecurePulse.slnx
     ├── SecurePulse.Intune      Intune device inventory over Microsoft Graph (certificate auth)
     ├── SecurePulse.Reporting   RiskScoreCalculator (0–100 score, grade, top risks)
     ├── SecurePulse.Web         Blazor Server portal (MudBlazor, M3 Expressive-style theme), consent links
-    └── SecurePulse.Worker      Background service: consent verification, scheduled Intune device sync
+    └── SecurePulse.Worker      Background service: consent verification, Intune device sync, scheduled Maester scans
 tests/
-    └── SecurePulse.Tests       xUnit: parser, scoring, Graph client, onboarding, sync, PostgreSQL repositories
+    └── SecurePulse.Tests       xUnit: parser, scoring, Graph client, onboarding, sync, scans, PostgreSQL repositories
 ```
 
 ## Run it
@@ -54,7 +54,7 @@ dotnet user-secrets set ConnectionStrings:SecurePulse "$CS" --project src/Secure
 dotnet user-secrets set Intune:AppClientId "<multi-tenant app client ID>" --project src/SecurePulse.Worker
 
 dotnet run --project src/SecurePulse.Web      # Development: migrates, seeds demo data if empty
-dotnet run --project src/SecurePulse.Worker   # migrates, then syncs Intune devices every 4 hours
+dotnet run --project src/SecurePulse.Worker   # migrates, syncs Intune devices every 4 hours, scans daily
 ```
 
 The Worker syncs tenants that have granted consent **and** have a certificate thumbprint in
@@ -102,14 +102,75 @@ App registration setup (one multi-tenant app):
 
 - **Supported account types:** accounts in any organizational directory (multi-tenant).
 - **Redirect URI (Web):** `https://<portal>/onboarding/consent-callback` (shown on the Connect page).
-- **API permissions (Application):** the read-only Graph permissions above. Nothing with Write,
-  Send or FullControl; verification fails if any are granted.
+- **API permissions (Application):** every permission listed on the Connect page (the two Intune
+  ones above plus Maester's, see [Security scans](#security-scans)). All are read-only. Nothing
+  with Write, Send or FullControl; verification fails if any are granted.
 - **Certificates:** upload the public key; install the certificate with its private key only on
   the Worker. Portal: `Onboarding:AppClientId`. Worker: `Intune:AppClientId` and
   `Onboarding:CertificateThumbprint`.
 
 The consent callback and result page are the only portal pages that work without signing in;
 the result page shows no tenant data.
+
+## Security scans
+
+The Worker runs [Maester](https://maester.dev) against each connected tenant (consent granted and
+a certificate in `CredentialReference`) and stores the results as findings, which drive the
+score and the fix list.
+
+- **Schedule:** a tenant is scanned when it has never been scanned, `Scans:Interval` (1 day)
+  after its last scan, or `Scans:RetryFailedAfter` (2 hours) after a failed one. A new tenant
+  gets its first scan within `Scans:PollInterval` (1 minute) of connecting.
+- **Queue:** runs live in the `scan_runs` table (Queued → Running → Succeeded/Failed), so they
+  survive restarts and several Workers can share the work. A tenant has at most one queued or
+  running scan per engine (enforced by a unique index); claims use `FOR UPDATE SKIP LOCKED`.
+  Manual scans go ahead of scheduled ones. Up to `Scans:MaxParallelScans` (2) run at once; a run
+  stuck in Running for `Scans:StaleAfter` (45 minutes, longer than `Maester:Timeout`) is failed
+  so it can be retried.
+- **Portal:** Owners and MSP admins can **Run scan** (Overview, all ready tenants) or **Scan
+  now** (Tenants, one tenant). The portal only queues the run and records *Scan requested* in the
+  audit log; the Worker does the work. Each tenant card shows the latest run (queued, running
+  with start time, failed with the error, or the last result) and updates while a scan runs.
+- **Failures** keep the tenant's previous findings. Before each scan the Worker gets a token
+  and checks its `roles` like onboarding does: anything that isn't read-only stops the scan, and
+  missing permissions fail it with "Re-consent needed: …".
+- **Re-consent:** tenants connected before a permission was added must approve again. **Re-consent**
+  on the tenant card opens the Connect page filled in; the new consent updates the same tenant.
+
+Worker setup (Windows or Linux):
+
+```powershell
+# PowerShell 7 on the Worker host
+Install-Module Maester -Scope AllUsers            # also installs Pester and Microsoft.Graph.Authentication
+Install-MaesterTests -Path /srv/securepulse/maester-tests
+```
+
+Then set `Maester:TestsPath` to that folder and, optionally, `Maester:PwshPath` and
+`Maester:ModuleVersion` (pin a tested version, e.g. `2.3.0`; empty loads the newest installed).
+`Maester:AppClientId` defaults to `Intune:AppClientId`. The scan signs in with the same
+certificate as device sync (`Connect-MgGraph -CertificateThumbprint`), so it must be in the
+Worker user's certificate store. Each run gets its own owner-only work folder under
+`Maester:WorkRoot`, deleted afterwards; arguments go through `ArgumentList`, and tenant names
+never reach the command line.
+
+Graph application permissions Maester needs for unattended runs (2.3.0), all read-only:
+`AuditLog.Read.All`, `DeviceManagementConfiguration.Read.All`,
+`DeviceManagementManagedDevices.Read.All`, `DeviceManagementRBAC.Read.All`,
+`DeviceManagementServiceConfig.Read.All`, `Directory.Read.All`,
+`DirectoryRecommendations.Read.All`, `EntitlementManagement.Read.All`,
+`IdentityRiskEvent.Read.All`, `NetworkAccess.Read.All`,
+`OnPremDirectorySynchronization.Read.All`, `OrgSettings-AppsAndServices.Read.All`,
+`OrgSettings-Forms.Read.All`, `Policy.Read.All`, `Policy.Read.ConditionalAccess`,
+`Reports.Read.All`, `ReportSettings.Read.All`, `RoleEligibilitySchedule.Read.Directory`,
+`RoleManagement.Read.All`, `RoleManagementAlert.Read.Directory`,
+`SecurityIdentitiesHealth.Read.All`, `SecurityIdentitiesSensors.Read.All`,
+`SharePointTenantSettings.Read.All`, `ThreatHunting.Read.All`,
+`UserAuthenticationMethod.Read.All`.
+
+Maester's optional extras are not requested because they aren't read-only:
+`ReportSettings.ReadWrite.All`, `Sites.FullControl.All` and the Exchange `Exchange.ManageAsApp`
+role. Checks that need them (Exchange Online, Teams, some SharePoint settings) are reported as
+skipped, and skipped checks don't count toward the score.
 
 ## Sign-in and roles
 
@@ -158,6 +219,7 @@ filters).
 | People | Invited, role changed, access removed, including refused attempts (*Denied*) and last-Owner refusals (*Failure*) |
 | Onboarding | Consent link created or cancelled; consent received, declined, from the wrong tenant, or on an expired/used link; tenant connected or verification failed (Worker) |
 | Devices | Remote action requests (currently recorded as not sent) |
+| Scans | Scan requested from the portal (scheduled scans are in `scan_runs`, not the audit log) |
 | Audit log | Each CSV export |
 
 - **Append-only in the database:** a trigger rejects `UPDATE`, `DELETE` and `TRUNCATE` on
@@ -186,13 +248,13 @@ checks are excluded. Any open **Critical** caps the grade at C.
 | Area | State |
 |---|---|
 | Core models, scoring, Maester parser | Built; covered by `SecurePulse.Tests` |
-| Maester engine runner | Built; needs a real tenant + certificate to exercise |
+| Maester engine runner | Built; tested with a stand-in `pwsh`; needs a real tenant + certificate to exercise |
 | Portal (Overview, Findings, Tenants) | Built; sample data or PostgreSQL |
 | Endpoints (Intune device inventory, device detail) | Built; remote actions disabled until approval + audit log exist |
 | PostgreSQL persistence (`SecurePulse.Data`) | Built; tested against PostgreSQL 16 |
 | Worker: Intune device sync | Built and tested against stubbed Graph; needs a real tenant + certificate to exercise |
 | Tenant onboarding (admin consent, verification, first sync) | Built; tested with stubbed Entra; needs the app registration to exercise |
-| Worker: scheduled engine scans | Next |
+| Worker: scheduled Maester scans (queue, retries, permission check, Run scan / Scan now) | Built; tested against PostgreSQL 16 and end to end with a stand-in `pwsh` |
 | Portal sign-in with roles (Entra ID, Owner / MSP admin / Client viewer) | Built; tested with development sign-in and the real Entra redirect |
 | Security audit log (append-only, page + CSV export) | Built; tested against PostgreSQL 16 |
 | ScubaGear adapter, PDF report | Next |

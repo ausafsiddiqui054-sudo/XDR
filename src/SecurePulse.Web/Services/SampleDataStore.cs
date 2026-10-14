@@ -9,8 +9,9 @@ namespace SecurePulse.Web.Services;
 /// portal can be designed and demoed before real scans exist. Replace with EF Core
 /// repositories once the Worker starts writing real scan results.
 /// </summary>
-public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDeviceRepository, IOnboardingRepository, IPortalUserRepository, IAuditLog
+public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDeviceRepository, IOnboardingRepository, IPortalUserRepository, IAuditLog, IScanRunRepository
 {
+    private readonly List<ScanRun> _scanRuns = [];
     private readonly List<AuditEvent> _audit = [];
     private readonly List<PortalUser> _users = [];
     private readonly Lock _gate = new();
@@ -545,6 +546,70 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
             return Task.FromResult<IReadOnlyList<AuditEvent>>(rows.OrderByDescending(e => e.OccurredAt).ThenByDescending(e => e.Id)
                 .Take(Math.Clamp(q.Limit, 1, 1000)).ToList());
         }
+    }
+
+    // --- Scan queue (in memory; mirrors EfScanRunRepository) ---------------------------------
+
+    public Task<(ScanRun Run, bool Created)> EnqueueAsync(Guid tenantId, string engine, ScanTrigger trigger, string? requestedBy,
+        DateTimeOffset at, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            if (_scanRuns.FirstOrDefault(r => r.TenantId == tenantId && r.Engine == engine && r.IsActive) is { } active)
+                return Task.FromResult((active, false));
+            var run = new ScanRun
+            {
+                Id = Guid.NewGuid(), TenantId = tenantId, Engine = engine, Trigger = trigger, Status = ScanRunStatus.Queued,
+                QueuedAt = at, RequestedBy = requestedBy
+            };
+            _scanRuns.Add(run);
+            return Task.FromResult((run, true));
+        }
+    }
+
+    public Task<ScanRun?> ClaimNextAsync(IReadOnlyCollection<string> engines, DateTimeOffset at, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            var next = _scanRuns.Where(r => r.Status == ScanRunStatus.Queued && engines.Contains(r.Engine))
+                .OrderBy(r => r.Trigger == ScanTrigger.Manual ? 0 : 1).ThenBy(r => r.QueuedAt).FirstOrDefault();
+            if (next is null) return Task.FromResult<ScanRun?>(null);
+            var claimed = next with { Status = ScanRunStatus.Running, StartedAt = at };
+            _scanRuns[_scanRuns.IndexOf(next)] = claimed;
+            return Task.FromResult<ScanRun?>(claimed);
+        }
+    }
+
+    public Task CompleteAsync(Guid runId, bool succeeded, int? findingCount, string? error, DateTimeOffset at, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            var index = _scanRuns.FindIndex(r => r.Id == runId && r.Status == ScanRunStatus.Running);
+            if (index >= 0)
+                _scanRuns[index] = _scanRuns[index] with
+                {
+                    Status = succeeded ? ScanRunStatus.Succeeded : ScanRunStatus.Failed, CompletedAt = at, FindingCount = findingCount, Error = error
+                };
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task<int> FailStaleAsync(DateTimeOffset startedBefore, string error, DateTimeOffset at, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            var stale = _scanRuns.Where(r => r.Status == ScanRunStatus.Running && r.StartedAt < startedBefore).ToList();
+            foreach (var r in stale)
+                _scanRuns[_scanRuns.IndexOf(r)] = r with { Status = ScanRunStatus.Failed, CompletedAt = at, Error = error };
+            return Task.FromResult(stale.Count);
+        }
+    }
+
+    public Task<IReadOnlyList<ScanRun>> GetLatestAsync(CancellationToken ct = default)
+    {
+        lock (_gate)
+            return Task.FromResult<IReadOnlyList<ScanRun>>(_scanRuns.GroupBy(r => (r.TenantId, r.Engine))
+                .Select(g => g.OrderByDescending(r => r.QueuedAt).First()).ToList());
     }
 
     /// <summary>Everything the store holds, for seeding a real database in development.</summary>

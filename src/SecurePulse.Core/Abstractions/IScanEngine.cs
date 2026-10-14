@@ -119,3 +119,25 @@ public interface IAuditLog
     /// <summary>Newest first.</summary>
     Task<IReadOnlyList<AuditEvent>> QueryAsync(AuditQuery query, CancellationToken ct = default);
 }
+
+/// <summary>The scan queue. Safe for several Workers: a run is claimed by exactly one of them.</summary>
+public interface IScanRunRepository
+{
+    /// <summary>
+    /// Queues a run, unless the tenant already has a queued or running run for that engine, in
+    /// which case that one is returned with <c>Created = false</c>.
+    /// </summary>
+    Task<(ScanRun Run, bool Created)> EnqueueAsync(Guid tenantId, string engine, ScanTrigger trigger, string? requestedBy,
+        DateTimeOffset at, CancellationToken ct = default);
+
+    /// <summary>Moves the next queued run (manual first, then oldest) to Running and returns it; null if none.</summary>
+    Task<ScanRun?> ClaimNextAsync(IReadOnlyCollection<string> engines, DateTimeOffset at, CancellationToken ct = default);
+
+    Task CompleteAsync(Guid runId, bool succeeded, int? findingCount, string? error, DateTimeOffset at, CancellationToken ct = default);
+
+    /// <summary>Fails runs stuck in Running since before <paramref name="startedBefore"/> (e.g. a Worker crashed).</summary>
+    Task<int> FailStaleAsync(DateTimeOffset startedBefore, string error, DateTimeOffset at, CancellationToken ct = default);
+
+    /// <summary>The most recent run per tenant and engine.</summary>
+    Task<IReadOnlyList<ScanRun>> GetLatestAsync(CancellationToken ct = default);
+}

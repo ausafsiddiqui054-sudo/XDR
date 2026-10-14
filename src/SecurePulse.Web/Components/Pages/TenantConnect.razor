@@ -70,7 +70,7 @@
                 <ol class="sp-steps">
                     <li><span class="sp-step-dot">1</span><div><MudText Typo="Typo.body2" Style="font-weight:600">You create a consent link</MudText><MudText Typo="Typo.caption" Color="Color.Secondary">We check the domain belongs to a Microsoft 365 tenant.</MudText></div></li>
                     <li><span class="sp-step-dot">2</span><div><MudText Typo="Typo.body2" Style="font-weight:600">The client's admin approves</MudText><MudText Typo="Typo.caption" Color="Color.Secondary">A Global Administrator signs in to Microsoft and grants read-only access.</MudText></div></li>
-                    <li><span class="sp-step-dot">3</span><div><MudText Typo="Typo.body2" Style="font-weight:600">SecurePulse verifies and syncs</MudText><MudText Typo="Typo.caption" Color="Color.Secondary">We confirm the access with Microsoft, then read the tenant's devices.</MudText></div></li>
+                    <li><span class="sp-step-dot">3</span><div><MudText Typo="Typo.body2" Style="font-weight:600">SecurePulse verifies and scans</MudText><MudText Typo="Typo.caption" Color="Color.Secondary">We confirm the access with Microsoft, then read the tenant's devices and run the security checks.</MudText></div></li>
                 </ol>
             </MudPaper>
 
@@ -80,23 +80,54 @@
                     <MudText Typo="Typo.h6">Read-only access</MudText>
                 </MudStack>
                 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
-                    The admin approves these Microsoft Graph permissions. None of them can change anything in the tenant.
+                    The admin approves these Microsoft Graph permissions. All are read-only: none can change anything in the tenant.
                 </MudText>
-                <MudStack Spacing="2">
-                    @foreach (var p in AssessmentPermissions.Required)
+                <MudExpansionPanels Elevation="0" Dense="true" Outlined="false">
+                    @foreach (var group in AssessmentPermissions.Required.GroupBy(p => p.Group))
                     {
-                        <div>
-                            <MudText Typo="Typo.body2" Style="font-weight:600">@p.Purpose</MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary" Style="font-family:ui-monospace,SFMono-Regular,Consolas,monospace">@p.Name</MudText>
-                        </div>
+                        <MudExpansionPanel Text="@($"{group.Key} · {group.Count()} permissions")">
+                            <MudStack Spacing="2">
+                                @foreach (var p in group)
+                                {
+                                    <div>
+                                        <MudText Typo="Typo.body2" Style="font-weight:600">@p.Purpose</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Style="font-family:ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere">@p.Name</MudText>
+                                    </div>
+                                }
+                            </MudStack>
+                        </MudExpansionPanel>
                     }
-                </MudStack>
+                </MudExpansionPanels>
             </MudPaper>
         </MudStack>
     </MudItem>
 </MudGrid>
 
 @code {
+    // Prefilled by the Re-consent action on a tenant card.
+    [SupplyParameterFromQuery(Name = "name")] public string? PrefillName { get; set; }
+    [SupplyParameterFromQuery(Name = "domain")] public string? PrefillDomain { get; set; }
+    [SupplyParameterFromQuery(Name = "partner")] public string? PrefillPartner { get; set; }
+    [SupplyParameterFromQuery(Name = "industry")] public string? PrefillIndustry { get; set; }
+
+    protected override void OnInitialized()
+    {
+        _input.DisplayName ??= PrefillName;
+        _input.PrimaryDomain ??= PrefillDomain;
+        _input.PartnerName ??= PrefillPartner;
+        if (PrefillIndustry is { } industry && OnboardingService.Industries.Contains(industry)) _input.Industry = industry;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // A prefilled form starts untouched; validate so "Create consent link" is enabled.
+        if (firstRender && _form is not null && PrefillDomain is not null)
+        {
+            await _form.Validate();
+            StateHasChanged();
+        }
+    }
+
     private readonly ConnectTenantForm _input = new();
     private readonly List<BreadcrumbItem> _breadcrumbs = [new("Tenants", href: "tenants"), new("Connect", href: null, disabled: true)];
     private MudForm? _form;

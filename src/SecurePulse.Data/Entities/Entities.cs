@@ -137,3 +137,18 @@ public sealed class AuditEventEntity
     public Dictionary<string, string> Details { get; set; } = [];
     public string? IpAddress { get; set; }
 }
+
+public sealed class ScanRunEntity
+{
+    public Guid Id { get; set; }
+    public Guid TenantId { get; set; }
+    public string Engine { get; set; } = "";
+    public ScanTrigger Trigger { get; set; }
+    public ScanRunStatus Status { get; set; }
+    public DateTimeOffset QueuedAt { get; set; }
+    public DateTimeOffset? StartedAt { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+    public string? RequestedBy { get; set; }
+    public int? FindingCount { get; set; }
+    public string? Error { get; set; }
+}

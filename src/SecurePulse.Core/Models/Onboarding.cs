@@ -54,19 +54,60 @@ public sealed record OnboardingRequest
     public bool IsExpired(DateTimeOffset now) => Status == OnboardingStatus.AwaitingConsent && now >= ExpiresAt;
 }
 
-public sealed record GraphPermission(string Name, string Purpose);
+public sealed record GraphPermission(string Name, string Purpose, string Group);
 
 /// <summary>
 /// Read-only Microsoft Graph application permissions the assessment app needs. One list shared
-/// by the portal (shown to admins before they consent) and the Worker (checked after consent).
+/// by the portal (shown to admins before they consent) and the Worker (checked after consent and
+/// before every scan). Maester's list follows its documentation for unattended runs (v2.3.0);
+/// its optional privileged extras (ReportSettings.ReadWrite.All, Exchange.ManageAsApp,
+/// Sites.FullControl.All) are deliberately not requested.
 /// </summary>
 public static class AssessmentPermissions
 {
+    public const string DevicesGroup = "Devices (Intune)";
+    public const string SecurityChecksGroup = "Security checks (Maester)";
+
     public static readonly IReadOnlyList<GraphPermission> Required =
     [
-        new("DeviceManagementManagedDevices.Read.All", "Read Intune device inventory and compliance state"),
-        new("DeviceManagementConfiguration.Read.All", "Read which compliance settings each device passes or fails")
+        new("DeviceManagementManagedDevices.Read.All", "Read Intune device inventory and compliance state", DevicesGroup),
+        new("DeviceManagementConfiguration.Read.All", "Read device configuration and compliance policies", DevicesGroup),
+
+        new("AuditLog.Read.All", "Read sign-in and audit logs", SecurityChecksGroup),
+        new("DeviceManagementRBAC.Read.All", "Read Intune role assignments", SecurityChecksGroup),
+        new("DeviceManagementServiceConfig.Read.All", "Read Intune enrollment and service settings", SecurityChecksGroup),
+        new("Directory.Read.All", "Read users, groups, apps and directory settings", SecurityChecksGroup),
+        new("DirectoryRecommendations.Read.All", "Read Entra recommendations", SecurityChecksGroup),
+        new("EntitlementManagement.Read.All", "Read access packages and reviews", SecurityChecksGroup),
+        new("IdentityRiskEvent.Read.All", "Read identity risk detections", SecurityChecksGroup),
+        new("NetworkAccess.Read.All", "Read Global Secure Access settings", SecurityChecksGroup),
+        new("OnPremDirectorySynchronization.Read.All", "Read directory sync settings", SecurityChecksGroup),
+        new("OrgSettings-AppsAndServices.Read.All", "Read organization app and service settings", SecurityChecksGroup),
+        new("OrgSettings-Forms.Read.All", "Read Microsoft Forms settings", SecurityChecksGroup),
+        new("Policy.Read.All", "Read authentication and authorization policies", SecurityChecksGroup),
+        new("Policy.Read.ConditionalAccess", "Read Conditional Access policies", SecurityChecksGroup),
+        new("Reports.Read.All", "Read usage and registration reports", SecurityChecksGroup),
+        new("ReportSettings.Read.All", "Read report privacy settings", SecurityChecksGroup),
+        new("RoleEligibilitySchedule.Read.Directory", "Read PIM eligible role assignments", SecurityChecksGroup),
+        new("RoleManagement.Read.All", "Read directory role assignments", SecurityChecksGroup),
+        new("RoleManagementAlert.Read.Directory", "Read PIM alerts", SecurityChecksGroup),
+        new("SecurityIdentitiesSensors.Read.All", "Read Defender for Identity sensors", SecurityChecksGroup),
+        new("SecurityIdentitiesHealth.Read.All", "Read Defender for Identity health", SecurityChecksGroup),
+        new("SharePointTenantSettings.Read.All", "Read SharePoint tenant settings", SecurityChecksGroup),
+        new("ThreatHunting.Read.All", "Run read-only advanced hunting queries", SecurityChecksGroup),
+        new("UserAuthenticationMethod.Read.All", "Read users' registered sign-in methods", SecurityChecksGroup)
     ];
+
+    /// <summary>Required permissions that aren't in <paramref name="granted"/>.</summary>
+    public static IReadOnlyList<string> MissingFrom(IEnumerable<string> granted)
+    {
+        var set = new HashSet<string>(granted, StringComparer.OrdinalIgnoreCase);
+        return Required.Select(p => p.Name).Where(p => !set.Contains(p)).ToList();
+    }
+
+    /// <summary>Granted permissions that aren't read-only.</summary>
+    public static IReadOnlyList<string> NotReadOnly(IEnumerable<string> granted) =>
+        granted.Where(p => !IsReadOnly(p)).Order(StringComparer.OrdinalIgnoreCase).ToList();
 
     /// <summary>
     /// Assessment consent must be read-only (CLAUDE.md rule 5). An allowlist, not a blocklist:

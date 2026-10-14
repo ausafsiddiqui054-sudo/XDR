@@ -387,6 +387,64 @@ namespace SecurePulse.Data.Migrations
                     b.ToTable("portal_users", (string)null);
                 });
 
+            modelBuilder.Entity("SecurePulse.Data.Entities.ScanRunEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Engine")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int?>("FindingCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("QueuedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RequestedBy")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTimeOffset?>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "QueuedAt");
+
+                    b.HasIndex("TenantId", "Engine")
+                        .IsUnique()
+                        .HasDatabaseName("IX_scan_runs_active")
+                        .HasFilter("\"Status\" IN ('Queued', 'Running')");
+
+                    b.HasIndex("TenantId", "Engine", "QueuedAt");
+
+                    b.ToTable("scan_runs", (string)null);
+                });
+
             modelBuilder.Entity("SecurePulse.Data.Entities.TenantEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -509,6 +567,15 @@ namespace SecurePulse.Data.Migrations
                         .WithMany()
                         .HasForeignKey("ClientTenantId")
                         .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("SecurePulse.Data.Entities.ScanRunEntity", b =>
+                {
+                    b.HasOne("SecurePulse.Data.Entities.TenantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

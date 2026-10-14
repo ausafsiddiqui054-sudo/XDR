@@ -74,7 +74,7 @@ public class OnboardingVerificationServiceTests
     public async Task VerifiedConsent_CreatesTenantAndRunsFirstSync()
     {
         var tid = Guid.NewGuid();
-        var h = new Harness { Tokens = new Tokens(t => Jwt.With(t.EntraTenantId, [.. Required, "Directory.Read.All"])) };
+        var h = new Harness { Tokens = new Tokens(t => Jwt.With(t.EntraTenantId, [.. Required, "User.Read.All"])) };
         var request = await h.ConsentedRequestAsync(tid);
 
         Assert.True(await h.Service.VerifyAsync(request));
@@ -82,7 +82,7 @@ public class OnboardingVerificationServiceTests
         var done = await h.ReloadAsync(request);
         Assert.Equal(OnboardingStatus.Completed, done!.Status);
         Assert.Equal(T0, done.CompletedAt);
-        Assert.Equal(["DeviceManagementConfiguration.Read.All", "DeviceManagementManagedDevices.Read.All", "Directory.Read.All"], done.GrantedPermissions);
+        Assert.Equal(Required.Append("User.Read.All").Order(StringComparer.OrdinalIgnoreCase), done.GrantedPermissions);
         Assert.Null(done.ProtectedState);
 
         var tenant = await h.Store.GetAsync(done.TenantId!.Value);

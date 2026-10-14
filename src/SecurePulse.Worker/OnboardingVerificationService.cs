@@ -72,7 +72,7 @@ public sealed class OnboardingVerificationService(
         if (claims.TenantId != request.EntraTenantId)
             return await FailAsync(request, $"The token was issued for tenant {claims.TenantId}, not {request.EntraTenantId}.", final: true, ct, denied: true);
 
-        var notReadOnly = claims.Roles.Where(r => !AssessmentPermissions.IsReadOnly(r)).Order().ToList();
+        var notReadOnly = AssessmentPermissions.NotReadOnly(claims.Roles);
         if (notReadOnly.Count > 0)
         {
             return await FailAsync(request,
@@ -80,8 +80,7 @@ public sealed class OnboardingVerificationService(
                 "remove them from the app registration, revoke them in the tenant, and consent again.", final: true, ct, denied: true);
         }
 
-        var missing = AssessmentPermissions.Required.Select(p => p.Name)
-            .Where(p => !claims.Roles.Contains(p, StringComparer.OrdinalIgnoreCase)).ToList();
+        var missing = AssessmentPermissions.MissingFrom(claims.Roles);
         if (missing.Count > 0)
         {
             return await FailAsync(request,

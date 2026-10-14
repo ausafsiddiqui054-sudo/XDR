@@ -71,13 +71,16 @@ public static class AuditActions
 
     public const string AuditExported = "audit.exported";
 
+    public const string ScanRequested = "scan.requested";
+
     public static readonly IReadOnlyDictionary<string, string> Categories = new Dictionary<string, string>
     {
         ["auth"] = "Sign-in",
         ["people"] = "People",
         ["onboarding"] = "Onboarding",
         ["device"] = "Devices",
-        ["audit"] = "Audit log"
+        ["audit"] = "Audit log",
+        ["scan"] = "Scans"
     };
 
     public static string CategoryOf(string action) => action.Split('.', 2)[0];
@@ -100,6 +103,7 @@ public static class AuditActions
         VerificationFailed => "Verification failed",
         DeviceActionRequested => "Device action requested",
         AuditExported => "Audit log exported",
+        ScanRequested => "Scan requested",
         _ => action
     };
 }
