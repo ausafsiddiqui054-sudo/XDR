@@ -238,6 +238,7 @@ public sealed class DeviceActionEntity
     public DateTimeOffset? CompletedAt { get; set; }
     public string? Error { get; set; }
     public Guid? PlaybookId { get; set; }
+    public bool AutoApproved { get; set; }
 }
 
 public sealed class PlaybookEntity
@@ -256,6 +257,11 @@ public sealed class PlaybookEntity
     public string UpdatedByName { get; set; } = "";
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? LastRunAt { get; set; }
+    public int DailyAutoLimit { get; set; }
+    public Guid? PreApprovedByUserId { get; set; }
+    public string? PreApprovedByName { get; set; }
+    public DateTimeOffset? PreApprovedAt { get; set; }
+    public DateTimeOffset? PreApprovalExpiresAt { get; set; }
 }
 
 /// <summary>

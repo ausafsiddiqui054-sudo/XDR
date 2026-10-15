@@ -80,6 +80,9 @@ public sealed record DeviceActionRequest
     /// <summary>The playbook that proposed it; null for a manual request.</summary>
     public Guid? PlaybookId { get; init; }
 
+    /// <summary>Approved by the playbook's pre-approval rather than a person deciding this request.</summary>
+    public bool AutoApproved { get; init; }
+
     public bool IsOpen => Status is DeviceActionStatus.PendingApproval or DeviceActionStatus.Approved or DeviceActionStatus.Sending;
 }
 

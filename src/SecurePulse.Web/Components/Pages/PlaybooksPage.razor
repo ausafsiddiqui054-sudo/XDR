@@ -13,8 +13,9 @@
         <MudText Typo="Typo.h4">Remediation playbooks</MudText>
         <MudText Typo="Typo.body2" Color="Color.Secondary">
             After each device sync, SecurePulse checks devices against these playbooks and proposes an action for each match.
-            Proposals wait in <MudLink Href="devices/actions" Typo="Typo.body2">Device actions</MudLink> until another admin approves them;
-            nothing is sent before that. Retire and wipe are never automated.
+            Proposals wait in <MudLink Href="devices/actions" Typo="Typo.body2">Device actions</MudLink> until another admin approves them,
+            unless a second Owner pre-approved the playbook (sync and Defender actions only, for @((int)PlaybookPreApproval.Validity.TotalDays) days,
+            within a daily limit). Retire and wipe are never automated.
         </MudText>
     </div>
     @if (_isOwner)
@@ -82,8 +83,42 @@ else
                         </MudText>
                     </MudStack>
 
+                    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Start" Class="sp-note mb-3" data-testid="preapproval">
+                        @if (v.PreApprovalActive)
+                        {
+                            <MudIcon Icon="@Icons.Material.Rounded.Verified" Size="Size.Small" Color="Color.Success" />
+                            <MudText Typo="Typo.caption">
+                                <b>Pre-approved</b> by @p.PreApprovedByName until @p.PreApprovalExpiresAt!.Value.UtcDateTime.ToString("d MMM yyyy"):
+                                up to @p.DailyAutoLimit actions per tenant a day go out without a per-action approval.
+                            </MudText>
+                        }
+                        else if (p.PreApprovedByUserId is not null)
+                        {
+                            <MudIcon Icon="@Icons.Material.Rounded.HourglassBottom" Size="Size.Small" Color="Color.Warning" />
+                            <MudText Typo="Typo.caption">
+                                The pre-approval by @p.PreApprovedByName is no longer valid (expired, playbook off, or that person isn't an Owner any more).
+                                Each action needs approval.
+                            </MudText>
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Rounded.HowToReg" Size="Size.Small" Color="Color.Primary" />
+                            <MudText Typo="Typo.caption">
+                                Each action needs another admin's approval.
+                                @if (_isOwner && v.WhyCannotPreApprove is { } why && PlaybookPreApproval.IsEligible(p.Action))
+                                {
+                                    <span class="sp-muted"> @why</span>
+                                }
+                            </MudText>
+                        }
+                    </MudStack>
+
                     <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="mb-3">
                         <MudChip T="string" Size="Size.Small" Variant="Variant.Text">@v.ProposedLastWeek proposed this week</MudChip>
+                        @if (v.AutoApprovedLastWeek > 0)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Success">@v.AutoApprovedLastWeek sent without a per-action approval</MudChip>
+                        }
                         @if (v.WaitingForApproval > 0)
                         {
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Href="devices/actions">
@@ -97,9 +132,21 @@ else
                         @(p.LastRunAt is { } run ? $"last checked {Dashboard.Ago(run).ToLowerInvariant()}" : "not run yet")
                     </MudText>
 
+                    <MudStack Row="true" Spacing="3" Class="mt-3" Wrap="Wrap.Wrap">
+                        @if (_isOwner && v.WhyCannotPreApprove is null && !v.PreApprovalActive)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Success" Class="px-0" StartIcon="@Icons.Material.Rounded.Verified"
+                                       OnClick="@(() => PreApproveAsync(p))" data-testid="preapprove-playbook">Pre-approve</MudButton>
+                        }
+                        @if (p.PreApprovedByUserId is not null)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Warning" Class="px-0" StartIcon="@Icons.Material.Rounded.RemoveModerator"
+                                       OnClick="@(() => WithdrawAsync(p))" data-testid="withdraw-preapproval">Withdraw pre-approval</MudButton>
+                        }
+                    </MudStack>
                     @if (_isOwner)
                     {
-                        <MudStack Row="true" Spacing="3" Class="mt-3">
+                        <MudStack Row="true" Spacing="3" Class="mt-1">
                             <MudButton Variant="Variant.Text" Color="Color.Primary" Class="px-0" StartIcon="@Icons.Material.Rounded.Edit"
                                        OnClick="@(() => EditAsync(p))" data-testid="edit-playbook">Edit</MudButton>
                             <MudButton Variant="Variant.Text" Color="Color.Error" Class="px-0" StartIcon="@Icons.Material.Rounded.Delete"
@@ -145,6 +192,27 @@ else
     {
         var result = await Playbooks.SetEnabledAsync(playbook.Id, on, playbook.UpdatedAt);
         Snackbar.Add(result.Ok ? $"\"{playbook.Name}\" is {(on ? "on" : "off")}." : result.Message, result.Ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
+        await LoadAsync();
+    }
+
+    private async Task PreApproveAsync(RemediationPlaybook p)
+    {
+        var confirmed = await Dialogs.ShowMessageBox($"Pre-approve \"{p.Name}\"?",
+            (MarkupString)($"When a device is <b>{System.Net.WebUtility.HtmlEncode(PlaybookService.TriggerLabel(p.Trigger, p.Days))}</b>, SecurePulse sends " +
+            $"<b>{System.Net.WebUtility.HtmlEncode(DeviceActions.Label(p.Action))}</b> without anyone approving each one: up to {p.DailyAutoLimit} per tenant a day, " +
+            $"for {(int)PlaybookPreApproval.Validity.TotalDays} days. Last saved by {System.Net.WebUtility.HtmlEncode(p.UpdatedByName)}.<br/><br/>" +
+            "Any change to the playbook withdraws this, and any Owner or MSP admin can withdraw it at any time. It's recorded in the audit log in your name."),
+            yesText: "Pre-approve", cancelText: "Cancel");
+        if (confirmed != true) return;
+        var result = await Playbooks.PreApproveAsync(p.Id, p.UpdatedAt);
+        Snackbar.Add(result.Message, result.Ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
+        await LoadAsync();
+    }
+
+    private async Task WithdrawAsync(RemediationPlaybook p)
+    {
+        var result = await Playbooks.WithdrawPreApprovalAsync(p.Id);
+        Snackbar.Add(result.Message, result.Ok ? MudBlazor.Severity.Info : MudBlazor.Severity.Warning);
         await LoadAsync();
     }
 

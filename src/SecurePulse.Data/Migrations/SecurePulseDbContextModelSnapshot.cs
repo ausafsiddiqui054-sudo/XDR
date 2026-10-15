@@ -166,6 +166,9 @@ namespace SecurePulse.Data.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
+                    b.Property<bool>("AutoApproved")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTimeOffset?>("CancelledAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -527,6 +530,11 @@ namespace SecurePulse.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("DailyAutoLimit")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(25);
+
                     b.Property<int?>("Days")
                         .HasColumnType("integer");
 
@@ -543,6 +551,19 @@ namespace SecurePulse.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("PreApprovalExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("PreApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PreApprovedByName")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid?>("PreApprovedByUserId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid");

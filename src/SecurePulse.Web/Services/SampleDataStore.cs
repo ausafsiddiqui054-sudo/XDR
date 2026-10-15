@@ -825,6 +825,32 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
         }
     }
 
+    Task<bool> IPlaybookRepository.GrantPreApprovalAsync(Guid id, DateTimeOffset expectedUpdatedAt, Guid byUserId, string byName, DateTimeOffset at,
+        DateTimeOffset expiresAt, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            var index = _playbooks.FindIndex(p => p.Id == id && p.UpdatedAt == expectedUpdatedAt && p.UpdatedByUserId != byUserId);
+            if (index < 0) return Task.FromResult(false);
+            _playbooks[index] = _playbooks[index] with
+            {
+                PreApprovedByUserId = byUserId, PreApprovedByName = byName, PreApprovedAt = at, PreApprovalExpiresAt = expiresAt
+            };
+            return Task.FromResult(true);
+        }
+    }
+
+    Task<bool> IPlaybookRepository.WithdrawPreApprovalAsync(Guid id, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            var index = _playbooks.FindIndex(p => p.Id == id && p.PreApprovedByUserId is not null);
+            if (index < 0) return Task.FromResult(false);
+            _playbooks[index] = _playbooks[index] with { PreApprovedByUserId = null, PreApprovedByName = null, PreApprovedAt = null, PreApprovalExpiresAt = null };
+            return Task.FromResult(true);
+        }
+    }
+
     Task<bool> IPlaybookRepository.DeleteAsync(Guid id, CancellationToken ct)
     {
         lock (_gate) return Task.FromResult(_playbooks.RemoveAll(p => p.Id == id) > 0);
@@ -861,6 +887,20 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
             Status = approve ? DeviceActionStatus.Approved : DeviceActionStatus.Rejected,
             DecidedAt = at, DecidedByUserId = deciderId, DecidedByName = deciderName, DecidedByRole = deciderRole, DecisionNote = note
         });
+
+    public Task<DeviceActionRequest?> AutoApproveAsync(Guid id, Guid deciderId, string deciderName, string note, DateTimeOffset at,
+        CancellationToken ct = default) =>
+        Transition(id, a => a.Status == DeviceActionStatus.PendingApproval && a.ExpiresAt > at && a.PlaybookId is not null, a => a with
+        {
+            Status = DeviceActionStatus.Approved, AutoApproved = true,
+            DecidedAt = at, DecidedByUserId = deciderId, DecidedByName = deciderName, DecidedByRole = PortalRole.Owner, DecisionNote = note
+        });
+
+    public Task<int> CountAutoApprovedSinceAsync(Guid playbookId, Guid tenantId, DateTimeOffset since, CancellationToken ct = default)
+    {
+        lock (_gate)
+            return Task.FromResult(_actions.Count(a => a.PlaybookId == playbookId && a.TenantId == tenantId && a.AutoApproved && a.RequestedAt >= since));
+    }
 
     public Task<DeviceActionRequest?> CancelAsync(Guid id, string cancelledBy, string? reason, DateTimeOffset at, CancellationToken ct = default) =>
         Transition(id, a => a.Status is DeviceActionStatus.PendingApproval or DeviceActionStatus.Approved,

@@ -28,6 +28,8 @@ public sealed class DeviceActionService(
     IRemediationTokenProvider tokens,
     IDeviceActionSender sender,
     IAuditLog audit,
+    IPlaybookRepository playbooks,
+    IPortalUserRepository users,
     IOptions<DeviceActionOptions> options,
     TimeProvider time,
     ILogger<DeviceActionService> logger)
@@ -113,6 +115,19 @@ public sealed class DeviceActionService(
             return $"the approval doesn't meet the policy ({policy})";
         if (!Guid.TryParse(a.DeviceId, out _))
             return "the device ID isn't a valid Intune managed device ID.";
+        if (a.AutoApproved && await PreApprovalProblemAsync(a, ct) is { } preApproval)
+            return preApproval;
+        return null;
+    }
+
+    /// <summary>An automatic approval stands only while the playbook's pre-approval does: same playbook, action and Owner, still current.</summary>
+    private async Task<string?> PreApprovalProblemAsync(DeviceActionRequest a, CancellationToken ct)
+    {
+        if (a.PlaybookId is not { } id || await playbooks.GetAsync(id, ct) is not { } p)
+            return "it was approved by a playbook that no longer exists.";
+        var stillOwner = p.PreApprovedByUserId is { } granter && (await users.GetAsync(granter, ct))?.Role == PortalRole.Owner;
+        if (!PlaybookPreApproval.IsActive(p, time.GetUtcNow(), stillOwner) || p.PreApprovedByUserId != a.DecidedByUserId || p.Action != a.Action)
+            return $"the pre-approval of playbook \"{p.Name}\" was withdrawn, expired or no longer matches; request it again or approve it in person.";
         return null;
     }
 

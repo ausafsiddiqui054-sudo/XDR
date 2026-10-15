@@ -52,7 +52,7 @@ public class DeviceActionServiceTests
 
         public IDeviceActionRepository Actions => Store;
 
-        public DeviceActionService Service => new(Store, Store, Tokens, Sender, Audit, Microsoft.Extensions.Options.Options.Create(Options), Time,
+        public DeviceActionService Service => new(Store, Store, Tokens, Sender, Audit, Store, Store, Microsoft.Extensions.Options.Options.Create(Options), Time,
             NullLogger<DeviceActionService>.Instance);
 
         public async Task<Tenant> TenantAsync() => (await Store.GetAllAsync()).Single(t => t.CanRemediate);

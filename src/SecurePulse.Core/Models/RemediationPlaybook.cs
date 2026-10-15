@@ -21,8 +21,8 @@ public enum PlaybookTrigger
 
 /// <summary>
 /// A remediation playbook: when a device matches <see cref="Trigger"/>, propose <see cref="Action"/> for it.
-/// Playbooks never send anything themselves: each proposal is a pending device action that a second
-/// person approves (<see cref="DeviceActionPolicy"/>), exactly like a manual request.
+/// Each proposal is a pending device action that a second person approves (<see cref="DeviceActionPolicy"/>),
+/// exactly like a manual request, unless another Owner pre-approved the playbook (<see cref="PlaybookPreApproval"/>).
 /// </summary>
 public sealed record RemediationPlaybook
 {
@@ -59,6 +59,58 @@ public sealed record RemediationPlaybook
 
     /// <summary>When the Worker last checked a tenant's devices against this playbook.</summary>
     public DateTimeOffset? LastRunAt { get; init; }
+
+    /// <summary>
+    /// Pre-approved playbooks send at most this many actions per tenant in any 24 hours without a person
+    /// approving each one; proposals beyond it wait in the queue as usual.
+    /// </summary>
+    public int DailyAutoLimit { get; init; } = PlaybookPreApproval.DefaultDailyLimit;
+
+    /// <summary>
+    /// The Owner (not the last editor) who pre-approved this exact version. Any save clears it, so what was
+    /// approved is what runs. See <see cref="PlaybookPreApproval"/>.
+    /// </summary>
+    public Guid? PreApprovedByUserId { get; init; }
+
+    public string? PreApprovedByName { get; init; }
+    public DateTimeOffset? PreApprovedAt { get; init; }
+    public DateTimeOffset? PreApprovalExpiresAt { get; init; }
+}
+
+/// <summary>
+/// Pre-approval lets a playbook's proposals go out without a person approving each one. Four eyes move to the
+/// playbook: an Owner other than its last editor approves the rule itself, for <see cref="Validity"/>, and only
+/// for actions that don't interrupt the person using the device.
+/// </summary>
+public static class PlaybookPreApproval
+{
+    public static readonly TimeSpan Validity = TimeSpan.FromDays(90);
+    public const int DefaultDailyLimit = 25;
+    public const int MaxDailyLimit = 100;
+
+    /// <summary>Sync and the Defender actions. Restart loses unsaved work, so it always needs a person; retire and wipe can't be in a playbook.</summary>
+    public static bool IsEligible(DeviceAction action) =>
+        action is DeviceAction.Sync or DeviceAction.DefenderQuickScan or DeviceAction.DefenderUpdateSignatures;
+
+    /// <summary>Why <paramref name="granterId"/> can't pre-approve <paramref name="p"/>, or null.</summary>
+    public static string? WhyCannotGrant(RemediationPlaybook p, Guid? granterId, PortalRole? granterRole)
+    {
+        if (granterId is null || granterRole != PortalRole.Owner) return "Only Owners can pre-approve playbooks.";
+        if (granterId == p.UpdatedByUserId) return "You saved this playbook last, so another Owner has to pre-approve it.";
+        if (!IsEligible(p.Action)) return $"{p.Action} can't be pre-approved: each one needs a person's approval.";
+        if (PlaybookRules.Problem(p) is { } problem) return problem;
+        return null;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="p"/>'s proposals may be approved automatically at <paramref name="now"/>.
+    /// <paramref name="granterIsOwner"/>: the pre-approving person is still an Owner today.
+    /// </summary>
+    public static bool IsActive(RemediationPlaybook p, DateTimeOffset now, bool granterIsOwner) =>
+        p.Enabled && granterIsOwner && IsEligible(p.Action) && PlaybookRules.Problem(p) is null
+        && p.PreApprovedByUserId is { } by && by != p.UpdatedByUserId
+        && p.PreApprovedAt is { } at && at <= now
+        && p.PreApprovalExpiresAt is { } until && until > now && until <= at + Validity;
 }
 
 /// <summary>What a playbook may do. Only non-destructive actions that fit the trigger; retire and wipe are never automated.</summary>
@@ -98,6 +150,8 @@ public static class PlaybookRules
         else if (p.Days is not null) return "Days only applies to the \"not checked in\" trigger.";
         if (p.MaxPerRun is < 1 or > MaxMaxPerRun) return $"Proposals per sync must be between 1 and {MaxMaxPerRun}.";
         if (p.Cooldown < MinCooldown || p.Cooldown > MaxCooldown) return "The cooldown must be between 1 hour and 30 days.";
+        if (p.DailyAutoLimit is < 1 or > PlaybookPreApproval.MaxDailyLimit)
+            return $"The daily limit for pre-approved actions must be between 1 and {PlaybookPreApproval.MaxDailyLimit}.";
         return null;
     }
 }

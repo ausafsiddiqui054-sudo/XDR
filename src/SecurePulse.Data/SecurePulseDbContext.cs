@@ -189,6 +189,8 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
             e.HasKey(x => x.Id);
             e.Property(x => x.Name).HasMaxLength(PlaybookRules.MaxNameLength);
             e.Property(x => x.UpdatedByName).HasMaxLength(512);
+            e.Property(x => x.PreApprovedByName).HasMaxLength(512);
+            e.Property(x => x.DailyAutoLimit).HasDefaultValue(PlaybookPreApproval.DefaultDailyLimit);
             e.HasOne<TenantEntity>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
         });
 

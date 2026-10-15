@@ -132,6 +132,11 @@ else
                 </MudTd>
                 <MudTd DataLabel="Decided">
                     <MudText Typo="Typo.body2">@(context.Request.DecidedByName ?? context.Request.CancelledBy ?? "—")</MudText>
+                    @if (context.Request.AutoApproved)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" Icon="@Icons.Material.Rounded.Verified"
+                                 Class="ml-0" data-testid="auto-approved">Pre-approved</MudChip>
+                    }
                     @if (context.Request.DecisionNote is { } note)
                     {
                         <MudText Typo="Typo.caption" Color="Color.Secondary">“@note”</MudText>

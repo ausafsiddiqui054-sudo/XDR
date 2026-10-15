@@ -156,6 +156,10 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
   (any status counts), and one open action per device. Defender actions are Windows only (`DeviceActionPolicy.AppliesTo`).
 - New actions must use `RemediationPermissions.Required` only; one needing another permission means re-consent for every
   tenant and is an organisational decision. Playbook edits are Owner-only, audited, and conditional on `UpdatedAt`.
+- Pre-approval (`PlaybookPreApproval`) is the only path around a per-action approval: Sync and the Defender actions only
+  (`IsEligible`; never Restart), granted by an Owner other than `UpdatedByUserId` for the version they saw, valid 90 days,
+  withdrawn by any save, and dead once the granter isn't an Owner. `IsActive` is the single check; the runner and the
+  Worker's send path both use it. Auto-approval is fail-closed (audit first) and capped by `DailyAutoLimit` per tenant.
 
 ## Defender health invariants
 - Defender data comes through Graph with the assessment app's existing read-only permissions:
@@ -180,8 +184,7 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
   portal still never calls Graph.
 
 ## Next steps (in order)
-1. Every engine from "What this is" is built. Decisions deliberately left open: playbook triggers on failed findings
-   (needs tenant-configuration write actions, i.e. new remediation permissions and re-consent) and pre-approved
-   playbooks (currently every proposal needs a person's approval).
+1. Every engine from "What this is" is built. Decision deliberately left open: playbook triggers on failed findings
+   (needs tenant-configuration write actions, i.e. new remediation permissions and re-consent).
 2. Launching GoPhish campaigns from SecurePulse is deliberately not built: it sends email to people, so it
    needs its own approval and consent decision first. The GoPhish engine only imports results.

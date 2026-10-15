@@ -41,6 +41,29 @@ public sealed class EfDeviceActionRepository(IDbContextFactory<SecurePulseDbCont
         return ids.ToHashSet(StringComparer.Ordinal);
     }
 
+    public async Task<int> CountAutoApprovedSinceAsync(Guid playbookId, Guid tenantId, DateTimeOffset since, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.DeviceActions.CountAsync(a => a.PlaybookId == playbookId && a.TenantId == tenantId && a.AutoApproved && a.RequestedAt >= since, ct);
+    }
+
+    public async Task<DeviceActionRequest?> AutoApproveAsync(Guid id, Guid deciderId, string deciderName, string note, DateTimeOffset at,
+        CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var changed = await db.DeviceActions
+            .Where(a => a.Id == id && a.Status == DeviceActionStatus.PendingApproval && a.ExpiresAt > at && a.PlaybookId != null)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(a => a.Status, DeviceActionStatus.Approved)
+                .SetProperty(a => a.AutoApproved, true)
+                .SetProperty(a => a.DecidedAt, at)
+                .SetProperty(a => a.DecidedByUserId, deciderId)
+                .SetProperty(a => a.DecidedByName, deciderName)
+                .SetProperty(a => a.DecidedByRole, PortalRole.Owner)
+                .SetProperty(a => a.DecisionNote, note), ct);
+        return changed == 0 ? null : await GetAsync(id, ct);
+    }
+
     public async Task<DeviceActionRequest?> GetAsync(Guid id, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);

@@ -281,7 +281,8 @@ internal static class EntityMapping
         SentAt = e.SentAt,
         CompletedAt = e.CompletedAt,
         Error = e.Error,
-        PlaybookId = e.PlaybookId
+        PlaybookId = e.PlaybookId,
+        AutoApproved = e.AutoApproved
     };
 
     public static DeviceActionEntity ToEntity(this DeviceActionRequest m) => new()
@@ -307,20 +308,25 @@ internal static class EntityMapping
         SentAt = m.SentAt,
         CompletedAt = m.CompletedAt,
         Error = m.Error,
-        PlaybookId = m.PlaybookId
+        PlaybookId = m.PlaybookId,
+        AutoApproved = m.AutoApproved
     };
 
     public static RemediationPlaybook ToModel(this PlaybookEntity e) => new()
     {
         Id = e.Id, Name = e.Name, Enabled = e.Enabled, Trigger = e.Trigger, Days = e.Days, Action = e.Action, TenantId = e.TenantId,
         MaxPerRun = e.MaxPerRun, Cooldown = e.Cooldown, CreatedAt = e.CreatedAt, UpdatedByUserId = e.UpdatedByUserId,
-        UpdatedByName = e.UpdatedByName, UpdatedAt = e.UpdatedAt, LastRunAt = e.LastRunAt
+        UpdatedByName = e.UpdatedByName, UpdatedAt = e.UpdatedAt, LastRunAt = e.LastRunAt,
+        DailyAutoLimit = e.DailyAutoLimit, PreApprovedByUserId = e.PreApprovedByUserId, PreApprovedByName = e.PreApprovedByName,
+        PreApprovedAt = e.PreApprovedAt, PreApprovalExpiresAt = e.PreApprovalExpiresAt
     };
 
     public static PlaybookEntity ToEntity(this RemediationPlaybook m) => new()
     {
         Id = m.Id, Name = m.Name, Enabled = m.Enabled, Trigger = m.Trigger, Days = m.Days, Action = m.Action, TenantId = m.TenantId,
         MaxPerRun = m.MaxPerRun, Cooldown = m.Cooldown, CreatedAt = m.CreatedAt, UpdatedByUserId = m.UpdatedByUserId,
-        UpdatedByName = m.UpdatedByName, UpdatedAt = m.UpdatedAt, LastRunAt = m.LastRunAt
+        UpdatedByName = m.UpdatedByName, UpdatedAt = m.UpdatedAt, LastRunAt = m.LastRunAt,
+        DailyAutoLimit = m.DailyAutoLimit, PreApprovedByUserId = m.PreApprovedByUserId, PreApprovedByName = m.PreApprovedByName,
+        PreApprovedAt = m.PreApprovedAt, PreApprovalExpiresAt = m.PreApprovalExpiresAt
     };
 }

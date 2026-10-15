@@ -236,6 +236,16 @@ public interface IDeviceActionRepository
     /// <summary>Devices <paramref name="playbookId"/> proposed an action for in <paramref name="tenantId"/> at or after <paramref name="since"/>, whatever became of it.</summary>
     Task<IReadOnlySet<string>> GetPlaybookDevicesSinceAsync(Guid playbookId, Guid tenantId, DateTimeOffset since, CancellationToken ct = default);
 
+    /// <summary>How many of <paramref name="playbookId"/>'s requests in <paramref name="tenantId"/> were approved automatically at or after <paramref name="since"/>.</summary>
+    Task<int> CountAutoApprovedSinceAsync(Guid playbookId, Guid tenantId, DateTimeOffset since, CancellationToken ct = default);
+
+    /// <summary>
+    /// Approves a pending, unexpired request on behalf of its playbook's pre-approval (decided by the pre-approving
+    /// Owner, <see cref="DeviceActionRequest.AutoApproved"/> set). Null if it was no longer pending.
+    /// </summary>
+    Task<DeviceActionRequest?> AutoApproveAsync(Guid id, Guid deciderId, string deciderName, string note, DateTimeOffset at,
+        CancellationToken ct = default);
+
     /// <summary>
     /// Expires pending requests past their deadline and approved ones not sent within
     /// <paramref name="sendWindow"/>, and fails ones stuck in Sending since before
@@ -256,6 +266,16 @@ public interface IPlaybookRepository
     Task<bool> UpdateAsync(RemediationPlaybook playbook, DateTimeOffset expectedUpdatedAt, CancellationToken ct = default);
 
     Task<bool> DeleteAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>
+    /// Records a pre-approval of the version with <paramref name="expectedUpdatedAt"/>; false if the playbook changed
+    /// since the Owner looked at it (or is gone). Doesn't change <see cref="RemediationPlaybook.UpdatedAt"/>.
+    /// </summary>
+    Task<bool> GrantPreApprovalAsync(Guid id, DateTimeOffset expectedUpdatedAt, Guid byUserId, string byName, DateTimeOffset at,
+        DateTimeOffset expiresAt, CancellationToken ct = default);
+
+    /// <summary>Clears the pre-approval; false if there was none.</summary>
+    Task<bool> WithdrawPreApprovalAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>Records when the Worker last checked devices against the playbook.</summary>
     Task RecordRunAsync(Guid id, DateTimeOffset at, CancellationToken ct = default);

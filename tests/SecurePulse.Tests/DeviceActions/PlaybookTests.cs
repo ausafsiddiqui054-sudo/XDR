@@ -201,7 +201,7 @@ public class PlaybookRunnerTests
 
         public Harness() => Audit = new DeviceActionRequestServiceTests.FlakyAuditLog(Store);
 
-        public PlaybookRunner Runner => new(Store, Store, Store, Audit, Time, NullLogger<PlaybookRunner>.Instance);
+        public PlaybookRunner Runner => new(Store, Store, Store, Audit, Store, Time, NullLogger<PlaybookRunner>.Instance);
         public IPlaybookRepository Playbooks => Store;
         public IDeviceActionRepository Actions => Store;
 
@@ -354,7 +354,7 @@ public class PlaybookServiceTests
         public SampleDataStore Store { get; } = new();
         public FakeTime Time { get; } = new(PlaybookData.T0);
         public FixedUser User { get; } = FixedUser.Owner();
-        public PlaybookService Service => new(Store, Store, Store, User, new AuditTrail(Store, User, Time, NullLogger<AuditTrail>.Instance), Time);
+        public PlaybookService Service => new(Store, Store, Store, User, Store, new AuditTrail(Store, User, Time, NullLogger<AuditTrail>.Instance), Time);
 
         public async Task<IReadOnlyList<AuditEvent>> EventsAsync(string action) => await Store.QueryAsync(new AuditQuery { Action = action });
     }

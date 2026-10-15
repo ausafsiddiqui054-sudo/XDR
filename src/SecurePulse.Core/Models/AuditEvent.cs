@@ -83,6 +83,9 @@ public static class AuditActions
     /// <summary>Written by the Worker before the Graph call; if it can't be written, nothing is sent.</summary>
     public const string DeviceActionSending = "device.action-sending";
 
+    /// <summary>Written by the Worker before a pre-approved playbook's proposal is approved; if it can't be written, it waits for a person.</summary>
+    public const string DeviceActionAutoApproved = "device.action-auto-approved";
+
     public const string DeviceActionResult = "device.action-result";
 
     /// <summary>A tenant's Wazuh agent group was set, changed or cleared (decides which agents its findings come from).</summary>
@@ -94,6 +97,12 @@ public static class AuditActions
     public const string PlaybookCreated = "remediation.playbook-created";
     public const string PlaybookChanged = "remediation.playbook-changed";
     public const string PlaybookDeleted = "remediation.playbook-deleted";
+
+    /// <summary>An Owner other than the last editor pre-approved a playbook.</summary>
+    public const string PlaybookPreApproved = "remediation.playbook-preapproved";
+
+    /// <summary>A pre-approval was withdrawn (by a person, or because the playbook was changed).</summary>
+    public const string PlaybookPreApprovalWithdrawn = "remediation.playbook-preapproval-withdrawn";
 
     public const string RemediationEnabled = "onboarding.remediation-enabled";
     public const string RemediationDisabled = "onboarding.remediation-disabled";
@@ -152,6 +161,9 @@ public static class AuditActions
         PlaybookCreated => "Playbook created",
         PlaybookChanged => "Playbook changed",
         PlaybookDeleted => "Playbook deleted",
+        PlaybookPreApproved => "Playbook pre-approved",
+        PlaybookPreApprovalWithdrawn => "Playbook pre-approval withdrawn",
+        DeviceActionAutoApproved => "Device action approved by pre-approved playbook",
         RemediationEnabled => "Remediation access granted",
         RemediationDisabled => "Remediation access turned off",
         AuditExported => "Audit log exported",

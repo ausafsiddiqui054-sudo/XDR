@@ -48,7 +48,21 @@
                              Min="1" Max="720" HelperText="1 to 720" />
         </MudStack>
 
+        @if (PlaybookPreApproval.IsEligible(_action))
+        {
+            <MudNumericField T="int" @bind-Value="_dailyAutoLimit" Label="If pre-approved: automatic actions per tenant a day" Variant="Variant.Outlined"
+                             Margin="Margin.Dense" Min="1" Max="PlaybookPreApproval.MaxDailyLimit" Class="mb-3"
+                             HelperText="Beyond this, proposals wait for a person" UserAttributes="@(new() { ["data-testid"] = "playbook-daily-limit" })" />
+        }
+
         <MudSwitch T="bool" @bind-Value="_enabled" Color="Color.Primary" Label="On" Class="mb-3" />
+
+        @if (Playbook?.PreApprovedByUserId is not null)
+        {
+            <MudAlert Severity="MudBlazor.Severity.Warning" Variant="Variant.Text" Dense="true" Class="mb-3" data-testid="withdraws-preapproval">
+                Saving withdraws the pre-approval by @Playbook.PreApprovedByName. Another Owner has to pre-approve the new version.
+            </MudAlert>
+        }
 
         @if (Problem is { } problem)
         {
@@ -58,9 +72,9 @@
         <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Start" Class="sp-note">
             <MudIcon Icon="@Icons.Material.Rounded.HowToReg" Size="Size.Small" Color="Color.Primary" />
             <MudText Typo="Typo.caption">
-                A playbook never sends anything by itself. After each device sync, matching devices get a pending request in
-                Device actions, in your name, and another admin has to approve each one. You can't approve the proposals of a
-                playbook you saved. Retire and wipe are never automated.
+                After each device sync, matching devices get a pending request in Device actions, in your name, and another admin
+                approves each one; you can't approve the proposals of a playbook you saved. Another Owner can pre-approve the
+                playbook for sync and Defender actions, so they go out without a per-action approval. Retire and wipe are never automated.
             </MudText>
         </MudStack>
     </DialogContent>
@@ -86,12 +100,13 @@
     private int _maxPerRun = PlaybookRules.DefaultMaxPerRun;
     private int _cooldownHours = (int)PlaybookRules.DefaultCooldown.TotalHours;
     private bool _enabled = true;
+    private int _dailyAutoLimit = PlaybookPreApproval.DefaultDailyLimit;
 
     protected override void OnInitialized()
     {
         if (Playbook is not { } p) return;
-        (_name, _trigger, _days, _action, _tenantId, _maxPerRun, _cooldownHours, _enabled) =
-            (p.Name, p.Trigger, p.Days ?? 7, p.Action, p.TenantId ?? Guid.Empty, p.MaxPerRun, (int)p.Cooldown.TotalHours, p.Enabled);
+        (_name, _trigger, _days, _action, _tenantId, _maxPerRun, _cooldownHours, _enabled, _dailyAutoLimit) =
+            (p.Name, p.Trigger, p.Days ?? 7, p.Action, p.TenantId ?? Guid.Empty, p.MaxPerRun, (int)p.Cooldown.TotalHours, p.Enabled, p.DailyAutoLimit);
     }
 
     private void TriggerChanged(PlaybookTrigger trigger)
@@ -101,7 +116,7 @@
     }
 
     private PlaybookDraft Draft => new(_name?.Trim() ?? "", _enabled, _trigger, _trigger == PlaybookTrigger.NotCheckedIn ? _days : null, _action,
-        _tenantId == Guid.Empty ? null : _tenantId, _maxPerRun, TimeSpan.FromHours(_cooldownHours));
+        _tenantId == Guid.Empty ? null : _tenantId, _maxPerRun, TimeSpan.FromHours(_cooldownHours), _dailyAutoLimit);
 
     // The same rules the service applies, so the form says what's wrong before saving.
     private string? Problem
@@ -112,7 +127,7 @@
             return PlaybookRules.Problem(new RemediationPlaybook
             {
                 Id = Guid.Empty, Name = d.Name, Enabled = d.Enabled, Trigger = d.Trigger, Days = d.Days, Action = d.Action, TenantId = d.TenantId,
-                MaxPerRun = d.MaxPerRun, Cooldown = d.Cooldown, CreatedAt = default, UpdatedByUserId = Guid.Empty, UpdatedByName = "", UpdatedAt = default
+                MaxPerRun = d.MaxPerRun, Cooldown = d.Cooldown, DailyAutoLimit = d.DailyAutoLimit, CreatedAt = default, UpdatedByUserId = Guid.Empty, UpdatedByName = "", UpdatedAt = default
             });
         }
     }

@@ -6,22 +6,25 @@ namespace SecurePulse.Web.Services;
 
 /// <summary>What the playbook editor submits.</summary>
 public sealed record PlaybookDraft(string Name, bool Enabled, PlaybookTrigger Trigger, int? Days, DeviceAction Action, Guid? TenantId,
-    int MaxPerRun, TimeSpan Cooldown);
+    int MaxPerRun, TimeSpan Cooldown, int DailyAutoLimit = PlaybookPreApproval.DefaultDailyLimit);
 
 /// <summary>A playbook with what the page shows next to it.</summary>
-public sealed record PlaybookView(RemediationPlaybook Playbook, string Scope, int ProposedLastWeek, int WaitingForApproval);
+public sealed record PlaybookView(RemediationPlaybook Playbook, string Scope, int ProposedLastWeek, int WaitingForApproval,
+    int AutoApprovedLastWeek, bool PreApprovalActive, string? WhyCannotPreApprove);
 
 public sealed record PlaybookOutcome(bool Ok, string Message, RemediationPlaybook? Playbook = null);
 
 /// <summary>
 /// Remediation playbooks in the portal. Owners create, change and delete them (audited); MSP admins can see them.
-/// Playbooks only ever propose device actions: the Worker adds them to the approval queue after each device sync.
+/// The Worker adds their proposals to the approval queue after each device sync. Another Owner can pre-approve a
+/// playbook so its proposals don't each need a person; any save withdraws that, and anyone operating can withdraw it.
 /// </summary>
 public sealed class PlaybookService(
     IPlaybookRepository playbooks,
     IDeviceActionRepository actions,
     ITenantRepository tenants,
     IUserContextAccessor users,
+    IPortalUserRepository portalUsers,
     AuditTrail audit,
     TimeProvider time)
 {
@@ -30,13 +33,19 @@ public sealed class PlaybookService(
         var user = await users.GetAsync();
         if (!user.IsOperator) return [];
         var names = (await tenants.GetAllAsync(ct)).ToDictionary(t => t.Id, t => t.DisplayName);
-        var weekAgo = time.GetUtcNow().AddDays(-7);
+        var now = time.GetUtcNow();
+        var weekAgo = now.AddDays(-7);
         var fromPlaybooks = (await actions.QueryAsync(new DeviceActionQuery { Limit = 1000 }, ct)).Where(a => a.PlaybookId is not null).ToList();
-        return (await playbooks.GetAllAsync(ct)).Select(p => new PlaybookView(p,
+        var views = new List<PlaybookView>();
+        foreach (var p in await playbooks.GetAllAsync(ct))
+            views.Add(new PlaybookView(p,
                 p.TenantId is { } id ? names.GetValueOrDefault(id, "Removed tenant") : "Every tenant with remediation access",
                 fromPlaybooks.Count(a => a.PlaybookId == p.Id && a.RequestedAt >= weekAgo),
-                fromPlaybooks.Count(a => a.PlaybookId == p.Id && a.Status == DeviceActionStatus.PendingApproval)))
-            .ToList();
+                fromPlaybooks.Count(a => a.PlaybookId == p.Id && a.Status == DeviceActionStatus.PendingApproval),
+                fromPlaybooks.Count(a => a.PlaybookId == p.Id && a.AutoApproved && a.RequestedAt >= weekAgo),
+                await IsActiveAsync(p, now, ct),
+                PlaybookPreApproval.WhyCannotGrant(p, user.UserId, user.Role)));
+        return views;
     }
 
     public async Task<PlaybookOutcome> CreateAsync(PlaybookDraft draft, CancellationToken ct = default)
@@ -63,7 +72,12 @@ public sealed class PlaybookService(
         var user = await users.GetAsync();
         if (!user.IsOwner || user.UserId is not { } userId) return new(false, "Only Owners can change playbooks.");
         if (await playbooks.GetAsync(id, ct) is not { } current) return new(false, "Playbook not found.");
-        var updated = Apply(draft, current with { UpdatedAt = time.GetUtcNow(), UpdatedByUserId = userId, UpdatedByName = user.Name });
+        // Any save withdraws a pre-approval: what another Owner approved must be exactly what runs.
+        var updated = Apply(draft, current with
+        {
+            UpdatedAt = time.GetUtcNow(), UpdatedByUserId = userId, UpdatedByName = user.Name,
+            PreApprovedByUserId = null, PreApprovedByName = null, PreApprovedAt = null, PreApprovalExpiresAt = null
+        });
         if (await ProblemAsync(updated, ct) is { } problem) return new(false, problem);
 
         if (!await playbooks.UpdateAsync(updated, expectedUpdatedAt, ct))
@@ -72,16 +86,75 @@ public sealed class PlaybookService(
         details["previous"] = Describe(current);
         await audit.RecordAsync(AuditActions.PlaybookChanged, AuditOutcome.Success,
             $"Changed playbook \"{updated.Name}\": {Describe(updated)}", updated.TenantId ?? current.TenantId, "Playbook", id.ToString(), details, user);
-        return new(true, $"Playbook \"{updated.Name}\" saved.", updated);
+        if (current.PreApprovedByUserId is not null)
+            await audit.RecordAsync(AuditActions.PlaybookPreApprovalWithdrawn, AuditOutcome.Success,
+                $"Pre-approval of playbook \"{updated.Name}\" (by {current.PreApprovedByName}) withdrawn because the playbook was changed",
+                updated.TenantId ?? current.TenantId, "Playbook", id.ToString(),
+                new Dictionary<string, string> { ["reason"] = "changed", ["preApprovedBy"] = current.PreApprovedByName ?? "" }, user);
+        return new(true, current.PreApprovedByUserId is null
+            ? $"Playbook \"{updated.Name}\" saved."
+            : $"Playbook \"{updated.Name}\" saved. Its pre-approval was withdrawn: another Owner has to pre-approve this version.", updated);
     }
 
     public async Task<PlaybookOutcome> SetEnabledAsync(Guid id, bool enabled, DateTimeOffset expectedUpdatedAt, CancellationToken ct = default)
     {
         if (await playbooks.GetAsync(id, ct) is not { } p) return new(false, "Playbook not found.");
         if (p.Enabled == enabled) return new(true, "No change.", p);
-        return await UpdateAsync(id, new PlaybookDraft(p.Name, enabled, p.Trigger, p.Days, p.Action, p.TenantId, p.MaxPerRun, p.Cooldown),
+        return await UpdateAsync(id, new PlaybookDraft(p.Name, enabled, p.Trigger, p.Days, p.Action, p.TenantId, p.MaxPerRun, p.Cooldown, p.DailyAutoLimit),
             expectedUpdatedAt, ct);
     }
+
+    /// <summary>
+    /// An Owner other than the last editor approves this version of the playbook for <see cref="PlaybookPreApproval.Validity"/>.
+    /// It authorises writes without a per-action approval, so it's fail-closed: the audit entry is written first.
+    /// </summary>
+    public async Task<PlaybookOutcome> PreApproveAsync(Guid id, DateTimeOffset expectedUpdatedAt, CancellationToken ct = default)
+    {
+        var user = await users.GetAsync();
+        if (await playbooks.GetAsync(id, ct) is not { } p) return new(false, "Playbook not found.");
+        if (PlaybookPreApproval.WhyCannotGrant(p, user.UserId, user.Role) is { } why) return new(false, why);
+        if (p.UpdatedAt != expectedUpdatedAt)
+            return new(false, "The playbook changed since you opened it. Review the new version before pre-approving it.");
+
+        var now = time.GetUtcNow();
+        var until = now + PlaybookPreApproval.Validity;
+        try
+        {
+            await audit.RecordOrThrowAsync(AuditActions.PlaybookPreApproved, AuditOutcome.Success,
+                $"Pre-approved playbook \"{p.Name}\" until {until.UtcDateTime:yyyy-MM-dd}: {Describe(p)}; up to {p.DailyAutoLimit} automatic actions per tenant a day",
+                p.TenantId, "Playbook", id.ToString(),
+                new Dictionary<string, string>(Details(p)) { ["expiresAt"] = until.ToString("O"), ["lastEditor"] = p.UpdatedByName }, user);
+        }
+        catch (AuditUnavailableException)
+        {
+            return new(false, "The audit log couldn't be written, so the playbook wasn't pre-approved. Try again later.");
+        }
+        if (!await playbooks.GrantPreApprovalAsync(id, expectedUpdatedAt, user.UserId!.Value, user.Name, now, until, ct))
+        {
+            await audit.RecordAsync(AuditActions.PlaybookPreApproved, AuditOutcome.Failure,
+                $"Pre-approval of playbook \"{p.Name}\" not applied: it changed at the same time", p.TenantId, "Playbook", id.ToString(), null, user);
+            return new(false, "The playbook changed since you opened it. Review the new version before pre-approving it.");
+        }
+        return new(true, $"\"{p.Name}\" is pre-approved until {until.UtcDateTime:d MMM yyyy}. Its proposals go out without a per-action approval, " +
+                         $"up to {p.DailyAutoLimit} per tenant a day.");
+    }
+
+    /// <summary>Withdrawing is the safe direction, so any Owner or MSP admin can do it.</summary>
+    public async Task<PlaybookOutcome> WithdrawPreApprovalAsync(Guid id, CancellationToken ct = default)
+    {
+        var user = await users.GetAsync();
+        if (!user.IsOperator) return new(false, "Only Owners and MSP admins can withdraw a pre-approval.");
+        if (await playbooks.GetAsync(id, ct) is not { } p) return new(false, "Playbook not found.");
+        if (!await playbooks.WithdrawPreApprovalAsync(id, ct)) return new(true, "It wasn't pre-approved.");
+        await audit.RecordAsync(AuditActions.PlaybookPreApprovalWithdrawn, AuditOutcome.Success,
+            $"Withdrew the pre-approval of playbook \"{p.Name}\" (by {p.PreApprovedByName})", p.TenantId, "Playbook", id.ToString(),
+            new Dictionary<string, string> { ["reason"] = "withdrawn", ["preApprovedBy"] = p.PreApprovedByName ?? "" }, user);
+        return new(true, $"Pre-approval of \"{p.Name}\" withdrawn. Its proposals need a person's approval again.");
+    }
+
+    private async Task<bool> IsActiveAsync(RemediationPlaybook p, DateTimeOffset now, CancellationToken ct) =>
+        p.PreApprovedByUserId is { } granter
+        && PlaybookPreApproval.IsActive(p, now, (await portalUsers.GetAsync(granter, ct))?.Role == PortalRole.Owner);
 
     /// <summary>Deleting stops new proposals; pending ones stay in the queue for a person to decide.</summary>
     public async Task<PlaybookOutcome> DeleteAsync(Guid id, CancellationToken ct = default)
@@ -103,7 +176,8 @@ public sealed class PlaybookService(
         Action = d.Action,
         TenantId = d.TenantId,
         MaxPerRun = d.MaxPerRun,
-        Cooldown = d.Cooldown
+        Cooldown = d.Cooldown,
+        DailyAutoLimit = d.DailyAutoLimit
     };
 
     private async Task<string?> ProblemAsync(RemediationPlaybook p, CancellationToken ct)
@@ -137,6 +211,7 @@ public sealed class PlaybookService(
         ["action"] = p.Action.ToString(),
         ["tenantId"] = p.TenantId?.ToString() ?? "all",
         ["maxPerRun"] = p.MaxPerRun.ToString(),
-        ["cooldownHours"] = ((int)p.Cooldown.TotalHours).ToString()
+        ["cooldownHours"] = ((int)p.Cooldown.TotalHours).ToString(),
+        ["dailyAutoLimit"] = p.DailyAutoLimit.ToString()
     };
 }

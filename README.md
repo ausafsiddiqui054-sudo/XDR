@@ -271,6 +271,27 @@ consent again.
   ID in the details. Deleting a playbook stops new proposals; pending ones stay for a person to decide.
 - `Playbooks:Enabled` (Worker, default `true`) switches the whole feature off.
 
+**Pre-approved playbooks.** For actions that don't interrupt the person at the device (**Sync, Defender
+quick scan, Update Defender signatures**), an Owner can pre-approve a playbook so its proposals go out
+without a person approving each one. Four eyes move to the playbook itself:
+
+- **Who:** an Owner other than the playbook's last editor (**Pre-approve** on the card, after a
+  confirmation that spells out the trigger, action and limits). It covers exactly the version that
+  Owner saw: **any save withdraws it**, even switching the playbook off, and any Owner or MSP admin
+  can **Withdraw pre-approval** at any time. Restart always needs a per-action approval; retire and
+  wipe can't be in a playbook.
+- **For how long:** 90 days, then it lapses and proposals wait for a person until an Owner
+  pre-approves again. It also stops if the pre-approving person is no longer an Owner.
+- **How much:** each playbook has a daily limit per tenant (default 25, up to 100) over a rolling
+  24 hours; proposals beyond it wait for a person.
+- **Fail-closed:** pre-approving writes *Playbook pre-approved* to the audit log first, and nothing is
+  granted if that fails. For each automatic approval the Worker writes *Device action approved by
+  pre-approved playbook* first; if that fails the request waits for a person. The request records the
+  pre-approving Owner as the approver, and before sending the Worker re-checks that the pre-approval
+  still holds (same playbook, action and Owner, not expired or withdrawn), on top of the usual checks.
+- The card shows who pre-approved it and until when, and how many actions went out without a
+  per-action approval this week; the Device actions history marks them *Pre-approved*.
+
 
 ## Security scans
 
@@ -726,7 +747,7 @@ checks are excluded. Any open **Critical** caps the grade at C.
 | Portal (Overview, Findings, Tenants) | Built; sample data or PostgreSQL |
 | Endpoints (Intune device inventory, device detail) | Built |
 | Defender health per device (Intune antivirus state, Defender for Endpoint sensor via advanced hunting) | Built; tested with stubbed Graph and against PostgreSQL 16; needs a real tenant with Defender for Endpoint to exercise |
-| Remediation playbooks (device-state triggers proposing Sync / Restart / Defender scan or signature update, four-eyes approval) | Built; tested with stubbed Graph and against PostgreSQL 16; needs the remediation app and a real tenant to exercise |
+| Remediation playbooks (device-state triggers proposing Sync / Restart / Defender scan or signature update, four-eyes approval; optional 90-day pre-approval by a second Owner for Sync and Defender actions, with a daily cap) | Built; tested with stubbed Graph and against PostgreSQL 16; needs the remediation app and a real tenant to exercise |
 | Device remote actions (remediation consent, approval queue, Worker sending via Graph) | Built; tested with stubbed Graph and against PostgreSQL 16; needs the remediation app registration and a real tenant to exercise |
 | PostgreSQL persistence (`SecurePulse.Data`) | Built; tested against PostgreSQL 16 |
 | Shared data-protection key ring (PostgreSQL, certificate-encrypted) | Built; tested against PostgreSQL 16 and with two portal instances |

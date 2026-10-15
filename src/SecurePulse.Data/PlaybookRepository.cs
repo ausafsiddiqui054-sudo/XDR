@@ -42,7 +42,36 @@ public sealed class EfPlaybookRepository(IDbContextFactory<SecurePulseDbContext>
                 .SetProperty(x => x.Cooldown, p.Cooldown)
                 .SetProperty(x => x.UpdatedByUserId, p.UpdatedByUserId)
                 .SetProperty(x => x.UpdatedByName, p.UpdatedByName)
-                .SetProperty(x => x.UpdatedAt, p.UpdatedAt), ct) > 0;
+                .SetProperty(x => x.UpdatedAt, p.UpdatedAt)
+                .SetProperty(x => x.DailyAutoLimit, p.DailyAutoLimit)
+                .SetProperty(x => x.PreApprovedByUserId, p.PreApprovedByUserId)
+                .SetProperty(x => x.PreApprovedByName, p.PreApprovedByName)
+                .SetProperty(x => x.PreApprovedAt, p.PreApprovedAt)
+                .SetProperty(x => x.PreApprovalExpiresAt, p.PreApprovalExpiresAt), ct) > 0;
+    }
+
+    public async Task<bool> GrantPreApprovalAsync(Guid id, DateTimeOffset expectedUpdatedAt, Guid byUserId, string byName, DateTimeOffset at,
+        DateTimeOffset expiresAt, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        // Conditional on the version the Owner reviewed: an edit in between means they approved something else.
+        return await db.Playbooks.Where(x => x.Id == id && x.UpdatedAt == expectedUpdatedAt && x.UpdatedByUserId != byUserId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.PreApprovedByUserId, byUserId)
+                .SetProperty(x => x.PreApprovedByName, byName)
+                .SetProperty(x => x.PreApprovedAt, at)
+                .SetProperty(x => x.PreApprovalExpiresAt, expiresAt), ct) > 0;
+    }
+
+    public async Task<bool> WithdrawPreApprovalAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.Playbooks.Where(x => x.Id == id && x.PreApprovedByUserId != null)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.PreApprovedByUserId, (Guid?)null)
+                .SetProperty(x => x.PreApprovedByName, (string?)null)
+                .SetProperty(x => x.PreApprovedAt, (DateTimeOffset?)null)
+                .SetProperty(x => x.PreApprovalExpiresAt, (DateTimeOffset?)null), ct) > 0;
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default)
