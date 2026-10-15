@@ -257,6 +257,8 @@ public class IntuneDeviceActionSenderTests
     [InlineData(DeviceAction.Restart, "rebootNow", null)]
     [InlineData(DeviceAction.Retire, "retire", null)]
     [InlineData(DeviceAction.Wipe, "wipe", """{"keepEnrollmentData":false,"keepUserData":false}""")]
+    [InlineData(DeviceAction.DefenderQuickScan, "windowsDefenderScan", """{"quickScan":true}""")]
+    [InlineData(DeviceAction.DefenderUpdateSignatures, "windowsDefenderUpdateSignatures", null)]
     public async Task PostsTheRightGraphAction(DeviceAction action, string path, string? body)
     {
         var (sender, stub) = Create(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent)));

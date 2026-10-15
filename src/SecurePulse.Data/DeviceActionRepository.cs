@@ -32,6 +32,15 @@ public sealed class EfDeviceActionRepository(IDbContextFactory<SecurePulseDbCont
         }
     }
 
+    public async Task<IReadOnlySet<string>> GetPlaybookDevicesSinceAsync(Guid playbookId, Guid tenantId, DateTimeOffset since, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var ids = await db.DeviceActions.AsNoTracking()
+            .Where(a => a.PlaybookId == playbookId && a.TenantId == tenantId && a.RequestedAt >= since)
+            .Select(a => a.DeviceId).Distinct().ToListAsync(ct);
+        return ids.ToHashSet(StringComparer.Ordinal);
+    }
+
     public async Task<DeviceActionRequest?> GetAsync(Guid id, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);

@@ -182,7 +182,8 @@ the result page shows no tenant data.
 
 ## Device remote actions
 
-Sync, restart, retire and wipe for Intune devices, from a device's page. They are write actions,
+Sync, restart, retire and wipe for Intune devices, plus a Defender Antivirus quick scan and signature
+update on Windows devices, from a device's page. They are write actions,
 so each one needs three things: remediation consent on the tenant, a second person's approval,
 and audit entries from request to result.
 
@@ -220,7 +221,8 @@ actions (`FOR UPDATE SKIP LOCKED`, so several Workers never send one twice) and 
    policy above (it doesn't trust the queue alone);
 2. gets a fresh token for the remediation app and checks its tenant and `roles` again;
 3. writes the *sending* audit entry, and sends nothing if that write fails;
-4. calls Graph v1.0 once (`syncDevice`, `rebootNow`, `retire`, or `wipe` with no data kept).
+4. calls Graph v1.0 once (`syncDevice`, `rebootNow`, `retire`, `wipe` with no data kept,
+   `windowsDefenderScan` as a quick scan, or `windowsDefenderUpdateSignatures`).
 
 Failures are recorded with the reason and never retried; request it again if it's still needed.
 A timeout or a Worker that stopped mid-call is reported as *outcome unknown: check the device in
@@ -236,6 +238,39 @@ Setup:
 - **Worker:** `Remediation:AppClientId`, `Remediation:CertificateThumbprint` (in the Worker user's
   store), optionally `Remediation:SendTimeout` (60 seconds), `DeviceActions:Enabled`,
   `DeviceActions:PollInterval` and `DeviceActions:StuckSendingAfter` (10 minutes).
+
+### Remediation playbooks
+
+Playbooks propose device actions automatically, n8n-style (*when this happens, do that*), and leave
+the decision to a person: **a playbook never sends anything itself.** After each successful device
+sync the Worker checks the tenant's fresh inventory against the enabled playbooks and adds a pending
+request to **Device actions** for each matching device. From there it is an ordinary request: another
+admin approves or rejects it, and the Worker re-checks the policy, remediation access and token before
+sending. The two Defender actions need the same single permission as the others, so tenants don't
+consent again.
+
+| When a device… | Can propose |
+|---|---|
+| hasn't checked in for N days (1–90) | Sync, Restart |
+| is noncompliant in Intune | Sync, Restart |
+| has Defender signatures out of date | Update Defender signatures, Sync |
+| has a Defender quick scan overdue | Defender quick scan |
+| needs a restart for Defender | Restart |
+
+- **Owners** create, change, switch on/off and delete playbooks under **Playbooks** (each change is
+  in the audit log as *Playbook created / changed / deleted*); MSP admins can see them. Edits are
+  conditional on the version you opened, so two Owners can't overwrite each other.
+- **Four eyes.** Proposals are requested in the name of whoever last saved the playbook, so that
+  person can't approve them. **Retire and wipe are never automated.** Defender actions only go to
+  Windows devices.
+- **Limits.** A playbook applies to one tenant or to every tenant with remediation access; it proposes
+  at most *N* actions per tenant per sync (default 20, up to 100) and at most one per device per
+  cooldown (default 1 day), whatever happened to the last one. A device that already has an open
+  request is left alone. Proposals expire after 24 hours like any request.
+- **Audit.** Each proposal records *Device action requested* with the playbook as the actor and its
+  ID in the details. Deleting a playbook stops new proposals; pending ones stay for a person to decide.
+- `Playbooks:Enabled` (Worker, default `true`) switches the whole feature off.
+
 
 ## Security scans
 
@@ -691,6 +726,7 @@ checks are excluded. Any open **Critical** caps the grade at C.
 | Portal (Overview, Findings, Tenants) | Built; sample data or PostgreSQL |
 | Endpoints (Intune device inventory, device detail) | Built |
 | Defender health per device (Intune antivirus state, Defender for Endpoint sensor via advanced hunting) | Built; tested with stubbed Graph and against PostgreSQL 16; needs a real tenant with Defender for Endpoint to exercise |
+| Remediation playbooks (device-state triggers proposing Sync / Restart / Defender scan or signature update, four-eyes approval) | Built; tested with stubbed Graph and against PostgreSQL 16; needs the remediation app and a real tenant to exercise |
 | Device remote actions (remediation consent, approval queue, Worker sending via Graph) | Built; tested with stubbed Graph and against PostgreSQL 16; needs the remediation app registration and a real tenant to exercise |
 | PostgreSQL persistence (`SecurePulse.Data`) | Built; tested against PostgreSQL 16 |
 | Shared data-protection key ring (PostgreSQL, certificate-encrypted) | Built; tested against PostgreSQL 16 and with two portal instances |

@@ -76,6 +76,9 @@ builder.Services.AddOptions<DeviceSyncOptions>()
     .Validate(o => o.Interval >= TimeSpan.FromMinutes(1), "DeviceSync:Interval must be at least one minute.")
     .Validate(o => o.MaxParallelTenants >= 1, "DeviceSync:MaxParallelTenants must be at least 1.")
     .ValidateOnStart();
+// Remediation playbooks: after each sync, propose device actions for matching devices (each still needs approval).
+var playbookOptions = builder.Configuration.GetSection("Playbooks").Get<PlaybookOptions>() ?? new PlaybookOptions();
+if (playbookOptions.Enabled) builder.Services.AddSingleton<PlaybookRunner>();
 builder.Services.AddSingleton<DeviceSyncService>();
 builder.Services.AddHostedService<DeviceSyncWorker>();
 

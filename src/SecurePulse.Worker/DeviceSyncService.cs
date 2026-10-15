@@ -15,7 +15,8 @@ public sealed class DeviceSyncService(
     IDeviceRepository devices,
     IDeviceInventorySource source,
     IOptions<DeviceSyncOptions> options,
-    ILogger<DeviceSyncService> logger)
+    ILogger<DeviceSyncService> logger,
+    PlaybookRunner? playbooks = null)
 {
     public async Task<DeviceSyncSummary> SyncAllAsync(CancellationToken ct = default)
     {
@@ -59,6 +60,19 @@ public sealed class DeviceSyncService(
         {
             logger.LogError(ex, "Saving {Source} sync for {Tenant} ({TenantId}) failed", source.Name, tenant.DisplayName, tenant.Id);
             return false;
+        }
+
+        // Playbooks look at the fresh inventory only; a failed sync keeps the old one, which they've already seen.
+        if (result.Succeeded && playbooks is not null)
+        {
+            try
+            {
+                await playbooks.RunForTenantAsync(tenant, ct);
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                logger.LogError(ex, "Playbooks for {Tenant} ({TenantId}) failed; the sync itself succeeded", tenant.DisplayName, tenant.Id);
+            }
         }
 
         return result.Succeeded;

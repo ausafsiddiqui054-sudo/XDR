@@ -42,6 +42,28 @@ public sealed partial class DeviceActionHttpTests(PortalAuthEndpointTests.Portal
         Assert.Contains("/access-pending", response.Headers.Location!.ToString());
     }
 
+    [Theory]
+    [InlineData("owner", true)]
+    [InlineData("msp-admin", false)]
+    public async Task OperatorsSeePlaybooks_OnlyOwnersCanCreateThem(string persona, bool canCreate)
+    {
+        var html = await (await SignInAsync(persona)).GetStringAsync("/devices/playbooks");
+
+        Assert.Contains("Remediation playbooks", html);
+        Assert.Contains("Retire and wipe are never automated", html);
+        Assert.Equal(canCreate, html.Contains("data-testid=\"new-playbook\""));
+    }
+
+    [Fact]
+    public async Task ClientViewersCantOpenPlaybooks()
+    {
+        var tenant = (await factory.Services.GetRequiredService<ITenantRepository>().GetAllAsync()).First(t => t.CanRemediate);
+        var response = await (await SignInAsync($"viewer:{tenant.Id}")).GetAsync("/devices/playbooks");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains("/access-pending", response.Headers.Location!.ToString());
+    }
+
     [Fact]
     public async Task DevicePagesOfARemediationTenantOfferActionsToOperatorsOnly()
     {

@@ -47,6 +47,11 @@ else
                             {
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error">Owner approval</MudChip>
                             }
+                            else if (a.PlaybookId is not null)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Href="devices/playbooks"
+                                         Icon="@Icons.Material.Rounded.AccountTree" data-testid="from-playbook">Playbook</MudChip>
+                            }
                         </MudStack>
                         <MudText Typo="Typo.body2" Color="Color.Secondary">
                             <MudLink Href="@($"endpoints/{a.TenantId}/{Uri.EscapeDataString(a.DeviceId)}")" Typo="Typo.body2">@v.TenantName</MudLink>

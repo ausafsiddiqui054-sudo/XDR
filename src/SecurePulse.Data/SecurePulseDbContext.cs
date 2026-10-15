@@ -17,6 +17,7 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
     public DbSet<AuditEventEntity> AuditEvents => Set<AuditEventEntity>();
     public DbSet<ScanRunEntity> ScanRuns => Set<ScanRunEntity>();
     public DbSet<DeviceActionEntity> DeviceActions => Set<DeviceActionEntity>();
+    public DbSet<PlaybookEntity> Playbooks => Set<PlaybookEntity>();
     public DbSet<DataProtectionKeyEntity> DataProtectionKeys => Set<DataProtectionKeyEntity>();
     public DbSet<AuditExportCheckpointEntity> AuditExportCheckpoints => Set<AuditExportCheckpointEntity>();
 
@@ -177,6 +178,17 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
                 .HasDatabaseName("IX_device_actions_open");
             e.HasIndex(x => new { x.Status, x.DecidedAt });
             e.HasIndex(x => new { x.TenantId, x.RequestedAt });
+            // Playbook cooldowns look up a playbook's recent proposals. No foreign key: history outlives a deleted playbook.
+            e.HasIndex(x => new { x.PlaybookId, x.TenantId, x.RequestedAt });
+            e.HasOne<TenantEntity>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<PlaybookEntity>(e =>
+        {
+            e.ToTable("remediation_playbooks");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).HasMaxLength(PlaybookRules.MaxNameLength);
+            e.Property(x => x.UpdatedByName).HasMaxLength(512);
             e.HasOne<TenantEntity>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
         });
 

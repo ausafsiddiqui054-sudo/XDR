@@ -1,0 +1,161 @@
+@page "/devices/playbooks"
+@attribute [Authorize(Policy = Policies.Operator)]
+@inject PlaybookService Playbooks
+@inject SecurePulse.Core.Abstractions.ITenantRepository TenantStore
+@inject IUserContextAccessor Current
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<PageTitle>Playbooks · SecurePulse</PageTitle>
+
+<MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap" Class="mb-6" Spacing="3">
+    <div style="max-width:760px">
+        <MudText Typo="Typo.h4">Remediation playbooks</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            After each device sync, SecurePulse checks devices against these playbooks and proposes an action for each match.
+            Proposals wait in <MudLink Href="devices/actions" Typo="Typo.body2">Device actions</MudLink> until another admin approves them;
+            nothing is sent before that. Retire and wipe are never automated.
+        </MudText>
+    </div>
+    @if (_isOwner)
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add" OnClick="@(() => EditAsync(null))"
+                   data-testid="new-playbook">New playbook</MudButton>
+    }
+</MudStack>
+
+@if (_items is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_items.Count == 0)
+{
+    <MudPaper Class="sp-card pa-8" Elevation="0" Outlined="true">
+        <MudStack AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Rounded.AccountTree" Color="Color.Primary" Size="Size.Large" />
+            <MudText Typo="Typo.h6">No playbooks yet</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Style="max-width:520px">
+                For example: when a device hasn't checked in for 7 days, propose a sync; when Defender signatures are out of date,
+                propose a signature update.
+            </MudText>
+        </MudStack>
+    </MudPaper>
+}
+else
+{
+    @if (_remediationTenants.Count == 0)
+    {
+        <MudAlert Severity="MudBlazor.Severity.Info" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px">
+            No tenant has granted remediation access yet, so playbooks have nothing to act on.
+        </MudAlert>
+    }
+    <MudGrid Spacing="4">
+        @foreach (var v in _items)
+        {
+            var p = v.Playbook;
+            <MudItem xs="12" md="6" xl="4">
+                <MudPaper Class="sp-card pa-5" Elevation="0" Outlined="true" data-testid="playbook" Style="height:100%">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-3">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Style="min-width:0">
+                            <MudIcon Icon="@DeviceActions.Icon(p.Action)" Color="@(p.Enabled ? Color.Primary : Color.Default)" />
+                            <MudText Typo="Typo.h6" Style="overflow-wrap:anywhere">@p.Name</MudText>
+                        </MudStack>
+                        @if (_isOwner)
+                        {
+                            <MudSwitch T="bool" Value="p.Enabled" ValueChanged="@(on => ToggleAsync(p, on))" Color="Color.Primary"
+                                       UserAttributes="@(new() { ["data-testid"] = "playbook-enabled" })" />
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(p.Enabled ? Color.Success : Color.Default)">
+                                @(p.Enabled ? "On" : "Off")
+                            </MudChip>
+                        }
+                    </MudStack>
+
+                    <MudStack Spacing="1" Class="mb-3">
+                        <MudText Typo="Typo.body2"><span class="sp-muted">When</span> <b>@PlaybookService.TriggerLabel(p.Trigger, p.Days)</b></MudText>
+                        <MudText Typo="Typo.body2"><span class="sp-muted">Propose</span> <b>@DeviceActions.Label(p.Action)</b></MudText>
+                        <MudText Typo="Typo.body2"><span class="sp-muted">For</span> @v.Scope</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            Up to @p.MaxPerRun per sync · once per device every @PlaybookService.Cooldown(p.Cooldown)
+                        </MudText>
+                    </MudStack>
+
+                    <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="mb-3">
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text">@v.ProposedLastWeek proposed this week</MudChip>
+                        @if (v.WaitingForApproval > 0)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Href="devices/actions">
+                                @v.WaitingForApproval waiting for approval
+                            </MudChip>
+                        }
+                    </MudStack>
+
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                        Saved by @p.UpdatedByName @Dashboard.Ago(p.UpdatedAt).ToLowerInvariant() ·
+                        @(p.LastRunAt is { } run ? $"last checked {Dashboard.Ago(run).ToLowerInvariant()}" : "not run yet")
+                    </MudText>
+
+                    @if (_isOwner)
+                    {
+                        <MudStack Row="true" Spacing="3" Class="mt-3">
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" Class="px-0" StartIcon="@Icons.Material.Rounded.Edit"
+                                       OnClick="@(() => EditAsync(p))" data-testid="edit-playbook">Edit</MudButton>
+                            <MudButton Variant="Variant.Text" Color="Color.Error" Class="px-0" StartIcon="@Icons.Material.Rounded.Delete"
+                                       OnClick="@(() => DeleteAsync(p))" data-testid="delete-playbook">Delete</MudButton>
+                        </MudStack>
+                    }
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private IReadOnlyList<PlaybookView>? _items;
+    private IReadOnlyList<(Guid Id, string Name)> _remediationTenants = [];
+    private bool _isOwner;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isOwner = (await Current.GetAsync()).IsOwner;
+        _remediationTenants = (await TenantStore.GetAllAsync()).Where(t => t.CanRemediate).OrderBy(t => t.DisplayName)
+            .Select(t => (t.Id, t.DisplayName)).ToList();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => _items = await Playbooks.GetAllAsync();
+
+    private async Task EditAsync(RemediationPlaybook? playbook)
+    {
+        var parameters = new DialogParameters<PlaybookDialog> { { x => x.Playbook, playbook }, { x => x.Tenants, _remediationTenants } };
+        var dialog = await Dialogs.ShowAsync<PlaybookDialog>(null, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: PlaybookDraft draft }) return;
+
+        var result = playbook is null
+            ? await Playbooks.CreateAsync(draft)
+            : await Playbooks.UpdateAsync(playbook.Id, draft, playbook.UpdatedAt);
+        Snackbar.Add(result.Message, result.Ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
+        await LoadAsync();
+    }
+
+    private async Task ToggleAsync(RemediationPlaybook playbook, bool on)
+    {
+        var result = await Playbooks.SetEnabledAsync(playbook.Id, on, playbook.UpdatedAt);
+        Snackbar.Add(result.Ok ? $"\"{playbook.Name}\" is {(on ? "on" : "off")}." : result.Message, result.Ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(RemediationPlaybook playbook)
+    {
+        var confirmed = await Dialogs.ShowMessageBox($"Delete \"{playbook.Name}\"?",
+            "It stops proposing actions. Actions it already proposed stay in Device actions for someone to approve or reject.",
+            yesText: "Delete", cancelText: "Keep it");
+        if (confirmed != true) return;
+        var result = await Playbooks.DeleteAsync(playbook.Id);
+        Snackbar.Add(result.Message, result.Ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
+        await LoadAsync();
+    }
+}

@@ -237,6 +237,25 @@ public sealed class DeviceActionEntity
     public DateTimeOffset? SentAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public string? Error { get; set; }
+    public Guid? PlaybookId { get; set; }
+}
+
+public sealed class PlaybookEntity
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = "";
+    public bool Enabled { get; set; }
+    public PlaybookTrigger Trigger { get; set; }
+    public int? Days { get; set; }
+    public DeviceAction Action { get; set; }
+    public Guid? TenantId { get; set; }
+    public int MaxPerRun { get; set; }
+    public TimeSpan Cooldown { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public Guid UpdatedByUserId { get; set; }
+    public string UpdatedByName { get; set; } = "";
+    public DateTimeOffset UpdatedAt { get; set; }
+    public DateTimeOffset? LastRunAt { get; set; }
 }
 
 /// <summary>

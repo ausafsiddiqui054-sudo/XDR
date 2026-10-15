@@ -62,6 +62,8 @@ public sealed class DeviceActionRequestService(
             return new(false, "Unknown action.");
         if (await devices.GetAsync(tenantId, deviceId, ct) is not { } device)
             return new(false, "Device not found in this tenant's inventory.");
+        if (!DeviceActionPolicy.AppliesTo(action, device.Platform))
+            return new(false, $"{DeviceActions.Label(action)} is only for Windows devices.");
         var why = reason?.Trim();
         if (string.IsNullOrEmpty(why))
             return new(false, "Give a reason: the approver sees it and it's kept in the audit log.");
@@ -84,14 +86,14 @@ public sealed class DeviceActionRequestService(
             ExpiresAt = now + DeviceActionPolicy.ApprovalWindow
         }, ct);
         if (!created)
-            return new(false, $"{device.DeviceName} already has an open {request.Action.ToString().ToLowerInvariant()} request ({Label(request.Status)}). " +
+            return new(false, $"{device.DeviceName} already has an open {DeviceActions.Label(request.Action).ToLowerInvariant()} request ({Label(request.Status)}). " +
                               "Wait for it to finish or cancel it first.", request);
 
         await audit.RecordAsync(AuditActions.DeviceActionRequested, AuditOutcome.Success,
             $"Requested {action} of {device.DeviceName}: {why}", tenantId, "DeviceAction", request.Id.ToString(), Details(request), user);
         return new(true, DeviceActionPolicy.IsDestructive(action)
-            ? $"{action} of {device.DeviceName} requested. An Owner other than you has to approve it."
-            : $"{action} of {device.DeviceName} requested. Another admin has to approve it.", request);
+            ? $"{DeviceActions.Label(action)} of {device.DeviceName} requested. An Owner other than you has to approve it."
+            : $"{DeviceActions.Label(action)} of {device.DeviceName} requested. Another admin has to approve it.", request);
     }
 
     /// <summary>
@@ -127,7 +129,7 @@ public sealed class DeviceActionRequestService(
                 Details(a), user);
             return new(false, "The request changed before your approval applied (someone else decided, it was cancelled, or it expired).");
         }
-        return new(true, $"Approved. SecurePulse sends {a.Action.ToString().ToLowerInvariant()} to {a.DeviceName} within a minute.", decided);
+        return new(true, $"Approved. SecurePulse sends {DeviceActions.Label(a.Action).ToLowerInvariant()} to {a.DeviceName} within a minute.", decided);
     }
 
     public async Task<DeviceActionOutcome> RejectAsync(Guid id, string? note, CancellationToken ct = default)

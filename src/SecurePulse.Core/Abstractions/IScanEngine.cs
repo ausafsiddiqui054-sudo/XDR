@@ -233,6 +233,9 @@ public interface IDeviceActionRepository
     /// <summary>Records the outcome of a request that is Sending.</summary>
     Task CompleteAsync(Guid id, bool succeeded, string? error, DateTimeOffset at, CancellationToken ct = default);
 
+    /// <summary>Devices <paramref name="playbookId"/> proposed an action for in <paramref name="tenantId"/> at or after <paramref name="since"/>, whatever became of it.</summary>
+    Task<IReadOnlySet<string>> GetPlaybookDevicesSinceAsync(Guid playbookId, Guid tenantId, DateTimeOffset since, CancellationToken ct = default);
+
     /// <summary>
     /// Expires pending requests past their deadline and approved ones not sent within
     /// <paramref name="sendWindow"/>, and fails ones stuck in Sending since before
@@ -240,6 +243,22 @@ public interface IDeviceActionRepository
     /// </summary>
     Task<IReadOnlyList<DeviceActionRequest>> ExpireAsync(DateTimeOffset at, TimeSpan sendWindow, DateTimeOffset sendingBefore,
         CancellationToken ct = default);
+}
+
+/// <summary>Remediation playbooks. Edits are conditional on the version the editor saw, so two people can't overwrite each other.</summary>
+public interface IPlaybookRepository
+{
+    Task<IReadOnlyList<RemediationPlaybook>> GetAllAsync(CancellationToken ct = default);
+    Task<RemediationPlaybook?> GetAsync(Guid id, CancellationToken ct = default);
+    Task AddAsync(RemediationPlaybook playbook, CancellationToken ct = default);
+
+    /// <summary>Saves <paramref name="playbook"/> if the stored one still has <paramref name="expectedUpdatedAt"/>; false otherwise (changed or deleted).</summary>
+    Task<bool> UpdateAsync(RemediationPlaybook playbook, DateTimeOffset expectedUpdatedAt, CancellationToken ct = default);
+
+    Task<bool> DeleteAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>Records when the Worker last checked devices against the playbook.</summary>
+    Task RecordRunAsync(Guid id, DateTimeOffset at, CancellationToken ct = default);
 }
 
 /// <summary>The scan queue. Safe for several Workers: a run is claimed by exactly one of them.</summary>

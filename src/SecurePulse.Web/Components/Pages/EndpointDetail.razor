@@ -55,7 +55,8 @@ else
                        Disabled="!CanRequest" OnClick="@(() => RequestAsync(DeviceAction.Sync))">Sync</MudButton>
             <MudMenu Label="More actions" EndIcon="@Icons.Material.Rounded.KeyboardArrowDown" Variant="Variant.Outlined"
                      Color="Color.Primary" Disabled="!CanRequest" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
-                @foreach (var action in new[] { DeviceAction.Restart, DeviceAction.Retire, DeviceAction.Wipe })
+                @foreach (var action in new[] { DeviceAction.Restart, DeviceAction.DefenderQuickScan, DeviceAction.DefenderUpdateSignatures,
+                                                DeviceAction.Retire, DeviceAction.Wipe }.Where(a => DeviceActionPolicy.AppliesTo(a, d.Platform)))
                 {
                     <MudMenuItem Icon="@DeviceActions.Icon(action)"
                                  IconColor="@(DeviceActions.IsDestructive(action) ? Color.Error : Color.Default)"

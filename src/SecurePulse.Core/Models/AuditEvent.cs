@@ -91,6 +91,10 @@ public static class AuditActions
     /// <summary>GoPhish results were turned on or off for a tenant.</summary>
     public const string GoPhishChanged = "onboarding.gophish-changed";
 
+    public const string PlaybookCreated = "remediation.playbook-created";
+    public const string PlaybookChanged = "remediation.playbook-changed";
+    public const string PlaybookDeleted = "remediation.playbook-deleted";
+
     public const string RemediationEnabled = "onboarding.remediation-enabled";
     public const string RemediationDisabled = "onboarding.remediation-disabled";
 
@@ -112,6 +116,7 @@ public static class AuditActions
         ["people"] = "People",
         ["onboarding"] = "Onboarding",
         ["device"] = "Devices",
+        ["remediation"] = "Remediation playbooks",
         ["audit"] = "Audit log",
         ["scan"] = "Scans",
         ["report"] = "Reports"
@@ -144,6 +149,9 @@ public static class AuditActions
         DeviceActionResult => "Device action result",
         WazuhGroupChanged => "Wazuh agent group changed",
         GoPhishChanged => "GoPhish results turned on or off",
+        PlaybookCreated => "Playbook created",
+        PlaybookChanged => "Playbook changed",
+        PlaybookDeleted => "Playbook deleted",
         RemediationEnabled => "Remediation access granted",
         RemediationDisabled => "Remediation access turned off",
         AuditExported => "Audit log exported",

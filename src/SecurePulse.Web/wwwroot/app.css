@@ -284,3 +284,7 @@
 .sp-tile-error { --sp-tile-color: var(--mud-palette-error); }
 .sp-tile-warning { --sp-tile-color: var(--mud-palette-warning); }
 .sp-tile-default { --sp-tile-color: var(--mud-palette-text-secondary); }
+
+.sp-muted {
+    color: var(--mud-palette-text-secondary);
+}

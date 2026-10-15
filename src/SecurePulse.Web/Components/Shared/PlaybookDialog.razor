@@ -1,0 +1,121 @@
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Rounded.AccountTree" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">@(Playbook is null ? "New playbook" : $"Edit {Playbook.Name}")</MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField T="string" @bind-Value="_name" Label="Name" Variant="Variant.Outlined" Immediate="true" Margin="Margin.Dense"
+                      MaxLength="PlaybookRules.MaxNameLength" Class="mb-4" UserAttributes="@(new() { ["data-testid"] = "playbook-name" })" />
+
+        <MudText Typo="Typo.subtitle2" Class="mb-2">When a device…</MudText>
+        <MudSelect T="PlaybookTrigger" Value="_trigger" ValueChanged="TriggerChanged" Label="Trigger" Variant="Variant.Outlined"
+                   Margin="Margin.Dense" Class="mb-3" UserAttributes="@(new() { ["data-testid"] = "playbook-trigger" })">
+            @foreach (var t in Enum.GetValues<PlaybookTrigger>())
+            {
+                <MudSelectItem Value="t">@PlaybookService.TriggerLabel(t)</MudSelectItem>
+            }
+        </MudSelect>
+        @if (_trigger == PlaybookTrigger.NotCheckedIn)
+        {
+            <MudNumericField T="int" @bind-Value="_days" Label="Days without a check-in" Variant="Variant.Outlined" Margin="Margin.Dense"
+                             Min="1" Max="PlaybookRules.MaxDays" Class="mb-3" />
+        }
+
+        <MudText Typo="Typo.subtitle2" Class="mb-2">…propose</MudText>
+        <MudSelect T="DeviceAction" @bind-Value="_action" Label="Action" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-1"
+                   UserAttributes="@(new() { ["data-testid"] = "playbook-action" })">
+            @foreach (var a in PlaybookRules.ActionsFor(_trigger))
+            {
+                <MudSelectItem Value="a">@DeviceActions.Label(a)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-4">@DeviceActions.Description(_action)</MudText>
+
+        <MudSelect T="Guid" @bind-Value="_tenantId" Label="Tenants" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3">
+            <MudSelectItem Value="Guid.Empty">Every tenant with remediation access</MudSelectItem>
+            @foreach (var (id, name) in Tenants)
+            {
+                <MudSelectItem Value="id">@name</MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudStack Row="true" Spacing="3" Class="mb-3">
+            <MudNumericField T="int" @bind-Value="_maxPerRun" Label="Proposals per sync" Variant="Variant.Outlined" Margin="Margin.Dense"
+                             Min="1" Max="PlaybookRules.MaxMaxPerRun" HelperText="Per tenant" />
+            <MudNumericField T="int" @bind-Value="_cooldownHours" Label="Once per device every (hours)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                             Min="1" Max="720" HelperText="1 to 720" />
+        </MudStack>
+
+        <MudSwitch T="bool" @bind-Value="_enabled" Color="Color.Primary" Label="On" Class="mb-3" />
+
+        @if (Problem is { } problem)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block mb-3" data-testid="playbook-problem">@problem</MudText>
+        }
+
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Start" Class="sp-note">
+            <MudIcon Icon="@Icons.Material.Rounded.HowToReg" Size="Size.Small" Color="Color.Primary" />
+            <MudText Typo="Typo.caption">
+                A playbook never sends anything by itself. After each device sync, matching devices get a pending request in
+                Device actions, in your name, and another admin has to approve each one. You can't approve the proposals of a
+                playbook you saved. Retire and wipe are never automated.
+            </MudText>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(Problem is not null)" OnClick="Save"
+                   data-testid="playbook-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public RemediationPlaybook? Playbook { get; set; }
+
+    /// <summary>Tenants with remediation access, for scoping.</summary>
+    [Parameter] public IReadOnlyList<(Guid Id, string Name)> Tenants { get; set; } = [];
+
+    private string? _name;
+    private PlaybookTrigger _trigger = PlaybookTrigger.NotCheckedIn;
+    private int _days = 7;
+    private DeviceAction _action = DeviceAction.Sync;
+    private Guid _tenantId = Guid.Empty;
+    private int _maxPerRun = PlaybookRules.DefaultMaxPerRun;
+    private int _cooldownHours = (int)PlaybookRules.DefaultCooldown.TotalHours;
+    private bool _enabled = true;
+
+    protected override void OnInitialized()
+    {
+        if (Playbook is not { } p) return;
+        (_name, _trigger, _days, _action, _tenantId, _maxPerRun, _cooldownHours, _enabled) =
+            (p.Name, p.Trigger, p.Days ?? 7, p.Action, p.TenantId ?? Guid.Empty, p.MaxPerRun, (int)p.Cooldown.TotalHours, p.Enabled);
+    }
+
+    private void TriggerChanged(PlaybookTrigger trigger)
+    {
+        _trigger = trigger;
+        if (!PlaybookRules.ActionsFor(trigger).Contains(_action)) _action = PlaybookRules.ActionsFor(trigger)[0];
+    }
+
+    private PlaybookDraft Draft => new(_name?.Trim() ?? "", _enabled, _trigger, _trigger == PlaybookTrigger.NotCheckedIn ? _days : null, _action,
+        _tenantId == Guid.Empty ? null : _tenantId, _maxPerRun, TimeSpan.FromHours(_cooldownHours));
+
+    // The same rules the service applies, so the form says what's wrong before saving.
+    private string? Problem
+    {
+        get
+        {
+            var d = Draft;
+            return PlaybookRules.Problem(new RemediationPlaybook
+            {
+                Id = Guid.Empty, Name = d.Name, Enabled = d.Enabled, Trigger = d.Trigger, Days = d.Days, Action = d.Action, TenantId = d.TenantId,
+                MaxPerRun = d.MaxPerRun, Cooldown = d.Cooldown, CreatedAt = default, UpdatedByUserId = Guid.Empty, UpdatedByName = "", UpdatedAt = default
+            });
+        }
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(Draft));
+}

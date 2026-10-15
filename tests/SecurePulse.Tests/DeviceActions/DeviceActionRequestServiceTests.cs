@@ -122,6 +122,25 @@ public class DeviceActionRequestServiceTests
     // --- Requesting --------------------------------------------------------------------------
 
     [Fact]
+    public async Task DefenderActionsAreRefusedForDevicesThatArentWindows()
+    {
+        var h = new Harness();
+        var (tenant, _) = await h.RemediationDeviceAsync();
+        var mac = new ManagedDevice { Id = Guid.NewGuid().ToString(), TenantId = tenant.Id, DeviceName = "MAC-1", Platform = DevicePlatform.MacOS,
+            ComplianceState = DeviceComplianceState.Compliant };
+        var win = mac with { Id = Guid.NewGuid().ToString(), DeviceName = "WIN-1", Platform = DevicePlatform.Windows };
+        await h.Store.SaveSyncAsync(new DeviceSyncResult { TenantId = tenant.Id, Source = "Intune", StartedAt = T0, CompletedAt = T0, Devices = [mac, win] });
+
+        var refused = await h.As(h.Admin).Service.RequestAsync(tenant.Id, mac.Id, DeviceAction.DefenderQuickScan, "Scan after a phishing click");
+        Assert.False(refused.Ok);
+        Assert.Contains("only for Windows", refused.Message);
+
+        var ok = await h.As(h.Admin).Service.RequestAsync(tenant.Id, win.Id, DeviceAction.DefenderQuickScan, "Scan after a phishing click");
+        Assert.True(ok.Ok, ok.Message);
+        Assert.Null(ok.Request!.PlaybookId);
+    }
+
+    [Fact]
     public async Task OperatorsRequestAndTheRequestWaitsForApproval()
     {
         var h = new Harness();

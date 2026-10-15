@@ -6,7 +6,13 @@ public enum DeviceAction
     Sync,
     Restart,
     Retire,
-    Wipe
+    Wipe,
+
+    /// <summary>Defender Antivirus quick scan (Windows).</summary>
+    DefenderQuickScan,
+
+    /// <summary>Defender Antivirus security intelligence (signature) update (Windows).</summary>
+    DefenderUpdateSignatures
 }
 
 public enum DeviceActionStatus
@@ -71,6 +77,9 @@ public sealed record DeviceActionRequest
     public DateTimeOffset? CompletedAt { get; init; }
     public string? Error { get; init; }
 
+    /// <summary>The playbook that proposed it; null for a manual request.</summary>
+    public Guid? PlaybookId { get; init; }
+
     public bool IsOpen => Status is DeviceActionStatus.PendingApproval or DeviceActionStatus.Approved or DeviceActionStatus.Sending;
 }
 
@@ -98,6 +107,10 @@ public static class DeviceActionPolicy
     public const int MaxNoteLength = 500;
 
     public static bool IsDestructive(DeviceAction action) => action is DeviceAction.Retire or DeviceAction.Wipe;
+
+    /// <summary>Whether <paramref name="action"/> exists for devices on <paramref name="platform"/>: the Defender actions are Windows only.</summary>
+    public static bool AppliesTo(DeviceAction action, DevicePlatform platform) =>
+        action is not (DeviceAction.DefenderQuickScan or DeviceAction.DefenderUpdateSignatures) || platform == DevicePlatform.Windows;
 
     public static bool CanRequest(PortalRole? role) => role is PortalRole.Owner or PortalRole.MspAdmin;
 

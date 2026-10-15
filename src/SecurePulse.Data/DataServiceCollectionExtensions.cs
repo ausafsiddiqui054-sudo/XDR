@@ -19,6 +19,7 @@ public static class DataServiceCollectionExtensions
         services.AddSingleton<IAuditLog, EfAuditLog>();
         services.AddSingleton<IScanRunRepository, EfScanRunRepository>();
         services.AddSingleton<IDeviceActionRepository, EfDeviceActionRepository>();
+        services.AddSingleton<IPlaybookRepository, EfPlaybookRepository>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<IAuditExportStore, EfAuditExportStore>();
         return services;

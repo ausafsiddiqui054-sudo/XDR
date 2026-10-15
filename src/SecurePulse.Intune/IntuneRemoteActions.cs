@@ -63,6 +63,8 @@ public sealed class IntuneDeviceActionSender(HttpClient http, IntuneOptions intu
         DeviceAction.Restart => "rebootNow",
         DeviceAction.Retire => "retire",
         DeviceAction.Wipe => "wipe",
+        DeviceAction.DefenderQuickScan => "windowsDefenderScan",
+        DeviceAction.DefenderUpdateSignatures => "windowsDefenderUpdateSignatures",
         _ => throw new ArgumentOutOfRangeException(nameof(action))
     };
 
@@ -81,6 +83,10 @@ public sealed class IntuneDeviceActionSender(HttpClient http, IntuneOptions intu
         {
             // A full wipe, as the portal describes it: no enrollment data or user data kept.
             request.Content = new StringContent("""{"keepEnrollmentData":false,"keepUserData":false}""", Encoding.UTF8, "application/json");
+        }
+        else if (action == DeviceAction.DefenderQuickScan)
+        {
+            request.Content = new StringContent("""{"quickScan":true}""", Encoding.UTF8, "application/json");
         }
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

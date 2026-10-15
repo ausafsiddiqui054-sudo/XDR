@@ -10,9 +10,10 @@ namespace SecurePulse.Web.Services;
 /// repositories once the Worker starts writing real scan results.
 /// </summary>
 public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDeviceRepository, IOnboardingRepository, IPortalUserRepository, IAuditLog,
-    IScanRunRepository, IDeviceActionRepository, IAuditExportStore
+    IScanRunRepository, IDeviceActionRepository, IAuditExportStore, IPlaybookRepository
 {
     private readonly List<DeviceActionRequest> _actions = [];
+    private readonly List<RemediationPlaybook> _playbooks = [];
     private readonly List<ScanRun> _scanRuns = [];
     private readonly List<AuditEvent> _audit = [];
     private readonly List<PortalUser> _users = [];
@@ -785,6 +786,58 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
     Task<DeviceActionRequest?> IDeviceActionRepository.GetAsync(Guid id, CancellationToken ct)
     {
         lock (_gate) return Task.FromResult(_actions.FirstOrDefault(a => a.Id == id));
+    }
+
+    public Task<IReadOnlySet<string>> GetPlaybookDevicesSinceAsync(Guid playbookId, Guid tenantId, DateTimeOffset since, CancellationToken ct = default)
+    {
+        lock (_gate)
+            return Task.FromResult<IReadOnlySet<string>>(_actions
+                .Where(a => a.PlaybookId == playbookId && a.TenantId == tenantId && a.RequestedAt >= since)
+                .Select(a => a.DeviceId).ToHashSet(StringComparer.Ordinal));
+    }
+
+    // --- Remediation playbooks ---------------------------------------------------------------------
+
+    Task<IReadOnlyList<RemediationPlaybook>> IPlaybookRepository.GetAllAsync(CancellationToken ct)
+    {
+        lock (_gate) return Task.FromResult<IReadOnlyList<RemediationPlaybook>>(_playbooks.OrderBy(p => p.Name, StringComparer.Ordinal).ToList());
+    }
+
+    Task<RemediationPlaybook?> IPlaybookRepository.GetAsync(Guid id, CancellationToken ct)
+    {
+        lock (_gate) return Task.FromResult(_playbooks.FirstOrDefault(p => p.Id == id));
+    }
+
+    Task IPlaybookRepository.AddAsync(RemediationPlaybook playbook, CancellationToken ct)
+    {
+        lock (_gate) _playbooks.Add(playbook);
+        return Task.CompletedTask;
+    }
+
+    Task<bool> IPlaybookRepository.UpdateAsync(RemediationPlaybook playbook, DateTimeOffset expectedUpdatedAt, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            var index = _playbooks.FindIndex(p => p.Id == playbook.Id && p.UpdatedAt == expectedUpdatedAt);
+            if (index < 0) return Task.FromResult(false);
+            _playbooks[index] = playbook with { CreatedAt = _playbooks[index].CreatedAt, LastRunAt = _playbooks[index].LastRunAt };
+            return Task.FromResult(true);
+        }
+    }
+
+    Task<bool> IPlaybookRepository.DeleteAsync(Guid id, CancellationToken ct)
+    {
+        lock (_gate) return Task.FromResult(_playbooks.RemoveAll(p => p.Id == id) > 0);
+    }
+
+    Task IPlaybookRepository.RecordRunAsync(Guid id, DateTimeOffset at, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            var index = _playbooks.FindIndex(p => p.Id == id);
+            if (index >= 0) _playbooks[index] = _playbooks[index] with { LastRunAt = at };
+        }
+        return Task.CompletedTask;
     }
 
     public Task<IReadOnlyList<DeviceActionRequest>> QueryAsync(DeviceActionQuery query, CancellationToken ct = default)

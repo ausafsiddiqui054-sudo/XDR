@@ -211,6 +211,9 @@ namespace SecurePulse.Data.Migrations
                     b.Property<DateTimeOffset>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("PlaybookId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Reason")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -248,6 +251,8 @@ namespace SecurePulse.Data.Migrations
                         .HasFilter("\"Status\" IN ('PendingApproval', 'Approved', 'Sending')");
 
                     b.HasIndex("TenantId", "RequestedAt");
+
+                    b.HasIndex("PlaybookId", "TenantId", "RequestedAt");
 
                     b.ToTable("device_actions", (string)null);
                 });
@@ -503,6 +508,66 @@ namespace SecurePulse.Data.Migrations
                     b.HasIndex("Status", "CreatedAt");
 
                     b.ToTable("onboarding_requests", (string)null);
+                });
+
+            modelBuilder.Entity("SecurePulse.Data.Entities.PlaybookEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<TimeSpan>("Cooldown")
+                        .HasColumnType("interval");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("Days")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("LastRunAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("MaxPerRun")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Trigger")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedByName")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("remediation_playbooks", (string)null);
                 });
 
             modelBuilder.Entity("SecurePulse.Data.Entities.PortalUserEntity", b =>
@@ -848,6 +913,14 @@ namespace SecurePulse.Data.Migrations
                         .WithMany()
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("SecurePulse.Data.Entities.PlaybookEntity", b =>
+                {
+                    b.HasOne("SecurePulse.Data.Entities.TenantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("SecurePulse.Data.Entities.PortalUserEntity", b =>
