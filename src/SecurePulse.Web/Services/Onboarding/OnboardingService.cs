@@ -196,6 +196,29 @@ public sealed partial class OnboardingService(
         return (true, value is null ? $"{tenant.DisplayName} is no longer scanned by Wazuh." : $"{tenant.DisplayName} now reads Wazuh agents in '{value}'.");
     }
 
+    /// <summary>
+    /// Turns the import of a tenant's GoPhish results on or off. Owners only: the key in the tenant's Key Vault
+    /// secret decides whose campaigns show up in the tenant's findings and report.
+    /// </summary>
+    public async Task<(bool Ok, string Message)> SetGoPhishEnabledAsync(Guid tenantId, bool enabled, CancellationToken ct = default)
+    {
+        var actor = await RequireOwnerAsync();
+        if (await tenants.GetAsync(tenantId, ct) is not { } tenant) return (false, "Tenant not found.");
+        if (tenant.GoPhishEnabled == enabled) return (true, "No change.");
+
+        await requests.SetGoPhishEnabledAsync(tenantId, enabled, ct);
+        var secret = GoPhishSecrets.ApiKeySecretName(tenant.Id);
+        await audit.RecordAsync(AuditActions.GoPhishChanged, AuditOutcome.Success,
+            enabled
+                ? $"Turned on GoPhish results for {tenant.DisplayName} (API key in Key Vault secret '{secret}')"
+                : $"Turned off GoPhish results for {tenant.DisplayName}",
+            tenant.Id, "Tenant", tenant.Id.ToString(),
+            new Dictionary<string, string> { ["enabled"] = enabled ? "true" : "false", ["secretName"] = secret }, actor);
+        return (true, enabled
+            ? $"GoPhish results are on for {tenant.DisplayName}. Store its GoPhish user's API key in Key Vault as '{secret}'."
+            : $"GoPhish results are off for {tenant.DisplayName}.");
+    }
+
     private async Task<UserContext> RequireOperatorAsync()
     {
         var user = await users.GetAsync();

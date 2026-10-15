@@ -531,6 +531,17 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
         }
     }
 
+    public Task SetGoPhishEnabledAsync(Guid tenantId, bool enabled, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            var index = _tenants.FindIndex(t => t.Id == tenantId);
+            if (index < 0) throw new KeyNotFoundException($"Tenant {tenantId} not found.");
+            _tenants[index] = _tenants[index] with { GoPhishEnabled = enabled };
+            return Task.CompletedTask;
+        }
+    }
+
     public Task<bool> DisableRemediationAsync(Guid tenantId, CancellationToken ct = default)
     {
         lock (_gate)

@@ -109,9 +109,10 @@ public sealed class ScanService(
             return (null, "The tenant isn't onboarded (consent or certificate missing).");
 
         if (!ScanEngines.AppliesTo(engine.Name, tenant))
-            return (null, $"{tenant.DisplayName} isn't set up for {engine.Name} (no Wazuh agent group on the Tenants page).");
+            return (null, $"{tenant.DisplayName} isn't set up for {engine.Name} " +
+                          (engine.Name == ScanEngines.GoPhish ? "(GoPhish is turned off on the Tenants page)." : "(no Wazuh agent group on the Tenants page)."));
 
-        // Graph engines: check the token's roles first. Wazuh checks its own API user's RBAC instead.
+        // Graph engines: check the token's roles first. Wazuh and GoPhish check their own API user instead.
         if (options.Value.CheckPermissions && ScanEngines.UsesGraph(engine.Name) && await CheckPermissionsAsync(tenant, engine.Name, ct) is { } permissionError)
             return (null, permissionError);
 

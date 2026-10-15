@@ -194,6 +194,13 @@ public sealed class EfOnboardingRepository(IDbContextFactory<SecurePulseDbContex
         }
     }
 
+    public async Task SetGoPhishEnabledAsync(Guid tenantId, bool enabled, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        if (await db.Tenants.Where(t => t.Id == tenantId).ExecuteUpdateAsync(s => s.SetProperty(t => t.GoPhishEnabled, enabled), ct) == 0)
+            throw new KeyNotFoundException($"Tenant {tenantId} not found.");
+    }
+
     public async Task<bool> DisableRemediationAsync(Guid tenantId, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);

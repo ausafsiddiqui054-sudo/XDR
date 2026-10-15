@@ -94,6 +94,7 @@ else
                         var engineRuns = Scans.Engines.Where(e => ScanEngines.AppliesTo(e, t.Tenant))
                             .Select(e => (Engine: e, Run: _scans.GetValueOrDefault((t.Tenant.Id, e)))).ToList();
                         var wazuh = Scans.Engines.Contains(ScanEngines.Wazuh);
+                        var goPhish = Scans.Engines.Contains(ScanEngines.GoPhish);
                     }
                     @if (t.Score is { } score)
                     {
@@ -162,6 +163,26 @@ else
                                     </MudText>
                                 </MudStack>
                             }
+                            @if (goPhish)
+                            {
+                                <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" data-testid="gophish-status">
+                                    <MudIcon Icon="@Icons.Material.Rounded.Phishing" Size="Size.Small" Color="@(t.Tenant.GoPhishEnabled ? Color.Primary : Color.Default)" />
+                                    <MudText Typo="Typo.caption" Style="overflow-wrap:anywhere">
+                                        @if (!t.Tenant.GoPhishEnabled)
+                                        {
+                                            <span>GoPhish: off, so phishing simulation results aren't imported</span>
+                                        }
+                                        else if (_isOwner)
+                                        {
+                                            <span>GoPhish results on · API key in Key Vault secret <b>@GoPhishSecrets.ApiKeySecretName(t.Tenant.Id)</b></span>
+                                        }
+                                        else
+                                        {
+                                            <span>GoPhish phishing simulation results imported</span>
+                                        }
+                                    </MudText>
+                                </MudStack>
+                            }
                         </MudStack>
                     }
 
@@ -189,6 +210,13 @@ else
                         {
                             <MudButton Variant="Variant.Text" Color="Color.Default" Class="px-0" StartIcon="@Icons.Material.Rounded.Lan"
                                        OnClick="@(() => EditWazuhGroupAsync(t.Tenant))" data-testid="edit-wazuh-group">Wazuh group</MudButton>
+                        }
+                        @if (_isOwner && connected && goPhish)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Default" Class="px-0" StartIcon="@Icons.Material.Rounded.Phishing"
+                                       OnClick="@(() => SetGoPhishAsync(t.Tenant, !t.Tenant.GoPhishEnabled))" data-testid="toggle-gophish">
+                                @(t.Tenant.GoPhishEnabled ? "Turn off GoPhish" : "Turn on GoPhish")
+                            </MudButton>
                         }
                         @if (_isOwner && t.Tenant.ConsentState == TenantConsentState.ReadOnlyGranted && Onboarding.IsRemediationConfigured)
                         {
@@ -233,6 +261,23 @@ else
         if ((await dialog.Result) is not { Canceled: false, Data: string group }) return;
 
         var (ok, message) = await Onboarding.SetWazuhAgentGroupAsync(tenant.Id, group);
+        Snackbar.Add(message, ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
+        _portfolio = await Posture.GetPortfolioAsync();
+    }
+
+    private async Task SetGoPhishAsync(Tenant tenant, bool enabled)
+    {
+        if (enabled)
+        {
+            var confirmed = await Dialogs.ShowMessageBox($"Import GoPhish results for {tenant.DisplayName}?",
+                (MarkupString)($"SecurePulse reads only the totals of each campaign (sent, opened, clicked, entered data, reported), never who did what, " +
+                $"and never launches campaigns or sends email.<br/><br/>Create a GoPhish user with the standard <b>User</b> role for this tenant, " +
+                $"run the tenant's campaigns as that user, and store that user's API key in Key Vault as " +
+                $"<b>{GoPhishSecrets.ApiKeySecretName(tenant.Id)}</b>. Keys of GoPhish admins are refused."),
+                yesText: "Turn on", cancelText: "Cancel");
+            if (confirmed != true) return;
+        }
+        var (ok, message) = await Onboarding.SetGoPhishEnabledAsync(tenant.Id, enabled);
         Snackbar.Add(message, ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
         _portfolio = await Posture.GetPortfolioAsync();
     }

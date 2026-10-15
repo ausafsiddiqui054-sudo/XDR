@@ -17,6 +17,7 @@ internal static class EntityMapping
         ConsentState = e.ConsentState,
         RemediationCredentialReference = e.RemediationCredentialReference,
         WazuhAgentGroup = e.WazuhAgentGroup,
+        GoPhishEnabled = e.GoPhishEnabled,
         LastScanAt = e.LastScanAt
     };
 
@@ -32,6 +33,7 @@ internal static class EntityMapping
         ConsentState = m.ConsentState,
         RemediationCredentialReference = m.RemediationCredentialReference,
         WazuhAgentGroup = m.WazuhAgentGroup,
+        GoPhishEnabled = m.GoPhishEnabled,
         LastScanAt = m.LastScanAt
     };
 

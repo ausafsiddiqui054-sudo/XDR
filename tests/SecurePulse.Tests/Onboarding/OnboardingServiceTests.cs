@@ -446,4 +446,41 @@ public class OnboardingServiceTests
         Assert.Equal((true, "No change."), await h.Service.SetWazuhAgentGroupAsync(tenant.Id, "clinic-a"));
         Assert.Single(await ((IAuditLog)h.Store).QueryAsync(new AuditQuery { Action = AuditActions.WazuhGroupChanged }));
     }
+
+    // --- GoPhish ---------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task OnlyOwnersTurnGoPhishOnOrOff_AndEachChangeIsAudited()
+    {
+        var h = new Harness();
+        var tenant = (await h.Store.GetAllAsync())[0];
+        var secret = GoPhishSecrets.ApiKeySecretName(tenant.Id);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => h.Service.SetGoPhishEnabledAsync(tenant.Id, true));
+        Assert.False((await h.Store.GetAsync(tenant.Id))!.GoPhishEnabled);
+
+        h.User.User = FixedUser.Owner().User;
+        var (ok, message) = await h.Service.SetGoPhishEnabledAsync(tenant.Id, true);
+        Assert.True(ok);
+        Assert.Contains($"Key Vault as '{secret}'", message);
+        Assert.True((await h.Store.GetAsync(tenant.Id))!.GoPhishEnabled);
+
+        Assert.Equal((true, "No change."), await h.Service.SetGoPhishEnabledAsync(tenant.Id, true));
+        Assert.True((await h.Service.SetGoPhishEnabledAsync(tenant.Id, false)).Ok);
+        Assert.False((await h.Store.GetAsync(tenant.Id))!.GoPhishEnabled);
+        Assert.Equal((false, "Tenant not found."), await h.Service.SetGoPhishEnabledAsync(Guid.NewGuid(), true));
+
+        var events = await ((IAuditLog)h.Store).QueryAsync(new AuditQuery { Action = AuditActions.GoPhishChanged });
+        Assert.Equal(2, events.Count);
+        Assert.All(events, e =>
+        {
+            Assert.Equal("Olivia Owner <olivia@msp.example>", e.ActorName);
+            Assert.Equal(tenant.Id, e.TenantId);
+            Assert.Equal(secret, e.Details["secretName"]);
+        });
+        Assert.Contains(events, e => e.Details["enabled"] == "true" && e.Summary.StartsWith("Turned on"));
+        Assert.Contains(events, e => e.Details["enabled"] == "false" && e.Summary.StartsWith("Turned off"));
+        Assert.Equal("Onboarding", AuditActions.Categories[AuditActions.CategoryOf(AuditActions.GoPhishChanged)]);
+        Assert.NotEqual(AuditActions.GoPhishChanged, AuditActions.Label(AuditActions.GoPhishChanged));
+    }
 }

@@ -380,6 +380,45 @@ public class ScanServiceTests
         h.Time.Advance(h.Options.RetryFailedAfter);
         Assert.Equal(1, await h.Service.EnqueueDueAsync());
     }
+    // --- GoPhish ----------------------------------------------------------------------------
+
+    [Fact]
+    public async Task GoPhish_IsScheduledOnlyWhereTurnedOn_WithoutAGraphCheck()
+    {
+        var goPhish = new FakeEngine(name: ScanEngines.GoPhish);
+        var h = new Harness { OtherEngines = [goPhish], Tokens = new Tokens(t => Jwt.With(t.EntraTenantId)) };
+        var onboarded = await h.OnboardAsync();
+        var on = onboarded[0];
+        await ((IOnboardingRepository)h.Store).SetGoPhishEnabledAsync(on.Id, true);
+
+        await h.Service.EnqueueDueAsync();
+        var queued = await h.Runs.GetLatestAsync();
+        Assert.Equal([on.Id], queued.Where(r => r.Engine == ScanEngines.GoPhish).Select(r => r.TenantId));
+    }
+
+    [Fact]
+    public async Task AQueuedGoPhishRun_FailsIfItWasTurnedOff_AndRunsWithoutGraphWhenOn()
+    {
+        var goPhish = new FakeEngine(name: ScanEngines.GoPhish);
+        var h = new Harness { Engine = goPhish, Tokens = new Tokens(t => Jwt.With(t.EntraTenantId)) };
+        var tenant = (await h.OnboardAsync(1))[0];
+        await h.Runs.EnqueueAsync(tenant.Id, ScanEngines.GoPhish, ScanTrigger.Manual, "Olivia", h.Time.Now);
+
+        await h.Service.DrainAsync();
+        var run = (await h.LatestAsync(tenant.Id))!;
+        Assert.Equal(ScanRunStatus.Failed, run.Status);
+        Assert.Contains("GoPhish is turned off", run.Error);
+        Assert.Empty(goPhish.Scanned);
+
+        await ((IOnboardingRepository)h.Store).SetGoPhishEnabledAsync(tenant.Id, true);
+        h.Time.Advance(TimeSpan.FromMinutes(1));
+        await h.Runs.EnqueueAsync(tenant.Id, ScanEngines.GoPhish, ScanTrigger.Manual, "Olivia", h.Time.Now);
+        await h.Service.DrainAsync();
+        var second = (await h.LatestAsync(tenant.Id))!;
+        Assert.True(second.Status == ScanRunStatus.Succeeded, second.Error);
+        Assert.Equal(0, h.Tokens.Calls);
+    }
+
     // --- Wazuh ------------------------------------------------------------------------------
 
     [Fact]

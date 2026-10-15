@@ -25,6 +25,9 @@ public sealed class TenantEntity
     /// <summary>Wazuh agent group of this tenant's agents. Unique: no two tenants read the same agents.</summary>
     public string? WazuhAgentGroup { get; set; }
 
+    /// <summary>Whether GoPhish results are imported. The API key is never here: it's in Key Vault (GoPhishSecrets).</summary>
+    public bool GoPhishEnabled { get; set; }
+
     public DateTimeOffset? LastScanAt { get; set; }
 }
 

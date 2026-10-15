@@ -21,7 +21,7 @@ Wazuh, GoPhish, n8n-style remediation (later phases). Read README.md for layout 
    engine-specific shapes leak past `SecurePulse.Engines`. Likewise Graph shapes stay inside
    `SecurePulse.Intune`, which returns normalized `ManagedDevice`s via `IDeviceInventorySource`.
 2. PowerShell engines run out of process. Pass arguments with `ProcessStartInfo.ArgumentList`,
-   never string concatenation. API engines (Wazuh) make bounded, read-only HTTP calls from the Worker.
+   never string concatenation. API engines (Wazuh, GoPhish) make bounded, read-only HTTP calls from the Worker.
    Validate tenant inputs (GUIDs, thumbprints, group names) before use.
 3. No secrets in code, config or the database. Certificates live in a vault/cert store;
    `Tenant.CredentialReference` is only a reference.
@@ -111,6 +111,19 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
 - SCA checks have no severity: every finding gets `Wazuh:FindingSeverity`. Only https references become links.
   A scan with no agents, no SCA results or any unreadable agent fails (stored findings stay).
 
+## GoPhish invariants
+- Import only: SecurePulse never creates, launches or changes campaigns and never sends email. Its GoPhish
+  client goes through `ReadOnlyHttpHandler` (GET/HEAD only); keep it there, since GoPhish keys can write.
+- Aggregates only: read `/api/campaigns/summary`, never `/api/campaigns/{id}/results` or anything that names
+  recipients. People's names, addresses and IPs never enter SecurePulse.
+- A tenant's campaigns come from its own GoPhish user. The key's secret name is derived
+  (`GoPhishSecrets.ApiKeySecretName`); don't make it configurable per tenant. The tenant opt-in
+  (`Tenant.GoPhishEnabled`) is Owner-only and audited `onboarding.gophish-changed`.
+- Admin keys are refused before any campaign is read (`HEAD /api/users/` must be 403). The key is sent in the
+  `Authorization` header, never the URL. TLS pinned (`GoPhish:CertificateSha256`) or validated; no redirects.
+- A campaign fails when anyone entered data; severity is `GoPhish:FindingSeverity`. No campaign in the lookback,
+  or none finished, fails the import (stored findings stay).
+
 ## Report invariants
 - PDF reports use QuestPDF. Its license tier is an organisational decision: it comes only from
   `Reports:QuestPdfLicense` (`ReportLicense.Apply`); never default or hard-code a tier. Tests set
@@ -157,5 +170,7 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
   portal still never calls Graph.
 
 ## Next steps (in order)
-1. GoPhish (phishing simulation) from "What this is". Unlike the other engines it sends email to people,
-   so it needs its own approval and consent decision before any code.
+1. n8n-style remediation from "What this is": build on the device action queue (separate remediation app,
+   approval policy, fail-closed audit); which actions and who approves them is a decision to make before any code.
+2. Launching GoPhish campaigns from SecurePulse is deliberately not built: it sends email to people, so it
+   needs its own approval and consent decision first. The GoPhish engine only imports results.

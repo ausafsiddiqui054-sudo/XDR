@@ -53,6 +53,12 @@ if (scanEngines.Contains(ScanEngines.Wazuh))
     var wazuh = builder.Services.AddWazuhEngine(builder.Configuration);
     engineTimeouts.Add(("Wazuh", wazuh.Timeout));
 }
+if (scanEngines.Contains(ScanEngines.GoPhish))
+{
+    // GoPhish: read-only import of each tenant's campaign counts; each tenant's API key comes from Key Vault.
+    var goPhish = builder.Services.AddGoPhishEngine(builder.Configuration);
+    engineTimeouts.Add(("GoPhish", goPhish.Timeout));
+}
 
 builder.Services.AddOptions<ScanOptions>()
     .Bind(builder.Configuration.GetSection("Scans"))

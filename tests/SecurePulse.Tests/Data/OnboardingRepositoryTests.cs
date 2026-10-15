@@ -224,4 +224,22 @@ public class OnboardingRepositoryTests(PostgresDatabase db) : IClassFixture<Post
 
         Assert.Equal(group, updated.WazuhAgentGroup);
     }
+
+    [PostgresFact]
+    public async Task GoPhishIsTurnedOnPerTenant_AndReConsentKeepsIt()
+    {
+        var tenant = await ConnectedTenantAsync();
+        Assert.False(tenant.GoPhishEnabled);
+
+        await Repo.SetGoPhishEnabledAsync(tenant.Id, true);
+        Assert.True((await Tenants.GetAsync(tenant.Id))!.GoPhishEnabled);
+
+        var again = await AddAsync(tenant.EntraTenantId);
+        await Repo.MarkConsentReceivedAsync(again.Id, DateTimeOffset.UtcNow);
+        Assert.True((await Repo.CompleteAsync(again.Id, TenantFor(again), [], T0)).GoPhishEnabled);
+
+        await Repo.SetGoPhishEnabledAsync(tenant.Id, false);
+        Assert.False((await Tenants.GetAsync(tenant.Id))!.GoPhishEnabled);
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => Repo.SetGoPhishEnabledAsync(Guid.NewGuid(), true));
+    }
 }

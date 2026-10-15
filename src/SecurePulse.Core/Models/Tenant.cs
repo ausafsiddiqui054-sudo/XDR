@@ -39,6 +39,12 @@ public sealed record Tenant
     /// </summary>
     public string? WazuhAgentGroup { get; init; }
 
+    /// <summary>
+    /// Whether the GoPhish engine imports this tenant's phishing simulation results. The tenant's campaigns
+    /// are run by its own GoPhish user, whose API key is in Key Vault under <see cref="GoPhishSecrets.ApiKeySecretName"/>.
+    /// </summary>
+    public bool GoPhishEnabled { get; init; }
+
     public DateTimeOffset? LastScanAt { get; init; }
 }
 
@@ -61,6 +67,15 @@ public static class WazuhAgentGroups
             return "The \"default\" group holds every unassigned agent, so it can't belong to one tenant. Put the tenant's agents in their own group.";
         return null;
     }
+}
+
+/// <summary>Where a tenant's GoPhish API key lives. Derived from the tenant ID, so no tenant can be pointed at another's key.</summary>
+public static class GoPhishSecrets
+{
+    public const string Prefix = "gophish-api-key-";
+
+    /// <summary>The Key Vault secret holding the API key of the tenant's own GoPhish user, e.g. gophish-api-key-3f2a….</summary>
+    public static string ApiKeySecretName(Guid tenantId) => $"{Prefix}{tenantId:N}";
 }
 
 public enum TenantConsentState

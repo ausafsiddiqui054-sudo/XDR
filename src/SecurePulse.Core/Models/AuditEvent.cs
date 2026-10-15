@@ -88,6 +88,9 @@ public static class AuditActions
     /// <summary>A tenant's Wazuh agent group was set, changed or cleared (decides which agents its findings come from).</summary>
     public const string WazuhGroupChanged = "onboarding.wazuh-group-changed";
 
+    /// <summary>GoPhish results were turned on or off for a tenant.</summary>
+    public const string GoPhishChanged = "onboarding.gophish-changed";
+
     public const string RemediationEnabled = "onboarding.remediation-enabled";
     public const string RemediationDisabled = "onboarding.remediation-disabled";
 
@@ -140,6 +143,7 @@ public static class AuditActions
         DeviceActionSending => "Device action sending",
         DeviceActionResult => "Device action result",
         WazuhGroupChanged => "Wazuh agent group changed",
+        GoPhishChanged => "GoPhish results turned on or off",
         RemediationEnabled => "Remediation access granted",
         RemediationDisabled => "Remediation access turned off",
         AuditExported => "Audit log exported",

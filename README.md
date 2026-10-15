@@ -241,8 +241,9 @@ Setup:
 
 The Worker runs [Maester](https://maester.dev), on a Windows Worker
 [ScubaGear](https://github.com/cisagov/ScubaGear) (CISA's SCuBA baselines), and
-[Wazuh](https://wazuh.com) SCA results for tenants mapped to a Wazuh agent group, against each connected
-tenant (consent granted and a certificate in `CredentialReference`). Results are stored as
+[Wazuh](https://wazuh.com) SCA results for tenants mapped to a Wazuh agent group, and imports
+[GoPhish](https://getgophish.com) phishing simulation results for tenants where it's turned on, against each
+connected tenant (consent granted and a certificate in `CredentialReference`). Results are stored as
 findings, which drive the score and the fix list; each engine replaces only its own findings.
 
 `Scans:Engines` (default `["Maester"]`) says which engines a Worker runs. ScubaGear needs
@@ -403,6 +404,51 @@ Redirects aren't followed.
 
 Then add `Wazuh` to the Worker's and the portal's `Scans:Engines`. The Worker won't start with
 an http URL, a malformed pin, or a Key Vault address that isn't a Key Vault.
+
+### GoPhish
+
+The GoPhish engine imports **phishing simulation results** from your [GoPhish](https://getgophish.com)
+server. It is an import only: **SecurePulse never creates, launches or changes a campaign and never
+sends email.** You run campaigns in GoPhish as before; SecurePulse turns their results into findings.
+
+- **Counts, not people.** The engine reads only `GET /api/campaigns/summary`: per campaign, how many
+  recipients were sent the email, opened it, clicked, entered data on the landing page and reported it.
+  It never reads the per-recipient results, so no names, email addresses or IP addresses of the people
+  tested reach SecurePulse, its database, reports or audit export.
+- **One GoPhish user per tenant.** GoPhish shows each user only their own campaigns, so each tenant's
+  campaigns are run by its own GoPhish user (standard **User** role), and that user's API key decides
+  which campaigns show up for the tenant. The key is stored in Key Vault under a name derived from the
+  tenant ID, `gophish-api-key-<tenant id without dashes>`, so a tenant can't be pointed at another's
+  key. An Owner turns GoPhish on for a tenant on its card (**Turn on GoPhish**, which shows the secret
+  name); each change is in the audit log (*GoPhish results turned on or off*).
+- **Admin keys are refused.** A GoPhish admin can manage every user and read their API keys. Before
+  each import the Worker sends `HEAD /api/users/` (an admin-only endpoint; HEAD returns no body) and
+  stops if the key is an admin's.
+- **Read-only on our side.** GoPhish has no read-only API keys: a standard user's key could also launch
+  campaigns. SecurePulse's GoPhish HTTP client refuses every request that isn't a GET or HEAD before it
+  leaves the process, sends the key in the `Authorization` header (never the URL), follows no
+  redirects, and pins the server's certificate (`GoPhish:CertificateSha256`) or validates it normally.
+- **Findings:** one per campaign launched within `GoPhish:Lookback` (365 days), under *Security
+  awareness*. A campaign **fails** when anyone entered data on its landing page, **passes** when it
+  completed without that, and is *not evaluated* while it's still running (unless someone already
+  entered data). The evidence gives the counts and rates: entered data, clicked, opened, reported.
+  Every campaign finding gets `GoPhish:FindingSeverity` (default `Medium`).
+- **An import fails, keeping the previous findings,** when the key is missing, rejected or an admin's,
+  no campaign was launched within the lookback, or none has finished yet.
+
+| Setting | Default | |
+|---|---|---|
+| `GoPhish:Url` | | The admin server, `https://gophish.example:3333` (the API is under `/api/`). |
+| `GoPhish:CertificateSha256` | | Pin for GoPhish's self-signed certificate (`openssl x509 -in gophish_admin.crt -noout -fingerprint -sha256`). |
+| `GoPhish:Lookback` | 365 days | Campaigns launched earlier are left out (7 days to 3 years). |
+| `GoPhish:FindingSeverity` | `Medium` | Info, Low, Medium, High or Critical. |
+| `GoPhish:Timeout` | 5 minutes | Per tenant. |
+| `GoPhish:KeyVault:VaultUri` | | `https://<vault>.vault.azure.net/` (also `.us`/`.cn` clouds). |
+| `GoPhish:KeyVault:TenantId`, `ClientId`, `CertificateThumbprint` | | Certificate sign-in to your tenant, or `UseManagedIdentity`. |
+
+Then add `GoPhish` to the Worker's and the portal's `Scans:Engines`. The Worker won't start with an
+http URL, a malformed pin, or a Key Vault address that isn't a Key Vault. Tenants without GoPhish turned
+on aren't imported.
 
 ## Sign-in and roles
 
@@ -652,6 +698,7 @@ checks are excluded. Any open **Critical** caps the grade at C.
 | Tenant onboarding (admin consent, verification, first sync) | Built; tested with stubbed Entra; needs the app registration to exercise |
 | Worker: scheduled Maester scans (queue, retries, permission check, Run scan / Scan now) | Built; tested against PostgreSQL 16 and end to end with a stand-in `pwsh` |
 | Wazuh engine (SCA / CIS benchmarks from a shared manager, group per tenant, password in Key Vault) | Built; tested against a stand-in Wazuh API over pinned TLS; needs a Wazuh manager and Key Vault to exercise |
+| GoPhish import (aggregate campaign results per tenant, key per tenant in Key Vault, GET/HEAD only) | Built; tested against a stand-in GoPhish API over pinned TLS; needs a GoPhish server and Key Vault to exercise |
 | ScubaGear engine (Entra ID baseline, Windows Worker) | Built; parser tested against ScubaGear 1.8.0's sample report, runner end to end with a stand-in; needs a Windows Worker, a real tenant and certificate to exercise |
 | Portal sign-in with roles (Entra ID, Owner / MSP admin / Client viewer) | Built; tested with development sign-in and the real Entra redirect |
 | Security audit log (append-only, page + CSV export) | Built; tested against PostgreSQL 16 |

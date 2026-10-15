@@ -1,6 +1,6 @@
-using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using SecurePulse.Core.Models;
+using SecurePulse.Engines.Http;
 
 namespace SecurePulse.Engines.Wazuh;
 
@@ -50,33 +50,15 @@ public sealed class WazuhOptions
     }
 
     /// <summary>64 lowercase hex characters, or null if <paramref name="pin"/> isn't a SHA-256 fingerprint.</summary>
-    public static string? NormalizePin(string? pin)
-    {
-        var hex = pin?.Replace(":", "").Replace(" ", "").Trim().ToLowerInvariant();
-        return hex is { Length: 64 } && hex.All(Uri.IsHexDigit) ? hex : null;
-    }
+    public static string? NormalizePin(string? pin) => PinnedHttp.NormalizePin(pin);
 
     /// <summary>
     /// The handler every Wazuh call goes through: no redirects (the token stays on the configured host),
     /// and the server certificate either pinned or validated normally.
     /// </summary>
-    public HttpMessageHandler CreateHandler()
-    {
-        var pin = NormalizePin(CertificateSha256);
-        return new SocketsHttpHandler
-        {
-            AllowAutoRedirect = false,
-            SslOptions =
-            {
-                RemoteCertificateValidationCallback = (_, certificate, _, errors) => pin is null
-                    ? errors == System.Net.Security.SslPolicyErrors.None
-                    : certificate is not null && MatchesPin(certificate, pin)
-            }
-        };
-    }
+    public HttpMessageHandler CreateHandler() => PinnedHttp.CreateHandler(CertificateSha256);
 
-    public static bool MatchesPin(X509Certificate certificate, string normalizedPin) =>
-        Convert.ToHexStringLower(SHA256.HashData(certificate.GetRawCertData())) == normalizedPin;
+    public static bool MatchesPin(X509Certificate certificate, string normalizedPin) => PinnedHttp.MatchesPin(certificate, normalizedPin);
 }
 
 /// <summary>The Wazuh API user's password, from a secret store (Azure Key Vault in the Worker). Never config.</summary>

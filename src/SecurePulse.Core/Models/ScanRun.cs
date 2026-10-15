@@ -48,12 +48,20 @@ public static class ScanEngines
     public const string Maester = "Maester";
     public const string ScubaGear = "ScubaGear";
     public const string Wazuh = "Wazuh";
+    public const string GoPhish = "GoPhish";
 
-    public static readonly IReadOnlyList<string> All = [Maester, ScubaGear, Wazuh];
+    public static readonly IReadOnlyList<string> All = [Maester, ScubaGear, Wazuh, GoPhish];
 
-    /// <summary>Whether <paramref name="engine"/> scans <paramref name="tenant"/>: Wazuh only once the tenant has an agent group.</summary>
-    public static bool AppliesTo(string engine, Tenant tenant) =>
-        engine != Wazuh || !string.IsNullOrWhiteSpace(tenant.WazuhAgentGroup);
+    /// <summary>
+    /// Whether <paramref name="engine"/> scans <paramref name="tenant"/>: Wazuh only once the tenant has an agent group,
+    /// GoPhish only once an Owner turned it on for the tenant.
+    /// </summary>
+    public static bool AppliesTo(string engine, Tenant tenant) => engine switch
+    {
+        Wazuh => !string.IsNullOrWhiteSpace(tenant.WazuhAgentGroup),
+        GoPhish => tenant.GoPhishEnabled,
+        _ => true
+    };
 
     /// <summary>Engines that read the tenant through Microsoft Graph, so the Worker checks the token's roles first.</summary>
     public static bool UsesGraph(string engine) => engine is Maester or ScubaGear;

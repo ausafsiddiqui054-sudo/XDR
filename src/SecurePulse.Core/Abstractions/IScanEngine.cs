@@ -5,7 +5,7 @@ namespace SecurePulse.Core.Abstractions;
 /// <summary>
 /// Every engine (Maester, ScubaGear, Wazuh, GoPhish) implements this and returns
 /// normalized <see cref="Finding"/>s. Engines run in the Worker, never the portal: PowerShell
-/// engines out of process, API engines (Wazuh) as bounded, read-only HTTP calls.
+/// engines out of process, API engines (Wazuh, GoPhish) as bounded, read-only HTTP calls.
 /// </summary>
 public interface IScanEngine
 {
@@ -93,6 +93,9 @@ public interface IOnboardingRepository
     /// uses the group; throws <see cref="KeyNotFoundException"/> for an unknown tenant.
     /// </summary>
     Task<bool> SetWazuhAgentGroupAsync(Guid tenantId, string? group, CancellationToken ct = default);
+
+    /// <summary>Turns GoPhish results on or off for a tenant; throws <see cref="KeyNotFoundException"/> for an unknown tenant.</summary>
+    Task SetGoPhishEnabledAsync(Guid tenantId, bool enabled, CancellationToken ct = default);
 
     Task<Tenant?> CompleteRemediationAsync(Guid id, string remediationCredentialReference, IReadOnlyList<string> grantedPermissions,
         DateTimeOffset at, CancellationToken ct = default);

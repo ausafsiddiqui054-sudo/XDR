@@ -639,6 +639,9 @@ namespace SecurePulse.Data.Migrations
                     b.Property<Guid>("EntraTenantId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("GoPhishEnabled")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Industry")
                         .IsRequired()
                         .HasMaxLength(128)
