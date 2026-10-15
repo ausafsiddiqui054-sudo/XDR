@@ -39,6 +39,8 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
             e.Property(x => x.Industry).HasMaxLength(128);
             e.Property(x => x.CredentialReference).HasMaxLength(256);
             e.Property(x => x.RemediationCredentialReference).HasMaxLength(256);
+            e.Property(x => x.WazuhAgentGroup).HasMaxLength(128);
+            e.HasIndex(x => x.WazuhAgentGroup).IsUnique();
         });
 
         b.Entity<FindingEntity>(e =>

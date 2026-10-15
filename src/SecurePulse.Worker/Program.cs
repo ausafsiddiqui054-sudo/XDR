@@ -47,6 +47,13 @@ if (scanEngines.Contains(ScanEngines.ScubaGear))
     engineTimeouts.Add(("ScubaGear", scubaGear.Timeout));
 }
 
+if (scanEngines.Contains(ScanEngines.Wazuh))
+{
+    // Wazuh reads the shared Wazuh manager's API, not Graph; its password comes from Key Vault.
+    var wazuh = builder.Services.AddWazuhEngine(builder.Configuration);
+    engineTimeouts.Add(("Wazuh", wazuh.Timeout));
+}
+
 builder.Services.AddOptions<ScanOptions>()
     .Bind(builder.Configuration.GetSection("Scans"))
     .Validate(o => o.Interval >= TimeSpan.FromHours(1), "Scans:Interval must be at least one hour.")

@@ -1,3 +1,4 @@
+using Npgsql;
 using Microsoft.EntityFrameworkCore;
 using SecurePulse.Core.Abstractions;
 using SecurePulse.Core.Models;
@@ -175,6 +176,22 @@ public sealed class EfOnboardingRepository(IDbContextFactory<SecurePulseDbContex
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return stored.ToModel();
+    }
+
+    public async Task<bool> SetWazuhAgentGroupAsync(Guid tenantId, string? group, CancellationToken ct = default)
+    {
+        if (group is not null && WazuhAgentGroups.Problem(group) is { } problem) throw new ArgumentException(problem, nameof(group));
+        await using var db = await factory.CreateDbContextAsync(ct);
+        try
+        {
+            var changed = await db.Tenants.Where(t => t.Id == tenantId)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.WazuhAgentGroup, group), ct);
+            return changed > 0 ? true : throw new KeyNotFoundException($"Tenant {tenantId} not found.");
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            return false; // another tenant already reads this group
+        }
     }
 
     public async Task<bool> DisableRemediationAsync(Guid tenantId, CancellationToken ct = default)

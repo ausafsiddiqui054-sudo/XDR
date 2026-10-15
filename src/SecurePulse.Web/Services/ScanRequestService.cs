@@ -56,7 +56,7 @@ public sealed class ScanRequestService(
         foreach (var id in tenantIds.Distinct())
         {
             if (await tenants.GetAsync(id, ct) is not { } tenant || !IsOnboarded(tenant)) continue;
-            foreach (var engine in selection.Engines)
+            foreach (var engine in selection.Engines.Where(e => ScanEngines.AppliesTo(e, tenant)))
             {
                 var (run, created) = await runs.EnqueueAsync(tenant.Id, engine, ScanTrigger.Manual, actor.Name, time.GetUtcNow(), ct);
                 if (!created) continue;

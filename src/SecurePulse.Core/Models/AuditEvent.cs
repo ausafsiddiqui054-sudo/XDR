@@ -85,6 +85,9 @@ public static class AuditActions
 
     public const string DeviceActionResult = "device.action-result";
 
+    /// <summary>A tenant's Wazuh agent group was set, changed or cleared (decides which agents its findings come from).</summary>
+    public const string WazuhGroupChanged = "onboarding.wazuh-group-changed";
+
     public const string RemediationEnabled = "onboarding.remediation-enabled";
     public const string RemediationDisabled = "onboarding.remediation-disabled";
 
@@ -136,6 +139,7 @@ public static class AuditActions
         DeviceActionExpired => "Device action expired",
         DeviceActionSending => "Device action sending",
         DeviceActionResult => "Device action result",
+        WazuhGroupChanged => "Wazuh agent group changed",
         RemediationEnabled => "Remediation access granted",
         RemediationDisabled => "Remediation access turned off",
         AuditExported => "Audit log exported",

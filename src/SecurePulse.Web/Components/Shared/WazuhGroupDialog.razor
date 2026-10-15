@@ -1,0 +1,35 @@
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Rounded.Lan" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Wazuh agent group for @TenantName</MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-4">
+            SecurePulse reads Security Configuration Assessment results only for agents in this group on your Wazuh manager.
+            Use a group that holds this client's agents and nobody else's. Agents that are also in another tenant's group are left out.
+        </MudText>
+        <MudTextField T="string" @bind-Value="_group" Label="Agent group" Variant="Variant.Outlined" Immediate="true" Margin="Margin.Dense"
+                      MaxLength="WazuhAgentGroups.MaxLength" Error="@(_problem is not null)" ErrorText="@_problem"
+                      HelperText="Letters, digits, '.', '_' and '-'. Leave empty to stop scanning this tenant with Wazuh."
+                      UserAttributes="@(new() { ["data-testid"] = "wazuh-group-input" })" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_problem is not null)"
+                   OnClick="@(() => MudDialog.Close(DialogResult.Ok(_group?.Trim() ?? "")))">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter, EditorRequired] public string TenantName { get; set; } = "";
+    [Parameter] public string? Group { get; set; }
+
+    private string? _group;
+
+    private string? _problem => string.IsNullOrWhiteSpace(_group) ? null : WazuhAgentGroups.Problem(_group.Trim());
+
+    protected override void OnInitialized() => _group = Group;
+}

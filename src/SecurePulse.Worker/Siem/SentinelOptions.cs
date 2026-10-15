@@ -72,22 +72,7 @@ public sealed partial class SentinelOptions
         if (!Uri.TryCreate(Audience, UriKind.Absolute, out var audience) || audience.Scheme != Uri.UriSchemeHttps)
             problems.Add("AuditExport:Sentinel:Audience must be an https URL such as https://monitor.azure.com.");
 
-        if (UseManagedIdentity)
-        {
-            if (!string.IsNullOrWhiteSpace(CertificateThumbprint))
-                problems.Add("Use either a certificate or a managed identity for AuditExport:Sentinel, not both.");
-            if (!string.IsNullOrWhiteSpace(ClientId) && !Guid.TryParse(ClientId, out _))
-                problems.Add("AuditExport:Sentinel:ClientId must be a GUID (the user-assigned identity's client ID), or empty for the system-assigned one.");
-        }
-        else
-        {
-            if (!Guid.TryParse(TenantId, out var tenant) || tenant == Guid.Empty)
-                problems.Add("AuditExport:Sentinel:TenantId must be your Entra tenant ID (a GUID).");
-            if (!Guid.TryParse(ClientId, out var client) || client == Guid.Empty)
-                problems.Add("AuditExport:Sentinel:ClientId must be the app registration's client ID (a GUID).");
-            if (CertificateThumbprint is not { Length: 40 } t || !t.All(Uri.IsHexDigit))
-                problems.Add("AuditExport:Sentinel:CertificateThumbprint must be a certificate thumbprint (40 hex characters), or set UseManagedIdentity.");
-        }
+        problems.AddRange(AzureCredentials.Problems("AuditExport:Sentinel", TenantId, ClientId, CertificateThumbprint, UseManagedIdentity));
 
         if (Interval < TimeSpan.FromSeconds(10)) problems.Add("AuditExport:Sentinel:Interval must be at least 10 seconds.");
         if (ExportLag < TimeSpan.FromSeconds(30)) problems.Add("AuditExport:Sentinel:ExportLag must be at least 30 seconds.");

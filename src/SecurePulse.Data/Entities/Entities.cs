@@ -22,6 +22,9 @@ public sealed class TenantEntity
     /// <summary>Remediation app certificate thumbprint. A reference only, never a secret.</summary>
     public string? RemediationCredentialReference { get; set; }
 
+    /// <summary>Wazuh agent group of this tenant's agents. Unique: no two tenants read the same agents.</summary>
+    public string? WazuhAgentGroup { get; set; }
+
     public DateTimeOffset? LastScanAt { get; set; }
 }
 

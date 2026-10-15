@@ -32,7 +32,35 @@ public sealed record Tenant
 
     public bool CanRemediate => ConsentState == TenantConsentState.RemediationGranted && !string.IsNullOrWhiteSpace(RemediationCredentialReference);
 
+    /// <summary>
+    /// The Wazuh agent group holding this tenant's agents on the shared Wazuh manager. The Wazuh
+    /// engine reads only agents in this group; null means the tenant isn't scanned by Wazuh.
+    /// Unique across tenants, so two tenants can never read the same agents.
+    /// </summary>
+    public string? WazuhAgentGroup { get; init; }
+
     public DateTimeOffset? LastScanAt { get; init; }
+}
+
+/// <summary>Rules for <see cref="Tenant.WazuhAgentGroup"/>.</summary>
+public static class WazuhAgentGroups
+{
+    public const int MaxLength = 128;
+
+    /// <summary>Wazuh puts every agent without a group in "default", so it never belongs to one tenant.</summary>
+    public const string Default = "default";
+
+    /// <summary>Why <paramref name="group"/> can't be a tenant's agent group, or null.</summary>
+    public static string? Problem(string? group)
+    {
+        if (string.IsNullOrWhiteSpace(group)) return "Enter the Wazuh agent group name.";
+        if (group.Length > MaxLength) return $"Wazuh group names are at most {MaxLength} characters.";
+        if (group is "." or ".." || !group.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-'))
+            return "Wazuh group names use only letters, digits, '.', '_' and '-'.";
+        if (string.Equals(group, Default, StringComparison.OrdinalIgnoreCase))
+            return "The \"default\" group holds every unassigned agent, so it can't belong to one tenant. Put the tenant's agents in their own group.";
+        return null;
+    }
 }
 
 public enum TenantConsentState

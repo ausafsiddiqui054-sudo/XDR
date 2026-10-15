@@ -4,8 +4,8 @@ namespace SecurePulse.Core.Abstractions;
 
 /// <summary>
 /// Every engine (Maester, ScubaGear, Wazuh, GoPhish) implements this and returns
-/// normalized <see cref="Finding"/>s. Engines must run out of process so a hung
-/// or crashing scan can never take down the portal.
+/// normalized <see cref="Finding"/>s. Engines run in the Worker, never the portal: PowerShell
+/// engines out of process, API engines (Wazuh) as bounded, read-only HTTP calls.
 /// </summary>
 public interface IScanEngine
 {
@@ -88,6 +88,12 @@ public interface IOnboardingRepository
     /// remediation access with <paramref name="remediationCredentialReference"/>. Returns the tenant,
     /// or null if no connected tenant matches (the request is then marked failed).
     /// </summary>
+    /// <summary>
+    /// Sets (or clears, with null) a tenant's Wazuh agent group. Returns false if another tenant already
+    /// uses the group; throws <see cref="KeyNotFoundException"/> for an unknown tenant.
+    /// </summary>
+    Task<bool> SetWazuhAgentGroupAsync(Guid tenantId, string? group, CancellationToken ct = default);
+
     Task<Tenant?> CompleteRemediationAsync(Guid id, string remediationCredentialReference, IReadOnlyList<string> grantedPermissions,
         DateTimeOffset at, CancellationToken ct = default);
 

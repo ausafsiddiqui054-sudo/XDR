@@ -91,7 +91,9 @@ else
 
                     @{
                         var connected = t.Tenant.ConsentState is TenantConsentState.ReadOnlyGranted or TenantConsentState.RemediationGranted;
-                        var engineRuns = Scans.Engines.Select(e => (Engine: e, Run: _scans.GetValueOrDefault((t.Tenant.Id, e)))).ToList();
+                        var engineRuns = Scans.Engines.Where(e => ScanEngines.AppliesTo(e, t.Tenant))
+                            .Select(e => (Engine: e, Run: _scans.GetValueOrDefault((t.Tenant.Id, e)))).ToList();
+                        var wazuh = Scans.Engines.Contains(ScanEngines.Wazuh);
                     }
                     @if (t.Score is { } score)
                     {
@@ -144,6 +146,22 @@ else
                                     }
                                 </MudStack>
                             }
+                            @if (wazuh)
+                            {
+                                <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" data-testid="wazuh-group">
+                                    <MudIcon Icon="@Icons.Material.Rounded.Lan" Size="Size.Small" Color="@(t.Tenant.WazuhAgentGroup is null ? Color.Default : Color.Primary)" />
+                                    <MudText Typo="Typo.caption">
+                                        @if (t.Tenant.WazuhAgentGroup is { } group)
+                                        {
+                                            <span>Wazuh agent group <b>@group</b></span>
+                                        }
+                                        else
+                                        {
+                                            <span>Wazuh: no agent group set, so this tenant isn't scanned by Wazuh</span>
+                                        }
+                                    </MudText>
+                                </MudStack>
+                            }
                         </MudStack>
                     }
 
@@ -166,6 +184,11 @@ else
                                        OnClick="@(() => ScanNowAsync(t.Tenant))">Scan now</MudButton>
                             <MudButton Variant="Variant.Text" Color="Color.Default" Class="px-0" StartIcon="@Icons.Material.Rounded.VerifiedUser"
                                        Href="@ReconsentUrl(t.Tenant)">Re-consent</MudButton>
+                        }
+                        @if (_isOwner && connected && wazuh)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Default" Class="px-0" StartIcon="@Icons.Material.Rounded.Lan"
+                                       OnClick="@(() => EditWazuhGroupAsync(t.Tenant))" data-testid="edit-wazuh-group">Wazuh group</MudButton>
                         }
                         @if (_isOwner && t.Tenant.ConsentState == TenantConsentState.ReadOnlyGranted && Onboarding.IsRemediationConfigured)
                         {
@@ -200,6 +223,18 @@ else
             Nav.NavigateTo($"tenants/connect/{request.Id}{(result.Reused ? "?reused=true" : "")}");
         else
             Snackbar.Add(result.Error ?? "Couldn't create a remediation consent link.", MudBlazor.Severity.Error);
+    }
+
+    private async Task EditWazuhGroupAsync(Tenant tenant)
+    {
+        var parameters = new DialogParameters<WazuhGroupDialog> { { x => x.TenantName, tenant.DisplayName }, { x => x.Group, tenant.WazuhAgentGroup } };
+        var dialog = await Dialogs.ShowAsync<WazuhGroupDialog>(null, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: string group }) return;
+
+        var (ok, message) = await Onboarding.SetWazuhAgentGroupAsync(tenant.Id, group);
+        Snackbar.Add(message, ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
+        _portfolio = await Posture.GetPortfolioAsync();
     }
 
     private async Task DisableRemediationAsync(Tenant tenant)

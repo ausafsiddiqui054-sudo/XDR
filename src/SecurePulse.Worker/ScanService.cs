@@ -34,7 +34,7 @@ public sealed class ScanService(
 
         foreach (var tenant in (await tenants.GetAllAsync(ct)).Where(IsOnboarded))
         {
-            foreach (var engine in _engines.Keys)
+            foreach (var engine in _engines.Keys.Where(e => ScanEngines.AppliesTo(e, tenant)))
             {
                 latest.TryGetValue((tenant.Id, engine), out var last);
                 var due = last switch
@@ -108,7 +108,11 @@ public sealed class ScanService(
         if (await tenants.GetAsync(run.TenantId, ct) is not { } tenant || !IsOnboarded(tenant))
             return (null, "The tenant isn't onboarded (consent or certificate missing).");
 
-        if (options.Value.CheckPermissions && await CheckPermissionsAsync(tenant, engine.Name, ct) is { } permissionError)
+        if (!ScanEngines.AppliesTo(engine.Name, tenant))
+            return (null, $"{tenant.DisplayName} isn't set up for {engine.Name} (no Wazuh agent group on the Tenants page).");
+
+        // Graph engines: check the token's roles first. Wazuh checks its own API user's RBAC instead.
+        if (options.Value.CheckPermissions && ScanEngines.UsesGraph(engine.Name) && await CheckPermissionsAsync(tenant, engine.Name, ct) is { } permissionError)
             return (null, permissionError);
 
         var result = await engine.RunAsync(tenant, ct);

@@ -518,6 +518,19 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
         }
     }
 
+    public Task<bool> SetWazuhAgentGroupAsync(Guid tenantId, string? group, CancellationToken ct = default)
+    {
+        if (group is not null && WazuhAgentGroups.Problem(group) is { } problem) throw new ArgumentException(problem, nameof(group));
+        lock (_gate)
+        {
+            var index = _tenants.FindIndex(t => t.Id == tenantId);
+            if (index < 0) throw new KeyNotFoundException($"Tenant {tenantId} not found.");
+            if (group is not null && _tenants.Any(t => t.Id != tenantId && t.WazuhAgentGroup == group)) return Task.FromResult(false);
+            _tenants[index] = _tenants[index] with { WazuhAgentGroup = group };
+            return Task.FromResult(true);
+        }
+    }
+
     public Task<bool> DisableRemediationAsync(Guid tenantId, CancellationToken ct = default)
     {
         lock (_gate)

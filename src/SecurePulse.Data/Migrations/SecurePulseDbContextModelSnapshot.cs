@@ -660,9 +660,16 @@ namespace SecurePulse.Data.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<string>("WazuhAgentGroup")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("EntraTenantId")
+                        .IsUnique();
+
+                    b.HasIndex("WazuhAgentGroup")
                         .IsUnique();
 
                     b.ToTable("tenants", (string)null);

@@ -181,4 +181,47 @@ public class OnboardingRepositoryTests(PostgresDatabase db) : IClassFixture<Post
         Assert.DoesNotContain(old.Id, open);
         Assert.DoesNotContain(cancelled.Id, open);
     }
+
+    private async Task<Tenant> ConnectedTenantAsync()
+    {
+        var request = await AddAsync();
+        await Repo.MarkConsentReceivedAsync(request.Id, DateTimeOffset.UtcNow);
+        return await Repo.CompleteAsync(request.Id, TenantFor(request), [], T0);
+    }
+
+    [PostgresFact]
+    public async Task WazuhGroup_IsSetClearedAndUniqueAcrossTenants()
+    {
+        var a = await ConnectedTenantAsync();
+        var b = await ConnectedTenantAsync();
+        var group = "clinic-" + Guid.NewGuid().ToString("N")[..8];
+
+        Assert.True(await Repo.SetWazuhAgentGroupAsync(a.Id, group));
+        Assert.Equal(group, (await Tenants.GetAsync(a.Id))!.WazuhAgentGroup);
+
+        Assert.False(await Repo.SetWazuhAgentGroupAsync(b.Id, group)); // two tenants can't read the same agents
+        Assert.Null((await Tenants.GetAsync(b.Id))!.WazuhAgentGroup);
+
+        Assert.True(await Repo.SetWazuhAgentGroupAsync(a.Id, null));
+        Assert.True(await Repo.SetWazuhAgentGroupAsync(b.Id, group)); // free again
+        Assert.True(await Repo.SetWazuhAgentGroupAsync(a.Id, null)); // any number of tenants without a group
+        Assert.Null((await Tenants.GetAsync(a.Id))!.WazuhAgentGroup);
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => Repo.SetWazuhAgentGroupAsync(Guid.NewGuid(), "x-" + group));
+        await Assert.ThrowsAsync<ArgumentException>(() => Repo.SetWazuhAgentGroupAsync(a.Id, "default"));
+    }
+
+    [PostgresFact]
+    public async Task ReConsent_KeepsTheWazuhGroup()
+    {
+        var tenant = await ConnectedTenantAsync();
+        var group = "keep-" + Guid.NewGuid().ToString("N")[..8];
+        await Repo.SetWazuhAgentGroupAsync(tenant.Id, group);
+
+        var again = await AddAsync(tenant.EntraTenantId);
+        await Repo.MarkConsentReceivedAsync(again.Id, DateTimeOffset.UtcNow);
+        var updated = await Repo.CompleteAsync(again.Id, TenantFor(again), [], T0);
+
+        Assert.Equal(group, updated.WazuhAgentGroup);
+    }
 }

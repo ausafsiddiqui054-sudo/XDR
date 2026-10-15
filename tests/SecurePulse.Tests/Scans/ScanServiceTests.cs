@@ -380,6 +380,55 @@ public class ScanServiceTests
         h.Time.Advance(h.Options.RetryFailedAfter);
         Assert.Equal(1, await h.Service.EnqueueDueAsync());
     }
+    // --- Wazuh ------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Wazuh_IsScheduledOnlyForTenantsWithAnAgentGroup()
+    {
+        var wazuh = new FakeEngine(name: ScanEngines.Wazuh);
+        var h = new Harness { OtherEngines = [wazuh] };
+        var onboarded = await h.OnboardAsync();
+        var mapped = onboarded[0];
+        await ((IOnboardingRepository)h.Store).SetWazuhAgentGroupAsync(mapped.Id, "clinic-a");
+
+        await h.Service.EnqueueDueAsync();
+
+        var queued = await h.Runs.GetLatestAsync();
+        Assert.Equal([mapped.Id], queued.Where(r => r.Engine == ScanEngines.Wazuh).Select(r => r.TenantId));
+        Assert.Equal(onboarded.Count, queued.Count(r => r.Engine == ScanEngines.Maester));
+    }
+
+    [Fact]
+    public async Task Wazuh_DoesntNeedGraphPermissions()
+    {
+        // A token without any assessment permission would stop a Graph engine; Wazuh checks its own API user instead.
+        var wazuh = new FakeEngine(name: ScanEngines.Wazuh);
+        var h = new Harness { Engine = wazuh, Tokens = new Tokens(t => Jwt.With(t.EntraTenantId)) };
+        var tenant = (await h.OnboardAsync(1))[0];
+        await ((IOnboardingRepository)h.Store).SetWazuhAgentGroupAsync(tenant.Id, "clinic-a");
+        await h.Runs.EnqueueAsync(tenant.Id, ScanEngines.Wazuh, ScanTrigger.Manual, "Olivia", h.Time.Now);
+
+        await h.Service.DrainAsync();
+
+        Assert.Equal(ScanRunStatus.Succeeded, (await h.LatestAsync(tenant.Id))!.Status);
+        Assert.Equal(0, h.Tokens.Calls);
+    }
+
+    [Fact]
+    public async Task AQueuedWazuhRun_FailsIfTheGroupWasRemoved()
+    {
+        var wazuh = new FakeEngine(name: ScanEngines.Wazuh);
+        var h = new Harness { Engine = wazuh };
+        var tenant = (await h.OnboardAsync(1))[0];
+        await h.Runs.EnqueueAsync(tenant.Id, ScanEngines.Wazuh, ScanTrigger.Manual, "Olivia", h.Time.Now);
+
+        await h.Service.DrainAsync();
+
+        var run = (await h.LatestAsync(tenant.Id))!;
+        Assert.Equal(ScanRunStatus.Failed, run.Status);
+        Assert.Contains("no Wazuh agent group", run.Error);
+        Assert.Empty(wazuh.Scanned);
+    }
 }
 
 public class ScanRequestServiceTests
@@ -456,4 +505,5 @@ public class ScanRequestServiceTests
         Assert.Equal([ScanEngines.Maester, ScanEngines.ScubaGear], ScanEngineSelection.From(["Maester", "ScubaGear", "Maester"]).Engines);
         Assert.Throws<InvalidOperationException>(() => ScanEngineSelection.From(["scubagear"]));
     }
+
 }

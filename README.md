@@ -239,8 +239,9 @@ Setup:
 
 ## Security scans
 
-The Worker runs [Maester](https://maester.dev) and, on a Windows Worker,
-[ScubaGear](https://github.com/cisagov/ScubaGear) (CISA's SCuBA baselines) against each connected
+The Worker runs [Maester](https://maester.dev), on a Windows Worker
+[ScubaGear](https://github.com/cisagov/ScubaGear) (CISA's SCuBA baselines), and
+[Wazuh](https://wazuh.com) SCA results for tenants mapped to a Wazuh agent group, against each connected
 tenant (consent granted and a certificate in `CredentialReference`). Results are stored as
 findings, which drive the score and the fix list; each engine replaces only its own findings.
 
@@ -348,6 +349,60 @@ or third-party checks), errors and omissions aren't evaluated. Findings carry th
 "CISA SCuBA" and a "BOD 25-01" tag where CISA marks the control as required by that directive. If
 ScubaGear can't evaluate any control (for example, sign-in failed), the scan fails and the
 previous results are kept.
+
+### Wazuh
+
+The Wazuh engine reads **Security Configuration Assessment** (SCA, CIS benchmark) results for each
+tenant's endpoints from your shared Wazuh manager, through the Wazuh server API (4.x, tested against
+the 4.14 API). It doesn't run a process: it makes read-only HTTP calls from the Worker.
+
+- **One group per tenant.** Agents are tied to a tenant by their Wazuh agent group. An Owner sets the
+  group on the tenant's card (**Wazuh group**); each change is in the audit log (*Wazuh agent group
+  changed*). A group belongs to one tenant only (enforced by a unique index), `default` is refused
+  (every unassigned agent is in it), and an agent that is also in another tenant's group is left out
+  of both. Tenants without a group aren't scanned by Wazuh.
+- **Findings:** one per SCA check per policy (e.g. *CIS Microsoft Windows 11 Enterprise Benchmark*),
+  across the tenant's agents: **Failed** if it failed on any agent (the evidence names them),
+  **Passed** if it passed everywhere it applies, otherwise *not evaluated*. Compliance mappings
+  (CIS, PCI DSS, ISO 27001, NIST 800-53, HIPAA…) become the finding's frameworks, under the
+  *Endpoint hardening* category. Only https references become links.
+- **Severity and the score:** SCA checks carry no severity, so every Wazuh finding gets
+  `Wazuh:FindingSeverity` (default `Low`). CIS benchmarks have a few hundred checks per OS, so Wazuh
+  findings move a tenant's score noticeably; pick the severity to suit how much endpoint hardening
+  should weigh.
+- **A scan fails, keeping the previous findings,** when the API user isn't read-only, the group has
+  no agents, none of them has SCA results, or any agent's results can't be read.
+
+**Read-only API user.** Create a Wazuh API user for SecurePulse with a role that only reads, e.g.
+a policy allowing `agent:read` and `sca:read` (resource `agent:group:<group>` or `agent:id:*`).
+Before every scan the Worker reads the user's effective policies
+(`GET /security/users/me/policies`) and refuses to scan if RBAC is in `black` mode (everything not
+denied is allowed) or if any allowed action isn't a `:read` action.
+
+**Password in Key Vault.** Wazuh's API only takes a username and password, so the password lives in
+Azure Key Vault and the Worker reads it for each scan with its certificate or managed identity
+(the identity needs *Key Vault Secrets User* on the vault). It never goes in config or the database.
+
+**TLS.** The Wazuh API uses a self-signed certificate by default. Pin it with
+`Wazuh:CertificateSha256`, the SHA-256 fingerprint of the API's certificate
+(`openssl x509 -in /var/ossec/api/configuration/ssl/server.crt -noout -fingerprint -sha256` on the
+manager): only that certificate is then accepted. Without a pin the certificate must be trusted normally.
+Redirects aren't followed.
+
+| Setting | Default | |
+|---|---|---|
+| `Wazuh:Url` | | `https://wazuh.example:55000` |
+| `Wazuh:Username` | `securepulse-readonly` | |
+| `Wazuh:CertificateSha256` | | Pin for a self-signed certificate. |
+| `Wazuh:FindingSeverity` | `Low` | Info, Low, Medium, High or Critical. |
+| `Wazuh:Timeout` | 20 minutes | Per tenant. |
+| `Wazuh:MaxConcurrentRequests` | 4 | Wazuh's API allows 300 requests a minute by default; 429s are retried. |
+| `Wazuh:KeyVault:VaultUri` | | `https://<vault>.vault.azure.net/` (also `.us`/`.cn` clouds). |
+| `Wazuh:KeyVault:PasswordSecretName` | `wazuh-api-password` | |
+| `Wazuh:KeyVault:TenantId`, `ClientId`, `CertificateThumbprint` | | Certificate sign-in to your tenant, or `UseManagedIdentity`. |
+
+Then add `Wazuh` to the Worker's and the portal's `Scans:Engines`. The Worker won't start with
+an http URL, a malformed pin, or a Key Vault address that isn't a Key Vault.
 
 ## Sign-in and roles
 
@@ -596,6 +651,7 @@ checks are excluded. Any open **Critical** caps the grade at C.
 | Worker: Intune device sync | Built and tested against stubbed Graph; needs a real tenant + certificate to exercise |
 | Tenant onboarding (admin consent, verification, first sync) | Built; tested with stubbed Entra; needs the app registration to exercise |
 | Worker: scheduled Maester scans (queue, retries, permission check, Run scan / Scan now) | Built; tested against PostgreSQL 16 and end to end with a stand-in `pwsh` |
+| Wazuh engine (SCA / CIS benchmarks from a shared manager, group per tenant, password in Key Vault) | Built; tested against a stand-in Wazuh API over pinned TLS; needs a Wazuh manager and Key Vault to exercise |
 | ScubaGear engine (Entra ID baseline, Windows Worker) | Built; parser tested against ScubaGear 1.8.0's sample report, runner end to end with a stand-in; needs a Windows Worker, a real tenant and certificate to exercise |
 | Portal sign-in with roles (Entra ID, Owner / MSP admin / Client viewer) | Built; tested with development sign-in and the real Entra redirect |
 | Security audit log (append-only, page + CSV export) | Built; tested against PostgreSQL 16 |

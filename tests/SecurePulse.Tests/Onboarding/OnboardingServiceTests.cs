@@ -399,4 +399,51 @@ public class OnboardingServiceTests
             }
         }
     }
+
+    // --- Wazuh agent group ---------------------------------------------------------------------
+
+    [Fact]
+    public async Task OnlyOwnersSetTheWazuhGroup_AndEachChangeIsAudited()
+    {
+        var h = new Harness();
+        var tenants = await h.Store.GetAllAsync();
+        var (a, b) = (tenants[0], tenants[1]);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => h.Service.SetWazuhAgentGroupAsync(a.Id, "clinic-a"));
+
+        h.User.User = FixedUser.Owner().User;
+        Assert.Equal((true, $"{a.DisplayName} now reads Wazuh agents in 'clinic-a'."), await h.Service.SetWazuhAgentGroupAsync(a.Id, " clinic-a "));
+        Assert.Equal("clinic-a", (await h.Store.GetAsync(a.Id))!.WazuhAgentGroup);
+
+        var (ok, message) = await h.Service.SetWazuhAgentGroupAsync(b.Id, "clinic-a");
+        Assert.False(ok);
+        Assert.Contains("already belongs to another tenant", message);
+
+        Assert.False((await h.Service.SetWazuhAgentGroupAsync(b.Id, "default")).Ok);
+        Assert.False((await h.Service.SetWazuhAgentGroupAsync(b.Id, "bad group")).Ok);
+        Assert.Null((await h.Store.GetAsync(b.Id))!.WazuhAgentGroup);
+
+        Assert.True((await h.Service.SetWazuhAgentGroupAsync(a.Id, "clinic-a-v2")).Ok);
+        Assert.True((await h.Service.SetWazuhAgentGroupAsync(a.Id, "")).Ok);
+        Assert.Null((await h.Store.GetAsync(a.Id))!.WazuhAgentGroup);
+
+        var events = await ((IAuditLog)h.Store).QueryAsync(new AuditQuery { Action = AuditActions.WazuhGroupChanged });
+        Assert.Equal(3, events.Count);
+        Assert.All(events, e => Assert.Equal("Olivia Owner <olivia@msp.example>", e.ActorName));
+        Assert.Contains(events, e => e.Details["group"] == "clinic-a" && e.Details["previousGroup"] == "" && e.TenantId == a.Id);
+        Assert.Contains(events, e => e.Details["group"] == "clinic-a-v2" && e.Details["previousGroup"] == "clinic-a");
+        Assert.Contains(events, e => e.Details["group"] == "" && e.Details["previousGroup"] == "clinic-a-v2" && e.Summary.StartsWith("Stopped reading"));
+    }
+
+    [Fact]
+    public async Task SettingTheSameWazuhGroupAgain_IsNotAChange()
+    {
+        var h = new Harness();
+        h.User.User = FixedUser.Owner().User;
+        var tenant = (await h.Store.GetAllAsync())[0];
+        await h.Service.SetWazuhAgentGroupAsync(tenant.Id, "clinic-a");
+
+        Assert.Equal((true, "No change."), await h.Service.SetWazuhAgentGroupAsync(tenant.Id, "clinic-a"));
+        Assert.Single(await ((IAuditLog)h.Store).QueryAsync(new AuditQuery { Action = AuditActions.WazuhGroupChanged }));
+    }
 }

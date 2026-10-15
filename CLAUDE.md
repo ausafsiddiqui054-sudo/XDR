@@ -20,8 +20,9 @@ Wazuh, GoPhish, n8n-style remediation (later phases). Read README.md for layout 
 1. Every engine implements `IScanEngine` and returns normalized `Finding`s. Never let
    engine-specific shapes leak past `SecurePulse.Engines`. Likewise Graph shapes stay inside
    `SecurePulse.Intune`, which returns normalized `ManagedDevice`s via `IDeviceInventorySource`.
-2. Engines run out of process. Pass arguments with `ProcessStartInfo.ArgumentList`,
-   never string concatenation. Validate tenant inputs (GUIDs, thumbprints) before use.
+2. PowerShell engines run out of process. Pass arguments with `ProcessStartInfo.ArgumentList`,
+   never string concatenation. API engines (Wazuh) make bounded, read-only HTTP calls from the Worker.
+   Validate tenant inputs (GUIDs, thumbprints, group names) before use.
 3. No secrets in code, config or the database. Certificates live in a vault/cert store;
    `Tenant.CredentialReference` is only a reference.
 4. Scoring lives only in `RiskScoreCalculator`. UI never re-implements scoring.
@@ -96,6 +97,19 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
 - ScubaGear runs only `aad`: its other products need Exchange.ManageAsApp, Sites.FullControl.All or
   directory roles, which break the read-only rule. Don't add products without that decision.
 - Shared out-of-process plumbing (validation, work folder, timeout) is in `Engines/OutOfProcessScan.cs`.
+- The Graph role check before a scan applies to Graph engines only (`ScanEngines.UsesGraph`); an engine that
+  doesn't apply to a tenant (`ScanEngines.AppliesTo`) is neither scheduled nor queued for it.
+
+## Wazuh invariants
+- One shared manager; a tenant's agents are its `Tenant.WazuhAgentGroup` (unique index, Owner-only, audited
+  `onboarding.wazuh-group-changed`, `default` refused). The engine reads only agents whose own group list
+  contains that group and leaves out agents also in another tenant's group. Never widen this.
+- The API user must be read-only: `WazuhRbac.Problem` refuses black RBAC mode and any allowed non-`:read`
+  action before each scan. Only GETs after the sign-in POST.
+- The password comes from Key Vault (`IWazuhPasswordProvider`), never config or the database. TLS is pinned
+  (`Wazuh:CertificateSha256`) or validated normally; no redirects.
+- SCA checks have no severity: every finding gets `Wazuh:FindingSeverity`. Only https references become links.
+  A scan with no agents, no SCA results or any unreadable agent fails (stored findings stay).
 
 ## Report invariants
 - PDF reports use QuestPDF. Its license tier is an organisational decision: it comes only from
@@ -143,5 +157,5 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
   portal still never calls Graph.
 
 ## Next steps (in order)
-1. Phase 2 engines from "What this is" (Wazuh, GoPhish), each behind `IScanEngine` with its own
-   read-only permission decision.
+1. GoPhish (phishing simulation) from "What this is". Unlike the other engines it sends email to people,
+   so it needs its own approval and consent decision before any code.

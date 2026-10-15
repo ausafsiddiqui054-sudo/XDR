@@ -27,19 +27,8 @@ public sealed class AzureSentinelTokenProvider : ISentinelTokenProvider
     public AzureSentinelTokenProvider(SentinelOptions options, ICertificateLoader certificates)
     {
         _scopes = [$"{options.Audience.TrimEnd('/')}/.default"];
-        if (options.UseManagedIdentity)
-        {
-            _credential = string.IsNullOrWhiteSpace(options.ClientId)
-                ? new ManagedIdentityCredential(ManagedIdentityId.SystemAssigned)
-                : new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(options.ClientId));
-            return;
-        }
-
-        var certificate = certificates.Find(options.CertificateThumbprint!)
-            ?? throw new InvalidOperationException(
-                $"AuditExport:Sentinel certificate {options.CertificateThumbprint} wasn't found with its private key in CurrentUser\\My or LocalMachine\\My.");
-        _credential = new ClientCertificateCredential(options.TenantId, options.ClientId, certificate,
-            new ClientCertificateCredentialOptions { AuthorityHost = new Uri(options.AuthorityHost) });
+        _credential = AzureCredentials.Create("AuditExport:Sentinel", options.TenantId, options.ClientId, options.CertificateThumbprint,
+            options.UseManagedIdentity, options.AuthorityHost, certificates);
     }
 
     public async Task<string> GetTokenAsync(CancellationToken ct)
@@ -54,18 +43,7 @@ public sealed class AzureSentinelTokenProvider : ISentinelTokenProvider
         }
     }
 
-    /// <summary>Azure.Identity puts the useful part (e.g. an AADSTS code) in inner exceptions; keep it on one line.</summary>
-    public static string Describe(Exception ex)
-    {
-        var parts = new List<string>();
-        for (var e = ex; e is not null; e = e.InnerException)
-        {
-            var line = string.Join(' ', e.Message.Split((char[])['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)).Trim().TrimEnd(':');
-            if (line.Length > 0 && !parts.Any(p => p.Contains(line, StringComparison.Ordinal))) parts.Add(line);
-        }
-        var text = string.Join(": ", parts);
-        return text.Length > 1000 ? text[..1000] + "…" : text;
-    }
+    public static string Describe(Exception ex) => AzureCredentials.Describe(ex);
 }
 
 /// <summary>

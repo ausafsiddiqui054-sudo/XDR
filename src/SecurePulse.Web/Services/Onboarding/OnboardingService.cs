@@ -172,6 +172,30 @@ public sealed partial class OnboardingService(
         return true;
     }
 
+    /// <summary>
+    /// Sets or clears (null/blank) the Wazuh agent group a tenant's Wazuh findings come from. Owners only:
+    /// a wrong group would show one client another client's endpoints. Each group belongs to one tenant.
+    /// </summary>
+    public async Task<(bool Ok, string Message)> SetWazuhAgentGroupAsync(Guid tenantId, string? group, CancellationToken ct = default)
+    {
+        var actor = await RequireOwnerAsync();
+        if (await tenants.GetAsync(tenantId, ct) is not { } tenant) return (false, "Tenant not found.");
+        var value = string.IsNullOrWhiteSpace(group) ? null : group.Trim();
+        if (value is not null && WazuhAgentGroups.Problem(value) is { } problem) return (false, problem);
+        if (value == tenant.WazuhAgentGroup) return (true, "No change.");
+
+        if (!await requests.SetWazuhAgentGroupAsync(tenantId, value, ct))
+            return (false, $"The Wazuh group '{value}' already belongs to another tenant. Each tenant's agents need their own group.");
+
+        await audit.RecordAsync(AuditActions.WazuhGroupChanged, AuditOutcome.Success,
+            value is null
+                ? $"Stopped reading Wazuh agents for {tenant.DisplayName} (was group '{tenant.WazuhAgentGroup}')"
+                : $"Set {tenant.DisplayName}'s Wazuh agent group to '{value}'{(tenant.WazuhAgentGroup is { } old ? $" (was '{old}')" : "")}",
+            tenant.Id, "Tenant", tenant.Id.ToString(),
+            new Dictionary<string, string> { ["group"] = value ?? "", ["previousGroup"] = tenant.WazuhAgentGroup ?? "" }, actor);
+        return (true, value is null ? $"{tenant.DisplayName} is no longer scanned by Wazuh." : $"{tenant.DisplayName} now reads Wazuh agents in '{value}'.");
+    }
+
     private async Task<UserContext> RequireOperatorAsync()
     {
         var user = await users.GetAsync();
