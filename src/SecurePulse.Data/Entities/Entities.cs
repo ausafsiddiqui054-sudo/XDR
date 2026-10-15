@@ -176,6 +176,21 @@ public sealed class AuditEventEntity
     public string Summary { get; set; } = "";
     public Dictionary<string, string> Details { get; set; } = [];
     public string? IpAddress { get; set; }
+
+    /// <summary>Set by the database (clock_timestamp()) on insert; exports follow this order.</summary>
+    public DateTimeOffset RecordedAt { get; set; }
+}
+
+/// <summary>How far one export destination has got: the last (RecordedAt, Id) it accepted.</summary>
+public sealed class AuditExportCheckpointEntity
+{
+    public string Destination { get; set; } = "";
+    public DateTimeOffset? RecordedAt { get; set; }
+    public Guid? LastId { get; set; }
+    public long ExportedCount { get; set; }
+    public DateTimeOffset? LastExportedAt { get; set; }
+    public DateTimeOffset? LastAttemptAt { get; set; }
+    public string? LastError { get; set; }
 }
 
 public sealed class ScanRunEntity

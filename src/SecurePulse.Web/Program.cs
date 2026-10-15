@@ -35,6 +35,7 @@ else
     builder.Services.AddSingleton<IAuditLog>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IScanRunRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IDeviceActionRepository>(sp => sp.GetRequiredService<SampleDataStore>());
+    builder.Services.AddSingleton<IAuditExportStore>(sp => sp.GetRequiredService<SampleDataStore>());
 }
 builder.Services.AddSingleton(new PortalMode(useDatabase));
 builder.Services.AddScoped<PostureService>();

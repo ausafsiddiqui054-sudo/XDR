@@ -20,7 +20,7 @@ public sealed class AuditRetentionOptions
     public bool Enabled => RetainFor is not null;
 }
 
-public sealed record AuditRetentionResult(DateTimeOffset Cutoff, long Deleted, bool Skipped = false, string? Error = null);
+public sealed record AuditRetentionResult(DateTimeOffset Cutoff, long Deleted, bool Skipped = false, string? Error = null, long HeldForExport = 0);
 
 /// <summary>
 /// Deletes audit events older than <see cref="AuditRetentionOptions.RetainFor"/>. Deleting the
@@ -45,10 +45,14 @@ public sealed class AuditRetentionService(
 
         var cutoff = time.GetUtcNow() - retainFor;
         var due = await purger.CountOlderThanAsync(cutoff, ct);
+        // Past the period but not yet sent to the SIEM: kept until the export catches up.
+        var held = await purger.CountAwaitingExportAsync(cutoff, ct);
+        if (held > 0)
+            logger.LogWarning("Audit retention: keeping {Held} events older than {Cutoff} until the audit export has sent them", held, cutoff);
         if (due == 0)
         {
-            logger.LogDebug("Audit retention: nothing older than {Cutoff}", cutoff);
-            return new AuditRetentionResult(cutoff, 0);
+            logger.LogDebug("Audit retention: nothing to remove older than {Cutoff}", cutoff);
+            return new AuditRetentionResult(cutoff, 0, HeldForExport: held);
         }
 
         var details = new Dictionary<string, string>
@@ -57,6 +61,7 @@ public sealed class AuditRetentionService(
             ["retainForDays"] = retainFor.TotalDays.ToString("0.##", CultureInfo.InvariantCulture),
             ["due"] = due.ToString(CultureInfo.InvariantCulture)
         };
+        if (held > 0) details["heldForExport"] = held.ToString(CultureInfo.InvariantCulture);
 
         try
         {
@@ -104,7 +109,7 @@ public sealed class AuditRetentionService(
         logger.LogInformation("Audit retention removed {Deleted} events older than {Cutoff}", deleted, cutoff);
         await TryAuditAsync(AuditActions.AuditPurged, AuditOutcome.Success,
             $"Removed {deleted:N0} audit events older than {cutoff:yyyy-MM-dd}", details, ct);
-        return new AuditRetentionResult(cutoff, deleted);
+        return new AuditRetentionResult(cutoff, deleted, HeldForExport: held);
     }
 
     /// <summary>Outcome entries record what already happened: a failed write is logged, not fatal.</summary>

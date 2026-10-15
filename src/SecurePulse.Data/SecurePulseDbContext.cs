@@ -18,6 +18,7 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
     public DbSet<ScanRunEntity> ScanRuns => Set<ScanRunEntity>();
     public DbSet<DeviceActionEntity> DeviceActions => Set<DeviceActionEntity>();
     public DbSet<DataProtectionKeyEntity> DataProtectionKeys => Set<DataProtectionKeyEntity>();
+    public DbSet<AuditExportCheckpointEntity> AuditExportCheckpoints => Set<AuditExportCheckpointEntity>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder builder)
     {
@@ -142,7 +143,18 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
             e.HasIndex(x => new { x.OccurredAt, x.Id }).IsDescending();
             e.HasIndex(x => new { x.Category, x.OccurredAt });
             e.HasIndex(x => new { x.TenantId, x.OccurredAt });
+            // The database's clock, per statement: one ordering for exports whatever the writers' clocks say.
+            e.Property(x => x.RecordedAt).HasDefaultValueSql("clock_timestamp()").ValueGeneratedOnAdd();
+            e.HasIndex(x => new { x.RecordedAt, x.Id });
             // No foreign keys: the record must survive deleted tenants and users.
+        });
+
+        b.Entity<AuditExportCheckpointEntity>(e =>
+        {
+            e.ToTable("audit_export_checkpoints");
+            e.HasKey(x => x.Destination);
+            e.Property(x => x.Destination).HasMaxLength(32);
+            e.Property(x => x.LastError).HasMaxLength(2000);
         });
     
         b.Entity<DeviceActionEntity>(e =>

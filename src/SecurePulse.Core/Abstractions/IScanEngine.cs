@@ -137,13 +137,47 @@ public interface IAuditLog
 /// </summary>
 public interface IAuditPurger
 {
+    /// <summary>Events older than <paramref name="cutoff"/> that may be deleted (already exported, if an export is set up).</summary>
     Task<long> CountOlderThanAsync(DateTimeOffset cutoff, CancellationToken ct = default);
 
+    /// <summary>Events older than <paramref name="cutoff"/> held back because an export hasn't sent them yet.</summary>
+    Task<long> CountAwaitingExportAsync(DateTimeOffset cutoff, CancellationToken ct = default);
+
     /// <summary>
-    /// Deletes events older than <paramref name="cutoff"/> in batches. Returns how many were deleted, or
+    /// Deletes events older than <paramref name="cutoff"/> in batches, never ones an export hasn't sent yet. Returns how many were deleted, or
     /// null when another Worker is already purging. Throws <see cref="AuditPurgeException"/> if it fails partway.
     /// </summary>
     Task<long?> PurgeOlderThanAsync(DateTimeOffset cutoff, int batchSize, CancellationToken ct = default);
+}
+
+/// <summary>
+/// The export checkpoint per destination. Events are read in the order the database stored them,
+/// and the checkpoint only moves after the destination accepted them: at least once, never lost.
+/// </summary>
+public interface IAuditExportStore
+{
+    /// <summary>
+    /// Locks <paramref name="destination"/>'s checkpoint and reads up to <paramref name="maxEvents"/>
+    /// events after it, leaving out ones stored less than <paramref name="lag"/> ago (so a slow insert
+    /// can't commit behind the checkpoint). Null when another Worker holds the checkpoint.
+    /// </summary>
+    Task<IAuditExportLease?> TryLeaseAsync(string destination, TimeSpan lag, int maxEvents, CancellationToken ct = default);
+
+    /// <summary>Records a failed attempt (the checkpoint doesn't move).</summary>
+    Task RecordFailureAsync(string destination, string error, CancellationToken ct = default);
+
+    /// <summary>Null when nothing has ever been exported to <paramref name="destination"/>.</summary>
+    Task<AuditExportStatus?> GetStatusAsync(string destination, CancellationToken ct = default);
+}
+
+/// <summary>Events read for one export call. Disposing without <see cref="CommitAsync"/> leaves the checkpoint where it was.</summary>
+public interface IAuditExportLease : IAsyncDisposable
+{
+    /// <summary>Oldest first, each with <see cref="AuditEvent.RecordedAt"/>.</summary>
+    IReadOnlyList<AuditEvent> Events { get; }
+
+    /// <summary>Moves the checkpoint past the first <paramref name="count"/> events (0: just records the attempt) and releases the lock.</summary>
+    Task CommitAsync(int count, CancellationToken ct = default);
 }
 
 public sealed class AuditPurgeException(long deleted, Exception inner)

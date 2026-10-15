@@ -235,7 +235,8 @@ internal static class EntityMapping
         TargetId = e.TargetId,
         Summary = e.Summary,
         Details = e.Details,
-        IpAddress = e.IpAddress
+        IpAddress = e.IpAddress,
+        RecordedAt = e.RecordedAt == default ? null : e.RecordedAt
     };
 
     public static ScanRun ToModel(this ScanRunEntity e) => new()

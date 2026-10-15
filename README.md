@@ -449,6 +449,7 @@ itself when its login has `CREATEROLE`; managed databases usually need this done
 ```sql
 CREATE ROLE securepulse_audit_purge NOLOGIN;
 GRANT SELECT, DELETE ON audit_events TO securepulse_audit_purge;   -- in the SecurePulse database
+GRANT SELECT ON audit_export_checkpoints TO securepulse_audit_purge;
 CREATE ROLE securepulse_maintenance LOGIN PASSWORD '<from your vault>';
 GRANT securepulse_audit_purge TO securepulse_maintenance;
 ```
@@ -456,8 +457,78 @@ GRANT securepulse_audit_purge TO securepulse_maintenance;
 The application's login must not be a superuser or a member of `securepulse_audit_purge`. Supply
 the maintenance connection string the same way as the main one (user-secrets or the
 `ConnectionStrings__AuditMaintenance` environment variable), and only to the Worker. To keep
-events longer than the period (e.g. in a SIEM), export them first: **Export CSV** on the Audit
-log page.
+events longer than the period, send them to Microsoft Sentinel (below): retention never deletes an
+event the export hasn't sent yet.
+
+### Export to Microsoft Sentinel
+
+The Worker can send every audit event to a Log Analytics workspace with Microsoft Sentinel, through
+the Azure Monitor [Logs Ingestion API](https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview).
+Your SOC then keeps them as long as the workspace's retention says, alerts on them and correlates
+them with other sources.
+
+How it works:
+
+- Events go in the order PostgreSQL stored them (`RecordedAt`, stamped by the database's clock),
+  in gzip-compressed calls of up to 500 events and under the API's 1 MB limit. Events stored in the
+  last two minutes (`ExportLag`) wait for the next run, so an insert that's still committing can't
+  land behind the checkpoint.
+- A checkpoint in `audit_export_checkpoints` moves only after Sentinel accepted a call (HTTP 2xx).
+  A failure, an outage or a crash means the same events are sent again later: **at least once,
+  never lost**. Rare duplicates are possible; each row carries its `EventId`, so de-duplicate with
+  `summarize arg_max(TimeGenerated, *) by EventId`.
+- **Retention waits for the export.** Once the export has a checkpoint, the purge leaves alone any
+  event Sentinel hasn't received, and the retention entry says how many it kept. To stop exporting
+  for good, turn it off and delete its row:
+  `DELETE FROM audit_export_checkpoints WHERE "Destination" = 'sentinel';`
+- Only one Worker exports at a time (a row lock on the checkpoint). Throttling (429), and 500, 502,
+  503 or 504 responses, are retried, honouring `Retry-After`. Anything else is recorded and shown on
+  the Audit log page, which also shows how many events have been sent and how many are waiting.
+- The export isn't itself recorded in the audit log: every run would add an event that then needs
+  exporting. It logs to the Worker's log instead.
+- The Worker signs in with a **certificate** (an app registration in your own tenant, not a client's)
+  or a **managed identity** when it runs in Azure, never a client secret. The token and the data
+  only go to an Azure Monitor ingestion host (`*.ingest.monitor.azure.com`, `.us` or `.cn`); any
+  other endpoint stops the Worker at startup.
+
+Settings (`AuditExport:Sentinel`, Worker only):
+
+| Setting | Default | |
+|---|---|---|
+| `Enabled` | `false` | |
+| `Endpoint` | | The DCR's logs ingestion endpoint (DCR → JSON view → `logsIngestion`), or a DCE when you use Private Link. |
+| `DcrImmutableId` | | `dcr-` and 32 hex characters (DCR → Overview). |
+| `StreamName` | `Custom-SecurePulseAudit` | The DCR's input stream. |
+| `Audience` | `https://monitor.azure.com` | `https://monitor.azure.us` for Azure Government, `https://monitor.azure.cn` for Azure China. |
+| `TenantId`, `ClientId`, `CertificateThumbprint` | | Certificate sign-in: your tenant, the app registration, and its certificate in `CurrentUser\My` or `LocalMachine\My`. |
+| `UseManagedIdentity` | `false` | Instead of a certificate. `ClientId` then names a user-assigned identity (empty: system-assigned). |
+| `Interval` | 1 minute | |
+| `ExportLag` | 2 minutes | At least 30 seconds. |
+| `MaxEventsPerCall` | 500 | |
+
+Azure setup, in the workspace's subscription:
+
+1. Create a custom table `SecurePulseAudit_CL` with these columns: `TimeGenerated` (datetime),
+   `EventId` (guid), `Action`, `ActionLabel`, `Category`, `Outcome` (string), `ActorUserId` (guid),
+   `ActorName` (string), `SecurePulseTenantId` (guid), `TargetType`, `TargetId`, `Summary` (string),
+   `Details` (dynamic), `IpAddress` (string), `RecordedAt` (datetime), `Source` (string).
+   (`TenantId` is reserved in Log Analytics, so SecurePulse's tenant is `SecurePulseTenantId`.)
+2. Create a data collection rule of kind `Direct` in the workspace's region, with a stream
+   `Custom-SecurePulseAudit` declaring the same columns, a destination for the workspace, and a data
+   flow with `"transformKql": "source"` and `"outputStream": "Custom-SecurePulseAudit_CL"`
+   (see Microsoft's [sample DCR](https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview#data-collection-rule)).
+3. Give the Worker's identity the **Monitoring Metrics Publisher** role on the DCR. Nothing else:
+   it can't read the workspace.
+4. Set the settings above and restart the Worker. The Audit log page shows the export within a minute.
+
+Example hunting query:
+
+```kusto
+SecurePulseAudit_CL
+| summarize arg_max(TimeGenerated, *) by EventId
+| where Category == "device" and Outcome != "Success"
+| project TimeGenerated, ActionLabel, ActorName, Summary, SecurePulseTenantId
+```
 
 ## Client reports (PDF)
 
@@ -529,6 +600,7 @@ checks are excluded. Any open **Critical** caps the grade at C.
 | Portal sign-in with roles (Entra ID, Owner / MSP admin / Client viewer) | Built; tested with development sign-in and the real Entra redirect |
 | Security audit log (append-only, page + CSV export) | Built; tested against PostgreSQL 16 |
 | Audit retention (maintenance role, 90-day floor in the database) | Built; tested against PostgreSQL 16 and end to end with the Worker; off until `AuditRetention:RetainFor` is set |
+| Audit export to Microsoft Sentinel (Logs Ingestion API, at-least-once checkpoint) | Built; tested against PostgreSQL 16 and a stand-in ingestion endpoint; needs a workspace, DCR and identity to exercise |
 | Branded PDF client report (QuestPDF) | Built; content checked by extracting the PDF's text; off until `Reports:QuestPdfLicense` is set |
 
 ## Security notes
@@ -542,7 +614,8 @@ checks are excluded. Any open **Critical** caps the grade at C.
   person's approval.
 - Portal access comes from SecurePulse's own user table, never from token role claims.
 - Security events are kept in an append-only audit table the app can't modify. Only a separate
-  maintenance role can remove events, and only ones past the configured retention period (at least 90 days).
+  maintenance role can remove events, and only ones past the configured retention period (at least 90 days)
+  that the Sentinel export, if set up, has already sent.
 - Data-protection keys (sign-in cookie, consent-link state) are shared through PostgreSQL only
   after encryption with a certificate; the portal refuses a shared key store without one.
 - Check each engine's license before redistributing modified versions (Wazuh is GPLv2).

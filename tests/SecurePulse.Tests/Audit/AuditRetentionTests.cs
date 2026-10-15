@@ -126,6 +126,47 @@ public class AuditPurgeDatabaseTests(PostgresDatabase db) : IClassFixture<Postgr
     }
 
     [AuditMaintenanceFact]
+    public async Task EventsAnExportHasntSent_AreNeverDeleted()
+    {
+        await ClearOldAsync();
+        var marker = await AddEventsAsync(400, 380, 370); // stored in this order
+        var factory = db.Services.GetRequiredService<IDbContextFactory<SecurePulseDbContext>>();
+        await using var context = await factory.CreateDbContextAsync();
+        var mine = await context.AuditEvents.AsNoTracking().Where(e => e.Summary.StartsWith(marker)).OrderBy(e => e.RecordedAt).ToListAsync();
+        var exportedUpTo = mine.Single(e => e.Summary.EndsWith(" 380 days ago"));
+        await using var source = Maintenance();
+        var cutoff = DateTimeOffset.UtcNow.AddDays(-365);
+
+        try
+        {
+            // An export that hasn't sent anything yet holds every event back.
+            context.AuditExportCheckpoints.Add(new SecurePulse.Data.Entities.AuditExportCheckpointEntity { Destination = "guard-new" });
+            await context.SaveChangesAsync();
+            Assert.Equal(0, await Purger(source).CountOlderThanAsync(cutoff));
+            Assert.Equal(0, await Purger(source).PurgeOlderThanAsync(cutoff, 100));
+
+            // Once it has sent up to the 380-day event, those can go; the 370-day one waits.
+            await context.AuditExportCheckpoints.Where(c => c.Destination == "guard-new").ExecuteDeleteAsync();
+            context.AuditExportCheckpoints.Add(new SecurePulse.Data.Entities.AuditExportCheckpointEntity
+            {
+                Destination = "guard-sent", RecordedAt = exportedUpTo.RecordedAt, LastId = exportedUpTo.Id
+            });
+            await context.SaveChangesAsync();
+
+            Assert.Equal(2, await Purger(source).CountOlderThanAsync(cutoff));
+            Assert.Equal(1, await Purger(source).CountAwaitingExportAsync(cutoff));
+            Assert.Equal(2, await Purger(source).PurgeOlderThanAsync(cutoff, 100));
+            Assert.Equal(new[] { 370 }, await RemainingAsync(marker));
+        }
+        finally
+        {
+            await context.AuditExportCheckpoints.Where(c => c.Destination.StartsWith("guard-")).ExecuteDeleteAsync();
+        }
+
+        Assert.Equal(1, await Purger(source).PurgeOlderThanAsync(cutoff, 100)); // no export: nothing held back
+    }
+
+    [AuditMaintenanceFact]
     public async Task TheDatabaseRefusesToDeleteAnythingYoungerThanTheFloor()
     {
         await ClearOldAsync();
@@ -212,6 +253,14 @@ public class AuditRetentionServiceTests
             return Task.FromResult(Due);
         }
 
+        public long Held;
+
+        public Task<long> CountAwaitingExportAsync(DateTimeOffset cutoff, CancellationToken ct = default)
+        {
+            Calls.Add("held");
+            return Task.FromResult(Held);
+        }
+
         public Task<long?> PurgeOlderThanAsync(DateTimeOffset cutoff, int batchSize, CancellationToken ct = default)
         {
             Calls.Add("purge");
@@ -262,7 +311,7 @@ public class AuditRetentionServiceTests
         var result = await service.RunOnceAsync();
 
         Assert.Equal(0, result!.Deleted);
-        Assert.Equal(["count"], purger.Calls);
+        Assert.Equal(["count", "held"], purger.Calls);
         Assert.Empty(log.Events);
     }
 
@@ -273,7 +322,7 @@ public class AuditRetentionServiceTests
 
         var result = await service.RunOnceAsync();
 
-        Assert.Equal(["count", "audit:audit.purge-started", "purge", "audit:audit.purged"], purger.Calls);
+        Assert.Equal(["count", "held", "audit:audit.purge-started", "purge", "audit:audit.purged"], purger.Calls);
         Assert.Equal(Now.AddDays(-400), purger.Cutoff);
         Assert.Equal(777, purger.BatchSize);
         Assert.Equal(42, result!.Deleted);
@@ -291,6 +340,19 @@ public class AuditRetentionServiceTests
         Assert.Equal(AuditOutcome.Success, done.Outcome);
         Assert.Equal("42", done.Details["deleted"]);
         Assert.Contains("Removed 42 audit events older than 2025-09-10", done.Summary);
+    }
+
+    [Fact]
+    public async Task EventsNotYetExported_AreReportedAsHeld()
+    {
+        var (service, purger, log) = Create();
+        purger.Held = 7;
+
+        var result = await service.RunOnceAsync();
+
+        Assert.Equal(7, result!.HeldForExport);
+        Assert.Equal("7", log.Events[0].Details["heldForExport"]);
+        Assert.False(log.Events[1].Details.ContainsKey("heldForExport") && log.Events[1].Details["heldForExport"] != "7");
     }
 
     [Fact]

@@ -10,7 +10,7 @@ namespace SecurePulse.Web.Services;
 /// repositories once the Worker starts writing real scan results.
 /// </summary>
 public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDeviceRepository, IOnboardingRepository, IPortalUserRepository, IAuditLog,
-    IScanRunRepository, IDeviceActionRepository
+    IScanRunRepository, IDeviceActionRepository, IAuditExportStore
 {
     private readonly List<DeviceActionRequest> _actions = [];
     private readonly List<ScanRun> _scanRuns = [];
@@ -655,6 +655,18 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
                 .Take(Math.Clamp(q.Limit, 1, 1000)).ToList());
         }
     }
+
+    // --- Audit export (the sample portal never exports; the status can be set for demos and tests) ---
+
+    public AuditExportStatus? ExportStatus { get; set; }
+
+    public Task<IAuditExportLease?> TryLeaseAsync(string destination, TimeSpan lag, int maxEvents, CancellationToken ct = default) =>
+        Task.FromResult<IAuditExportLease?>(null);
+
+    public Task RecordFailureAsync(string destination, string error, CancellationToken ct = default) => Task.CompletedTask;
+
+    public Task<AuditExportStatus?> GetStatusAsync(string destination, CancellationToken ct = default) =>
+        Task.FromResult(ExportStatus?.Destination == destination ? ExportStatus : null);
 
     // --- Scan queue (in memory; mirrors EfScanRunRepository) ---------------------------------
 

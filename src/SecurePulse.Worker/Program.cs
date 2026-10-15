@@ -5,6 +5,7 @@ using SecurePulse.Engines.Maester;
 using SecurePulse.Engines.ScubaGear;
 using SecurePulse.Intune;
 using SecurePulse.Worker;
+using SecurePulse.Worker.Siem;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -106,6 +107,21 @@ if (builder.Configuration.GetSection("AuditRetention").Get<AuditRetentionOptions
     builder.Services.AddAuditPurger(maintenance);
     builder.Services.AddSingleton<AuditRetentionService>();
     builder.Services.AddHostedService<AuditRetentionWorker>();
+}
+
+// Audit export to Microsoft Sentinel (Logs Ingestion API). Off unless AuditExport:Sentinel:Enabled.
+var sentinel = builder.Configuration.GetSection("AuditExport:Sentinel").Get<SentinelOptions>() ?? new SentinelOptions();
+if (sentinel.Enabled)
+{
+    if (sentinel.Problems() is { Count: > 0 } problems)
+        throw new InvalidOperationException(string.Join(" ", problems));
+    builder.Services.AddSingleton(sentinel);
+    builder.Services.AddSingleton<ISentinelTokenProvider, AzureSentinelTokenProvider>();
+    // The sink applies SentinelOptions.Timeout itself; no redirects, so the token only goes to the configured host.
+    builder.Services.AddHttpClient<ISentinelAuditSink, SentinelAuditSink>(c => c.Timeout = Timeout.InfiniteTimeSpan)
+        .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+    builder.Services.AddSingleton<AuditExportService>();
+    builder.Services.AddHostedService<AuditExportWorker>();
 }
 
 var host = builder.Build();

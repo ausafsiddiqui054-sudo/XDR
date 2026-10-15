@@ -62,6 +62,11 @@ namespace SecurePulse.Data.Migrations
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
 
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("clock_timestamp()");
+
                     b.Property<string>("Summary")
                         .IsRequired()
                         .HasMaxLength(1000)
@@ -85,9 +90,41 @@ namespace SecurePulse.Data.Migrations
                     b.HasIndex("OccurredAt", "Id")
                         .IsDescending();
 
+                    b.HasIndex("RecordedAt", "Id");
+
                     b.HasIndex("TenantId", "OccurredAt");
 
                     b.ToTable("audit_events", (string)null);
+                });
+
+            modelBuilder.Entity("SecurePulse.Data.Entities.AuditExportCheckpointEntity", b =>
+                {
+                    b.Property<string>("Destination")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<long>("ExportedCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset?>("LastAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset?>("LastExportedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("LastId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Destination");
+
+                    b.ToTable("audit_export_checkpoints", (string)null);
                 });
 
             modelBuilder.Entity("SecurePulse.Data.Entities.DataProtectionKeyEntity", b =>

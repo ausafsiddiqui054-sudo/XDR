@@ -2,6 +2,7 @@
 @attribute [Authorize(Policy = Policies.Operator)]
 @using SecurePulse.Core.Abstractions
 @inject IAuditLog Log
+@inject IAuditExportStore Exports
 @inject ITenantRepository Tenants
 @inject TimeProvider Time
 
@@ -29,6 +30,10 @@
         <span>
             Retention: events older than @Days(_lastPurge) days are removed.
             Last run @Dashboard.Ago(_lastPurge.OccurredAt).ToLowerInvariant() removed @Count(_lastPurge, "deleted") events from before @Cutoff(_lastPurge).
+            @if (_lastPurge.Details.ContainsKey("heldForExport"))
+            {
+                <text> @Count(_lastPurge, "heldForExport") older events were kept because Microsoft Sentinel doesn't have them yet.</text>
+            }
         </span>
     }
     else
@@ -36,6 +41,27 @@
         <span><b>The last retention run didn't finish</b> (@Dashboard.Ago(_lastPurge.OccurredAt).ToLowerInvariant()): @_lastPurge.Summary</span>
     }
 </MudAlert>
+
+@if (_export is { } export)
+{
+    <MudAlert Severity="@(export.LastError is null ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning)" Variant="Variant.Outlined"
+              Class="mb-4" Style="border-radius:16px" Icon="@Icons.Material.Rounded.CloudUpload" data-testid="sentinel-export">
+        @if (export.LastError is { } error)
+        {
+            <span>
+                <b>Sending audit events to Microsoft Sentinel is failing.</b> @export.Pending.ToString("N0") events are waiting and are
+                kept until they're sent. Last attempt @Dashboard.Ago(export.LastAttemptAt).ToLowerInvariant(): @error
+            </span>
+        }
+        else
+        {
+            <span>
+                Microsoft Sentinel: @export.ExportedCount.ToString("N0") events sent@(export.LastExportedAt is { } sentAt ? $", last {Dashboard.Ago(sentAt).ToLowerInvariant()}" : "").
+                @(export.Pending == 0 ? "Up to date." : $"{export.Pending:N0} newer events go with the next run.")
+            </span>
+        }
+    </MudAlert>
+}
 
 <MudPaper Class="sp-card pa-4 mb-4" Elevation="0" Outlined="true">
     <MudGrid Spacing="3">
@@ -172,6 +198,7 @@
     private bool _hasMore;
     private bool _loading;
     private AuditEvent? _lastPurge;
+    private AuditExportStatus? _export;
 
     private static string Days(AuditEvent e) => e.Details.GetValueOrDefault("retainForDays", "?");
 
@@ -186,6 +213,7 @@
     {
         _tenantNames = (await Tenants.GetAllAsync()).ToDictionary(t => t.Id, t => t.DisplayName);
         _lastPurge = (await Log.QueryAsync(new AuditQuery { Action = AuditActions.AuditPurged, Limit = 1 })).FirstOrDefault();
+        _export = await Exports.GetStatusAsync(AuditExportDestinations.Sentinel);
         await ApplyAsync(_filter);
     }
 

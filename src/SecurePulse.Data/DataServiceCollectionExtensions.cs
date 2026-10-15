@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using SecurePulse.Core.Abstractions;
 
 namespace SecurePulse.Data;
@@ -18,6 +19,8 @@ public static class DataServiceCollectionExtensions
         services.AddSingleton<IAuditLog, EfAuditLog>();
         services.AddSingleton<IScanRunRepository, EfScanRunRepository>();
         services.AddSingleton<IDeviceActionRepository, EfDeviceActionRepository>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<IAuditExportStore, EfAuditExportStore>();
         return services;
     }
 

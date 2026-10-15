@@ -45,6 +45,12 @@ public sealed record AuditEvent
 
     public string? IpAddress { get; init; }
 
+    /// <summary>
+    /// When the database stored it (the database's clock, not the writer's). Null until stored.
+    /// Exports to a SIEM follow this order, so events from hosts with skewed clocks aren't skipped.
+    /// </summary>
+    public DateTimeOffset? RecordedAt { get; init; }
+
     public string Category => AuditActions.CategoryOf(Action);
 }
 
@@ -177,4 +183,29 @@ public static class AuditRetention
     /// <summary>Why <paramref name="retainFor"/> can't be used, or null.</summary>
     public static string? Problem(TimeSpan retainFor) =>
         retainFor < Minimum ? $"must be at least {Minimum.TotalDays:0} days (it's {retainFor.TotalDays:0.##})." : null;
+}
+
+/// <summary>Where audit events are exported to, and how far each export has got.</summary>
+public static class AuditExportDestinations
+{
+    /// <summary>Microsoft Sentinel (a Log Analytics workspace) through the Azure Monitor Logs Ingestion API.</summary>
+    public const string Sentinel = "sentinel";
+}
+
+/// <summary>An export destination's progress, for the Audit log page.</summary>
+public sealed record AuditExportStatus
+{
+    public required string Destination { get; init; }
+
+    /// <summary>Events sent so far (counted by SecurePulse; duplicates after a retry count twice).</summary>
+    public long ExportedCount { get; init; }
+
+    /// <summary>Stored events not exported yet (including the newest ones still inside the export lag).</summary>
+    public long Pending { get; init; }
+
+    public DateTimeOffset? LastExportedAt { get; init; }
+    public DateTimeOffset? LastAttemptAt { get; init; }
+
+    /// <summary>The last attempt's error; null once an attempt succeeds.</summary>
+    public string? LastError { get; init; }
 }

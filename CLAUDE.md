@@ -69,6 +69,13 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
   Worker's separate `ConnectionStrings:AuditMaintenance` login. The app's login is never a member of it.
 - Retention is off until `AuditRetention:RetainFor` is set (an organisational decision; never default it).
   The purge is fail-closed: `audit.purge-started` is written first and nothing is deleted if that fails.
+- Sentinel export (`Worker/Siem`): events go in `RecordedAt` order (database clock, not the writer's),
+  skipping the last `ExportLag`; the checkpoint (`audit_export_checkpoints`) moves only after Sentinel
+  accepted a call. At least once, never lost: don't advance it before the send or skip failed batches.
+  The purge never deletes events after any destination's checkpoint (`PostgresAuditPurger.NotYetExported`).
+- The export authenticates with a certificate or managed identity (no secrets) and sends only to
+  Azure Monitor ingestion hosts (`SentinelOptions.AllowedHostSuffixes`). Don't audit export runs
+  (each would create an event to export); log them.
 - Don't audit unauthenticated input that isn't tied to a real record (public endpoints would let
   anyone flood the table).
 - Portal events record after the action and log Critical if the write fails. Remote/write
@@ -136,5 +143,5 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
   portal still never calls Graph.
 
 ## Next steps (in order)
-1. Ship audit events to a SIEM (Microsoft Sentinel via the Logs Ingestion API) so they're kept
-   outside SecurePulse beyond the retention period.
+1. Phase 2 engines from "What this is" (Wazuh, GoPhish), each behind `IScanEngine` with its own
+   read-only permission decision.

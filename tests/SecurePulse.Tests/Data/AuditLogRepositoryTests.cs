@@ -35,7 +35,8 @@ public class AuditLogRepositoryTests(PostgresDatabase db) : IClassFixture<Postgr
         await Log.RecordAsync(e);
 
         var loaded = Assert.Single(await Log.QueryAsync(new AuditQuery { TenantId = tenant }));
-        Assert.Equal(e with { Details = loaded.Details }, loaded);
+        Assert.Equal(e with { Details = loaded.Details, RecordedAt = loaded.RecordedAt }, loaded);
+        Assert.NotNull(loaded.RecordedAt); // stamped by the database, not the writer
         Assert.Equal(e.Details, loaded.Details);
         Assert.Equal("people", loaded.Category);
     }
