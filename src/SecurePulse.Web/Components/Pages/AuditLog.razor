@@ -10,13 +10,32 @@
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
     <div>
         <MudText Typo="Typo.h4">Audit log</MudText>
-        <MudText Typo="Typo.body2" Color="Color.Secondary">Sign-ins, people changes, onboarding and device requests. Entries can't be edited or deleted.</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Sign-ins, people changes, onboarding and device requests. Entries can't be edited; only the retention job removes old ones.</MudText>
     </div>
     <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Download"
                Href="@($"settings/audit/export.csv{_filter.ToQueryString()}")" UserAttributes="@(new() { ["download"] = "" })">
         Export CSV
     </MudButton>
 </MudStack>
+
+<MudAlert Severity="@(_lastPurge?.Outcome == AuditOutcome.Failure ? MudBlazor.Severity.Warning : MudBlazor.Severity.Info)"
+          Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px" Icon="@Icons.Material.Rounded.History" data-testid="retention">
+    @if (_lastPurge is null)
+    {
+        <span>No audit events have been removed. Events are kept until a retention period is set for the Worker (<code>AuditRetention:RetainFor</code>).</span>
+    }
+    else if (_lastPurge.Outcome == AuditOutcome.Success)
+    {
+        <span>
+            Retention: events older than @Days(_lastPurge) days are removed.
+            Last run @Dashboard.Ago(_lastPurge.OccurredAt).ToLowerInvariant() removed @Count(_lastPurge, "deleted") events from before @Cutoff(_lastPurge).
+        </span>
+    }
+    else
+    {
+        <span><b>The last retention run didn't finish</b> (@Dashboard.Ago(_lastPurge.OccurredAt).ToLowerInvariant()): @_lastPurge.Summary</span>
+    }
+</MudAlert>
 
 <MudPaper Class="sp-card pa-4 mb-4" Elevation="0" Outlined="true">
     <MudGrid Spacing="3">
@@ -152,10 +171,21 @@
     private Guid? _open;
     private bool _hasMore;
     private bool _loading;
+    private AuditEvent? _lastPurge;
+
+    private static string Days(AuditEvent e) => e.Details.GetValueOrDefault("retainForDays", "?");
+
+    private static string Count(AuditEvent e, string key) =>
+        long.TryParse(e.Details.GetValueOrDefault(key), System.Globalization.CultureInfo.InvariantCulture, out var n) ? n.ToString("N0") : "?";
+
+    private static string Cutoff(AuditEvent e) =>
+        DateTimeOffset.TryParse(e.Details.GetValueOrDefault("cutoff"), System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.RoundtripKind, out var at) ? at.ToLocalTime().ToString("d MMM yyyy") : "?";
 
     protected override async Task OnInitializedAsync()
     {
         _tenantNames = (await Tenants.GetAllAsync()).ToDictionary(t => t.Id, t => t.DisplayName);
+        _lastPurge = (await Log.QueryAsync(new AuditQuery { Action = AuditActions.AuditPurged, Limit = 1 })).FirstOrDefault();
         await ApplyAsync(_filter);
     }
 

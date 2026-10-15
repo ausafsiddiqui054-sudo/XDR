@@ -84,6 +84,30 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<OnboardingVerificationService>();
 builder.Services.AddHostedService<OnboardingVerificationWorker>();
 
+// Audit retention: off until AuditRetention:RetainFor is set. Deleting needs a separate maintenance
+// login (a member of the purge role); the application's login must never be able to delete audit events.
+builder.Services.AddOptions<AuditRetentionOptions>()
+    .Bind(builder.Configuration.GetSection("AuditRetention"))
+    .Validate(o => o.RetainFor is not { } r || AuditRetention.Problem(r) is null,
+        $"AuditRetention:RetainFor must be at least {AuditRetention.Minimum.TotalDays:0} days.")
+    .Validate(o => o.Interval >= TimeSpan.FromHours(1), "AuditRetention:Interval must be at least one hour.")
+    .Validate(o => o.BatchSize is >= 100 and <= 100_000, "AuditRetention:BatchSize must be between 100 and 100000.")
+    .ValidateOnStart();
+if (builder.Configuration.GetSection("AuditRetention").Get<AuditRetentionOptions>() is { Enabled: true })
+{
+    var maintenance = builder.Configuration.GetConnectionString("AuditMaintenance");
+    if (string.IsNullOrWhiteSpace(maintenance))
+        throw new InvalidOperationException(
+            "AuditRetention:RetainFor is set, but ConnectionStrings:AuditMaintenance isn't. Retention deletes with a separate maintenance login.");
+    if (string.Equals(new Npgsql.NpgsqlConnectionStringBuilder(maintenance).Username, new Npgsql.NpgsqlConnectionStringBuilder(connectionString).Username,
+            StringComparison.Ordinal))
+        throw new InvalidOperationException(
+            "ConnectionStrings:AuditMaintenance uses the application's login. Use a separate login that is a member of securepulse_audit_purge.");
+    builder.Services.AddAuditPurger(maintenance);
+    builder.Services.AddSingleton<AuditRetentionService>();
+    builder.Services.AddHostedService<AuditRetentionWorker>();
+}
+
 var host = builder.Build();
 
 if (builder.Configuration.GetValue("Database:MigrateOnStartup", true))

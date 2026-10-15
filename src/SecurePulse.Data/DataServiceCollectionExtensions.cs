@@ -21,6 +21,16 @@ public static class DataServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// The audit retention purger, on its own maintenance connection (a login that is a member of
+    /// <see cref="PostgresAuditPurger.PurgeRole"/>). Only the Worker that runs retention registers it.
+    /// </summary>
+    public static IServiceCollection AddAuditPurger(this IServiceCollection services, string maintenanceConnectionString)
+    {
+        services.AddSingleton<IAuditPurger>(new PostgresAuditPurger(Npgsql.NpgsqlDataSource.Create(maintenanceConnectionString)));
+        return services;
+    }
+
     /// <summary>Applies pending migrations. EF Core takes a database lock, so concurrent callers are safe.</summary>
     public static async Task MigrateSecurePulseDatabaseAsync(this IServiceProvider services, CancellationToken ct = default)
     {

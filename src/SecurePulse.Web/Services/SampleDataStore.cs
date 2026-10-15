@@ -639,6 +639,7 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
             if (q.From is { } from) rows = rows.Where(e => e.OccurredAt >= from);
             if (q.To is { } to) rows = rows.Where(e => e.OccurredAt < to);
             if (!string.IsNullOrEmpty(q.Category)) rows = rows.Where(e => e.Category == q.Category);
+            if (!string.IsNullOrEmpty(q.Action)) rows = rows.Where(e => e.Action == q.Action);
             if (q.Outcome is { } outcome) rows = rows.Where(e => e.Outcome == outcome);
             if (q.TenantId is { } tenantId) rows = rows.Where(e => e.TenantId == tenantId);
             if (!string.IsNullOrWhiteSpace(q.Search))

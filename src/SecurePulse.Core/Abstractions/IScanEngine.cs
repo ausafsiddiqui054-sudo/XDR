@@ -132,6 +132,27 @@ public interface IAuditLog
 }
 
 /// <summary>
+/// Deletes old audit events for the retention job. Implementations connect with a separate
+/// maintenance role: the application's own database role can never delete audit events.
+/// </summary>
+public interface IAuditPurger
+{
+    Task<long> CountOlderThanAsync(DateTimeOffset cutoff, CancellationToken ct = default);
+
+    /// <summary>
+    /// Deletes events older than <paramref name="cutoff"/> in batches. Returns how many were deleted, or
+    /// null when another Worker is already purging. Throws <see cref="AuditPurgeException"/> if it fails partway.
+    /// </summary>
+    Task<long?> PurgeOlderThanAsync(DateTimeOffset cutoff, int batchSize, CancellationToken ct = default);
+}
+
+public sealed class AuditPurgeException(long deleted, Exception inner)
+    : Exception($"Audit purge failed after deleting {deleted} events: {inner.Message}", inner)
+{
+    public long Deleted { get; } = deleted;
+}
+
+/// <summary>
 /// The remote action queue. State changes are conditional updates, so two people deciding at once,
 /// or two Workers sending at once, can't both succeed.
 /// </summary>

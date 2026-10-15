@@ -63,7 +63,12 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
 ## Audit invariants
 - Security-relevant actions record an `AuditEvent` (portal: `AuditTrail`; Worker: `IAuditLog`).
   Add new actions to `AuditActions` with a label and a category; never rename stored action strings.
-- `audit_events` is append-only (DB trigger). Don't add update/delete paths or foreign keys.
+- `audit_events` is append-only (DB trigger). Don't add update/delete paths or foreign keys. The one
+  exception is retention: only the NOLOGIN role `securepulse_audit_purge` may delete, only rows older than
+  90 days (`AuditRetention.Minimum`, enforced in the trigger too), through `PostgresAuditPurger` on the
+  Worker's separate `ConnectionStrings:AuditMaintenance` login. The app's login is never a member of it.
+- Retention is off until `AuditRetention:RetainFor` is set (an organisational decision; never default it).
+  The purge is fail-closed: `audit.purge-started` is written first and nothing is deleted if that fails.
 - Don't audit unauthenticated input that isn't tied to a real record (public endpoints would let
   anyone flood the table).
 - Portal events record after the action and log Critical if the write fails. Remote/write
@@ -131,5 +136,5 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
   portal still never calls Graph.
 
 ## Next steps (in order)
-1. Audit retention: a maintenance role allowed to purge `audit_events` older than a configured
-   period (the trigger blocks the app). Optionally ship events to a SIEM (Sentinel) as well.
+1. Ship audit events to a SIEM (Microsoft Sentinel via the Logs Ingestion API) so they're kept
+   outside SecurePulse beyond the retention period.

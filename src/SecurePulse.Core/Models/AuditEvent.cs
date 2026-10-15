@@ -12,8 +12,9 @@ public enum AuditOutcome
 }
 
 /// <summary>
-/// One security-relevant event. Append-only: never updated or deleted, and deliberately not linked
-/// by foreign key to tenants or users, so it outlives them.
+/// One security-relevant event. Append-only: never updated, and deleted only by the retention job
+/// once older than the configured period (<see cref="AuditRetention"/>). Deliberately not linked by
+/// foreign key to tenants or users, so it outlives them.
 /// </summary>
 public sealed record AuditEvent
 {
@@ -83,6 +84,12 @@ public static class AuditActions
 
     public const string AuditExported = "audit.exported";
 
+    /// <summary>Written before the retention job deletes anything; nothing is deleted if this can't be written.</summary>
+    public const string AuditPurgeStarted = "audit.purge-started";
+
+    /// <summary>The retention job's outcome: how many events older than the cutoff it deleted.</summary>
+    public const string AuditPurged = "audit.purged";
+
     public const string ScanRequested = "scan.requested";
 
     public const string ReportDownloaded = "report.downloaded";
@@ -126,6 +133,8 @@ public static class AuditActions
         RemediationEnabled => "Remediation access granted",
         RemediationDisabled => "Remediation access turned off",
         AuditExported => "Audit log exported",
+        AuditPurgeStarted => "Audit retention started",
+        AuditPurged => "Old audit events removed",
         ScanRequested => "Scan requested",
         ReportDownloaded => "Report downloaded",
         _ => action
@@ -140,6 +149,9 @@ public sealed record AuditQuery
     /// <summary>Action category: "auth", "people" or "onboarding".</summary>
     public string? Category { get; init; }
 
+    /// <summary>One exact action, e.g. <see cref="AuditActions.AuditPurged"/>.</summary>
+    public string? Action { get; init; }
+
     public AuditOutcome? Outcome { get; init; }
     public Guid? TenantId { get; init; }
 
@@ -150,4 +162,19 @@ public sealed record AuditQuery
     public (DateTimeOffset OccurredAt, Guid Id)? Before { get; init; }
 
     public int Limit { get; init; } = 50;
+}
+
+/// <summary>
+/// How long audit events are kept. Deleting them is an organisational decision, so nothing is
+/// deleted until a period is configured, and never anything younger than <see cref="Minimum"/>
+/// (the database enforces the same floor).
+/// </summary>
+public static class AuditRetention
+{
+    /// <summary>The shortest period that can be configured. Matches the floor in the audit_events trigger.</summary>
+    public static readonly TimeSpan Minimum = TimeSpan.FromDays(90);
+
+    /// <summary>Why <paramref name="retainFor"/> can't be used, or null.</summary>
+    public static string? Problem(TimeSpan retainFor) =>
+        retainFor < Minimum ? $"must be at least {Minimum.TotalDays:0} days (it's {retainFor.TotalDays:0.##})." : null;
 }

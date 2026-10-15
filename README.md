@@ -397,12 +397,13 @@ filters).
 | Onboarding | Consent link created or cancelled; consent received, declined, from the wrong tenant, or on an expired/used link; tenant connected or verification failed (Worker) |
 | Devices | Remote actions: requested, approved (or an approval that didn't apply), rejected, cancelled, expired, *sending* (written by the Worker before the Graph call) and the result |
 | Scans | Scan requested from the portal (scheduled scans are in `scan_runs`, not the audit log) |
-| Audit log | Each CSV export |
+| Audit log | Each CSV export; retention runs (started, and how many events were removed) |
 | Reports | Each PDF report download |
 
 - **Append-only in the database:** a trigger rejects `UPDATE`, `DELETE` and `TRUNCATE` on
-  `audit_events`, so entries can't be changed through the app or with its credentials. No
-  foreign keys, so entries outlive the tenants and people they mention.
+  `audit_events`, so entries can't be changed through the app or with its credentials. The only
+  exception is retention (below). No foreign keys, so entries outlive the tenants and people
+  they mention.
 - **Not recorded on purpose:** consent callbacks with an unknown `state` (the endpoint is public,
   so they go to the application log rather than letting anyone fill the table) and the Worker's
   verification retries (only the final result).
@@ -414,6 +415,49 @@ filters).
 - If writing an audit entry fails, the action stands and the failure is logged at Critical
   level. CSV cells that start with `=`, `+`, `-`, `@` or a tab are prefixed with `'` so
   spreadsheets don't run them as formulas.
+
+### Retention
+
+Audit events are kept forever until you set a retention period: how long to keep them is your
+organisation's decision (check your regulator's and your clients' requirements first). With
+`AuditRetention:RetainFor` set, one Worker deletes events older than that period, once a day by default:
+
+| Setting | Default | |
+|---|---|---|
+| `AuditRetention:RetainFor` | (none) | E.g. `365.00:00:00`. At least 90 days; the Worker won't start with less. |
+| `AuditRetention:Interval` | 1 day | How often it checks. |
+| `AuditRetention:BatchSize` | 5000 | Rows deleted per transaction. |
+| `ConnectionStrings:AuditMaintenance` | | Required with `RetainFor`: a separate login (below). Must not be the application's login. |
+
+How deletion is limited:
+
+- The application's database login still can't delete anything. A NOLOGIN role,
+  `securepulse_audit_purge`, is the only one the trigger lets delete, and only rows older than
+  90 days. A misconfigured cutoff can't remove recent events, and `UPDATE` and `TRUNCATE` stay
+  blocked for every role.
+- The Worker connects with a separate maintenance login that's a member of that role, and switches
+  to it (`SET LOCAL ROLE`) for each batch. The portal never has this login.
+- Before deleting, the Worker records *Audit retention started* with the cutoff and the number
+  of events due. If that entry can't be written, nothing is deleted. Afterwards it records *Old
+  audit events removed* with the count, or a *Failure* with how many were removed before an
+  error. A database advisory lock stops two Workers from purging at once.
+- The Audit log page shows the last run: the period, when it ran and how many events it removed.
+
+Database setup, once per server, by an administrator (the migration creates the role and grant
+itself when its login has `CREATEROLE`; managed databases usually need this done by hand):
+
+```sql
+CREATE ROLE securepulse_audit_purge NOLOGIN;
+GRANT SELECT, DELETE ON audit_events TO securepulse_audit_purge;   -- in the SecurePulse database
+CREATE ROLE securepulse_maintenance LOGIN PASSWORD '<from your vault>';
+GRANT securepulse_audit_purge TO securepulse_maintenance;
+```
+
+The application's login must not be a superuser or a member of `securepulse_audit_purge`. Supply
+the maintenance connection string the same way as the main one (user-secrets or the
+`ConnectionStrings__AuditMaintenance` environment variable), and only to the Worker. To keep
+events longer than the period (e.g. in a SIEM), export them first: **Export CSV** on the Audit
+log page.
 
 ## Client reports (PDF)
 
@@ -484,6 +528,7 @@ checks are excluded. Any open **Critical** caps the grade at C.
 | ScubaGear engine (Entra ID baseline, Windows Worker) | Built; parser tested against ScubaGear 1.8.0's sample report, runner end to end with a stand-in; needs a Windows Worker, a real tenant and certificate to exercise |
 | Portal sign-in with roles (Entra ID, Owner / MSP admin / Client viewer) | Built; tested with development sign-in and the real Entra redirect |
 | Security audit log (append-only, page + CSV export) | Built; tested against PostgreSQL 16 |
+| Audit retention (maintenance role, 90-day floor in the database) | Built; tested against PostgreSQL 16 and end to end with the Worker; off until `AuditRetention:RetainFor` is set |
 | Branded PDF client report (QuestPDF) | Built; content checked by extracting the PDF's text; off until `Reports:QuestPdfLicense` is set |
 
 ## Security notes
@@ -496,7 +541,8 @@ checks are excluded. Any open **Critical** caps the grade at C.
   write permission, its own certificate and its own consent, and every action needs a second
   person's approval.
 - Portal access comes from SecurePulse's own user table, never from token role claims.
-- Security events are kept in an append-only audit table the app can't modify.
+- Security events are kept in an append-only audit table the app can't modify. Only a separate
+  maintenance role can remove events, and only ones past the configured retention period (at least 90 days).
 - Data-protection keys (sign-in cookie, consent-link state) are shared through PostgreSQL only
   after encryption with a certificate; the portal refuses a shared key store without one.
 - Check each engine's license before redistributing modified versions (Wazuh is GPLv2).

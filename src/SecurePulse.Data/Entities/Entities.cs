@@ -160,7 +160,7 @@ public sealed class PortalUserEntity
     public DateTimeOffset? LastSignInAt { get; set; }
 }
 
-/// <summary>Append-only; a database trigger rejects UPDATE and DELETE.</summary>
+/// <summary>Append-only; a database trigger rejects UPDATE and DELETE (except retention by securepulse_audit_purge, rows older than 90 days).</summary>
 public sealed class AuditEventEntity
 {
     public Guid Id { get; set; }
