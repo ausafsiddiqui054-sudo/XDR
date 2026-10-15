@@ -103,6 +103,16 @@ public interface IOnboardingRepository
     /// <summary>Turns remediation off for a tenant: back to read-only, remediation credential cleared. False if it wasn't on.</summary>
     Task<bool> DisableRemediationAsync(Guid tenantId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Completes a configuration-app consent: the connected tenant with the request's Entra tenant ID gets
+    /// <paramref name="credentialReference"/>. Null if no connected tenant matches (the request is then marked failed).
+    /// </summary>
+    Task<Tenant?> CompleteConfigurationAsync(Guid id, string credentialReference, IReadOnlyList<string> grantedPermissions,
+        DateTimeOffset at, CancellationToken ct = default);
+
+    /// <summary>Clears a tenant's configuration credential. False if it wasn't set.</summary>
+    Task<bool> DisableConfigurationAsync(Guid tenantId, CancellationToken ct = default);
+
     Task CancelAsync(Guid id, CancellationToken ct = default);
 }
 
@@ -278,6 +288,52 @@ public interface IPlaybookRepository
     Task<bool> WithdrawPreApprovalAsync(Guid id, CancellationToken ct = default);
 
     /// <summary>Records when the Worker last checked devices against the playbook.</summary>
+    Task RecordRunAsync(Guid id, DateTimeOffset at, CancellationToken ct = default);
+}
+
+/// <summary>
+/// The configuration change queue. Like device actions: conditional state changes, one open change per tenant and
+/// fix, claims that only one Worker wins.
+/// </summary>
+public interface IConfigurationChangeRepository
+{
+    /// <summary>Adds a pending request, unless the tenant already has an open one for the same fix (returned with <c>Created = false</c>).</summary>
+    Task<(ConfigurationChangeRequest Request, bool Created)> AddAsync(ConfigurationChangeRequest request, CancellationToken ct = default);
+
+    Task<ConfigurationChangeRequest?> GetAsync(Guid id, CancellationToken ct = default);
+
+    /// <summary>Newest first.</summary>
+    Task<IReadOnlyList<ConfigurationChangeRequest>> QueryAsync(ConfigurationChangeQuery query, CancellationToken ct = default);
+
+    Task<ConfigurationChangeRequest?> DecideAsync(Guid id, bool approve, Guid deciderId, string deciderName, PortalRole deciderRole, string? note,
+        DateTimeOffset at, CancellationToken ct = default);
+
+    Task<ConfigurationChangeRequest?> CancelAsync(Guid id, string cancelledBy, string? reason, DateTimeOffset at, CancellationToken ct = default);
+
+    Task<IReadOnlyList<ConfigurationChangeRequest>> CancelOpenForTenantAsync(Guid tenantId, string cancelledBy, string reason, DateTimeOffset at,
+        CancellationToken ct = default);
+
+    Task<ConfigurationChangeRequest?> ClaimNextApprovedAsync(DateTimeOffset at, CancellationToken ct = default);
+
+    Task CompleteAsync(Guid id, bool succeeded, string? error, string? policyId, DateTimeOffset at, CancellationToken ct = default);
+
+    Task<IReadOnlyList<ConfigurationChangeRequest>> ExpireAsync(DateTimeOffset at, TimeSpan sendWindow, DateTimeOffset sendingBefore,
+        CancellationToken ct = default);
+
+    /// <summary>Whether <paramref name="playbookId"/> proposed anything for <paramref name="tenantId"/> at or after <paramref name="since"/>.</summary>
+    Task<bool> HasPlaybookProposalSinceAsync(Guid playbookId, Guid tenantId, DateTimeOffset since, CancellationToken ct = default);
+}
+
+public interface IFindingPlaybookRepository
+{
+    Task<IReadOnlyList<FindingPlaybook>> GetAllAsync(CancellationToken ct = default);
+    Task<FindingPlaybook?> GetAsync(Guid id, CancellationToken ct = default);
+    Task AddAsync(FindingPlaybook playbook, CancellationToken ct = default);
+
+    /// <summary>Saves if the stored playbook still has <paramref name="expectedUpdatedAt"/>.</summary>
+    Task<bool> UpdateAsync(FindingPlaybook playbook, DateTimeOffset expectedUpdatedAt, CancellationToken ct = default);
+
+    Task<bool> DeleteAsync(Guid id, CancellationToken ct = default);
     Task RecordRunAsync(Guid id, DateTimeOffset at, CancellationToken ct = default);
 }
 

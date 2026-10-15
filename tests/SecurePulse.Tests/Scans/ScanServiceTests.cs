@@ -69,8 +69,11 @@ public class ScanServiceTests
         public ScanOptions Options { get; } = new() { MaxParallelScans = 2 };
         public IScanRunRepository Runs => Store;
 
+        public bool WithFindingPlaybooks { get; init; }
+
         public ScanService Service => new(Store, Store, Store, [Engine, .. OtherEngines], Tokens, Microsoft.Extensions.Options.Options.Create(Options), Time,
-            NullLogger<ScanService>.Instance);
+            NullLogger<ScanService>.Instance,
+            WithFindingPlaybooks ? new FindingPlaybookRunner(Store, Store, Store, Store, Time, NullLogger<FindingPlaybookRunner>.Instance) : null);
 
         /// <summary>Gives the sample's connected tenants a certificate so they count as onboarded.</summary>
         public async Task<IReadOnlyList<Tenant>> OnboardAsync(int count = int.MaxValue)
@@ -380,6 +383,54 @@ public class ScanServiceTests
         h.Time.Advance(h.Options.RetryFailedAfter);
         Assert.Equal(1, await h.Service.EnqueueDueAsync());
     }
+    // --- Finding playbooks --------------------------------------------------------------------
+
+    [Fact]
+    public async Task FindingPlaybooksRunAfterASuccessfulScanOnly()
+    {
+        var failLegacyAuth = true;
+        var engine = new FakeEngine((t, _) => Task.FromResult(failLegacyAuth
+            ? FakeEngine.Ok(t) with
+            {
+                Findings = [new Finding { Id = $"m:{t.Id:N}:legacy", TenantId = t.Id, Source = ScanEngines.Maester, SourceCheckId = "MS.AAD.1.1v1",
+                    Title = "Legacy authentication SHALL be blocked", Severity = Severity.High, Status = FindingStatus.Failed }]
+            }
+            : FakeEngine.Ok(t) with { Succeeded = false, Error = "boom", Findings = [] }));
+        var h = new Harness { Engine = engine, WithFindingPlaybooks = true };
+        var tenant = (await h.OnboardAsync(1))[0];
+        IOnboardingRepository onboarding = h.Store;
+        var consent = new OnboardingRequest
+        {
+            Id = Guid.NewGuid(), Kind = OnboardingKind.Configuration, DisplayName = tenant.DisplayName, PrimaryDomain = tenant.PrimaryDomain,
+            EntraTenantId = tenant.EntraTenantId, Status = OnboardingStatus.AwaitingConsent, CreatedAt = h.Time.Now, ExpiresAt = h.Time.Now.AddDays(1)
+        };
+        await onboarding.AddAsync(consent, Guid.NewGuid().ToString("N"));
+        await onboarding.MarkConsentReceivedAsync(consent.Id, h.Time.Now);
+        await onboarding.CompleteConfigurationAsync(consent.Id, Thumbprint, [.. ConfigurationPermissions.Required], h.Time.Now);
+        await ((IFindingPlaybookRepository)h.Store).AddAsync(new FindingPlaybook
+        {
+            Id = Guid.NewGuid(), FixId = ConfigurationFixes.BlockLegacyAuth.Id, Enabled = true, CreatedAt = h.Time.Now, UpdatedAt = h.Time.Now,
+            UpdatedByUserId = Guid.NewGuid(), UpdatedByName = "Olivia"
+        });
+        IConfigurationChangeRepository changes = h.Store;
+
+        // A failed scan keeps the old findings and proposes nothing, even if old findings would match.
+        await h.Store.SaveScanAsync(new ScanResult { TenantId = tenant.Id, Source = ScanEngines.Maester, StartedAt = h.Time.Now, CompletedAt = h.Time.Now,
+            Findings = [new Finding { Id = "old", TenantId = tenant.Id, Source = ScanEngines.Maester, SourceCheckId = "MS.AAD.1.1v1", Title = "old",
+                Severity = Severity.High, Status = FindingStatus.Failed }] });
+        failLegacyAuth = false;
+        await h.Runs.EnqueueAsync(tenant.Id, ScanEngines.Maester, ScanTrigger.Manual, "Olivia", h.Time.Now);
+        await h.Service.DrainAsync();
+        Assert.Empty(await changes.QueryAsync(new ConfigurationChangeQuery()));
+
+        failLegacyAuth = true;
+        h.Time.Advance(TimeSpan.FromMinutes(1));
+        await h.Runs.EnqueueAsync(tenant.Id, ScanEngines.Maester, ScanTrigger.Manual, "Olivia", h.Time.Now);
+        await h.Service.DrainAsync();
+        var c = Assert.Single(await changes.QueryAsync(new ConfigurationChangeQuery()));
+        Assert.Equal(("block-legacy-auth", DeviceActionStatus.PendingApproval), (c.FixId, c.Status));
+    }
+
     // --- GoPhish ----------------------------------------------------------------------------
 
     [Fact]

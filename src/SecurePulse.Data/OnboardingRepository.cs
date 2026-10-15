@@ -201,6 +201,50 @@ public sealed class EfOnboardingRepository(IDbContextFactory<SecurePulseDbContex
             throw new KeyNotFoundException($"Tenant {tenantId} not found.");
     }
 
+    public async Task<Tenant?> CompleteConfigurationAsync(Guid id, string credentialReference, IReadOnlyList<string> grantedPermissions,
+        DateTimeOffset at, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        var request = await db.OnboardingRequests.FirstOrDefaultAsync(r => r.Id == id, ct)
+            ?? throw new InvalidOperationException($"Onboarding request {id} not found.");
+        if (request.Status != OnboardingStatus.Verifying || request.Kind != OnboardingKind.Configuration)
+            throw new InvalidOperationException($"Onboarding request {id} isn't a configuration request being verified.");
+
+        var stored = await db.Tenants.FirstOrDefaultAsync(t => t.EntraTenantId == request.EntraTenantId
+            && (t.ConsentState == TenantConsentState.ReadOnlyGranted || t.ConsentState == TenantConsentState.RemediationGranted), ct);
+        if (stored is null)
+        {
+            // Configuration access is only added to a connected tenant; it never connects one on its own.
+            request.Status = OnboardingStatus.Failed;
+            request.LastError = "The tenant isn't connected for assessment any more, so configuration access can't be added.";
+            request.ProtectedState = null;
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return null;
+        }
+
+        stored.ConfigurationCredentialReference = credentialReference;
+        request.Status = OnboardingStatus.Completed;
+        request.CompletedAt = at;
+        request.TenantId = stored.Id;
+        request.LastError = null;
+        request.GrantedPermissions = [.. grantedPermissions];
+        request.ProtectedState = null;
+
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return stored.ToModel();
+    }
+
+    public async Task<bool> DisableConfigurationAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        return await db.Tenants.Where(t => t.Id == tenantId && t.ConfigurationCredentialReference != null)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.ConfigurationCredentialReference, (string?)null), ct) > 0;
+    }
+
     public async Task<bool> DisableRemediationAsync(Guid tenantId, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);

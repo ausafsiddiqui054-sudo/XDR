@@ -18,7 +18,8 @@ public sealed class ScanService(
     IGraphTokenProvider tokens,
     IOptions<ScanOptions> options,
     TimeProvider time,
-    ILogger<ScanService> logger)
+    ILogger<ScanService> logger,
+    FindingPlaybookRunner? findingPlaybooks = null)
 {
     private readonly IReadOnlyDictionary<string, IScanEngine> _engines = engines.ToDictionary(e => e.Name, StringComparer.Ordinal);
 
@@ -121,6 +122,19 @@ public sealed class ScanService(
             return (null, result.Error ?? "The scan failed without an error message.");
 
         await findings.SaveScanAsync(result, ct);
+
+        // Finding playbooks look at the stored findings only after a successful scan replaced them.
+        if (findingPlaybooks is not null)
+        {
+            try
+            {
+                await findingPlaybooks.RunForTenantAsync(tenant, ct);
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                logger.LogError(ex, "Finding playbooks for {Tenant} failed; the scan itself succeeded", tenant.DisplayName);
+            }
+        }
         return (result.Findings.Count, null);
     }
 

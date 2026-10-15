@@ -161,6 +161,19 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
   withdrawn by any save, and dead once the granter isn't an Owner. `IsActive` is the single check; the runner and the
   Worker's send path both use it. Auto-approval is fail-closed (audit first) and capped by `DailyAutoLimit` per tenant.
 
+## Configuration fix invariants
+- Tenant configuration changes go only through the separate configuration app (`Configuration:*`, `IConfigurationTokenProvider`),
+  which may hold exactly `ConfigurationPermissions.Required` (Policy.Read.All + Policy.ReadWrite.ConditionalAccess). Its consent
+  never connects a tenant (`CompleteConfigurationAsync`) and is independent of remediation access.
+- Only catalog fixes (`ConfigurationFixes`): constant, report-only Conditional Access policies named with `PolicyNamePrefix`. Never
+  interpolate tenant or finding data into a policy, never create an enforced policy, never switch one on. `GraphConditionalAccessWriter`
+  refuses anything not in the catalog or not report-only, skips a policy that already exists by name, and never retries.
+- Every change needs an Owner other than the requester (`ConfigurationChangePolicy`), every time; no pre-approval. Approval and the
+  Worker's send are fail-closed (audit first); the Worker re-checks access, approval and token roles before each send.
+- Finding playbooks (`FindingPlaybook`) only propose, after a successful scan (`ScanService` → `FindingPlaybookRunner`), as their last
+  editor, at most once per tenant and fix per `FindingPlaybookRules.Cooldown`; one open change per tenant and fix
+  (`IX_configuration_changes_open`). Adding a fix or a permission is an organisational decision.
+
 ## Defender health invariants
 - Defender data comes through Graph with the assessment app's existing read-only permissions:
   `windowsProtectionState` (DeviceManagementManagedDevices.Read.All) and advanced hunting
@@ -184,7 +197,7 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
   portal still never calls Graph.
 
 ## Next steps (in order)
-1. Every engine from "What this is" is built. Decision deliberately left open: playbook triggers on failed findings
-   (needs tenant-configuration write actions, i.e. new remediation permissions and re-consent).
+1. Every engine from "What this is" is built. Open decisions: more catalog fixes (each a reviewed policy, and anything beyond
+   Conditional Access needs new configuration-app permissions and re-consent) and whether SecurePulse may ever enforce a policy.
 2. Launching GoPhish campaigns from SecurePulse is deliberately not built: it sends email to people, so it
    needs its own approval and consent decision first. The GoPhish engine only imports results.

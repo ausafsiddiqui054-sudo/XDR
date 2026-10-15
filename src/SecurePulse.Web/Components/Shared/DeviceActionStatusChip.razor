@@ -1,9 +1,12 @@
 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@ColorOf(Status)" data-testid="action-status">
-    @DeviceActionRequestService.Label(Status)
+    @(Status == DeviceActionStatus.Sent && SentLabel is not null ? SentLabel : DeviceActionRequestService.Label(Status))
 </MudChip>
 
 @code {
     [Parameter, EditorRequired] public DeviceActionStatus Status { get; set; }
+
+    /// <summary>What "Sent" means here; device actions go to Intune, configuration fixes to Entra.</summary>
+    [Parameter] public string? SentLabel { get; set; }
 
     private static Color ColorOf(DeviceActionStatus status) => status switch
     {

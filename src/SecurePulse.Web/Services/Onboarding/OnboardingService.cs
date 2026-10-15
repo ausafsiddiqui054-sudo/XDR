@@ -39,6 +39,7 @@ public sealed partial class OnboardingService(
     IOnboardingRepository requests,
     ITenantRepository tenants,
     IDeviceActionRepository deviceActions,
+    IConfigurationChangeRepository configurationChanges,
     IEntraTenantResolver resolver,
     IDataProtectionProvider protection,
     OnboardingOptions options,
@@ -58,6 +59,10 @@ public sealed partial class OnboardingService(
 
     public bool IsRemediationConfigured => Guid.TryParse(options.RemediationAppClientId, out var id) && id != Guid.Empty
                                            && !string.Equals(options.RemediationAppClientId, options.AppClientId, StringComparison.OrdinalIgnoreCase);
+
+    public bool IsConfigurationConfigured => Guid.TryParse(options.ConfigurationAppClientId, out var id) && id != Guid.Empty
+                                             && !string.Equals(options.ConfigurationAppClientId, options.AppClientId, StringComparison.OrdinalIgnoreCase)
+                                             && !string.Equals(options.ConfigurationAppClientId, options.RemediationAppClientId, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The connected tenant this request would update (re-consent), if any.</summary>
     public async Task<Tenant?> GetConnectedTenantAsync(OnboardingRequest request, CancellationToken ct = default) =>
@@ -94,6 +99,7 @@ public sealed partial class OnboardingService(
             ["clientName"] = r.DisplayName
         };
         if (r.Kind == OnboardingKind.Remediation) details["kind"] = "remediation";
+        if (r.Kind == OnboardingKind.Configuration) details["kind"] = "configuration";
         return details;
     }
 
@@ -147,6 +153,69 @@ public sealed partial class OnboardingService(
             tenant.Id, "OnboardingRequest", request.Id.ToString(),
             new Dictionary<string, string>(Details(request)) { ["expiresAt"] = request.ExpiresAt.ToString("O") }, actor);
         return new(request, null);
+    }
+
+    /// <summary>
+    /// Starts consent to the separate configuration app (report-only Conditional Access fixes) for a connected tenant,
+    /// Owners only. Independent of remediation access; the Worker verifies the grant before anything changes.
+    /// </summary>
+    public async Task<StartOnboardingResult> StartConfigurationAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        var actor = await RequireOwnerAsync();
+        if (!IsConfigurationConfigured)
+            return new(null, "Onboarding:ConfigurationAppClientId isn't set to the configuration app's client ID (a different app from the other two).");
+        if (await tenants.GetAsync(tenantId, ct) is not { } tenant)
+            return new(null, "Tenant not found.");
+        if (tenant.ConsentState is not (TenantConsentState.ReadOnlyGranted or TenantConsentState.RemediationGranted))
+            return new(null, $"{tenant.DisplayName} has to be connected for assessment first.");
+        if (tenant.CanConfigure)
+            return new(null, $"{tenant.DisplayName} already has configuration access.");
+
+        var now = time.GetUtcNow();
+        var inProgress = (await requests.GetOpenAsync(ct)).FirstOrDefault(r => r.Kind == OnboardingKind.Configuration
+            && r.EntraTenantId == tenant.EntraTenantId && r.Status is OnboardingStatus.AwaitingConsent or OnboardingStatus.Verifying && !r.IsExpired(now));
+        if (inProgress is not null)
+            return new(inProgress, null, Reused: true);
+
+        var state = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
+        var request = new OnboardingRequest
+        {
+            Id = Guid.NewGuid(),
+            Kind = OnboardingKind.Configuration,
+            DisplayName = tenant.DisplayName,
+            PrimaryDomain = tenant.PrimaryDomain,
+            PartnerName = tenant.PartnerName,
+            Industry = tenant.Industry,
+            EntraTenantId = tenant.EntraTenantId,
+            Status = OnboardingStatus.AwaitingConsent,
+            CreatedAt = now,
+            ExpiresAt = now + options.LinkLifetime,
+            ProtectedState = Protector.Protect(state),
+            StartedBy = actor.Name
+        };
+        await requests.AddAsync(request, HashState(state), ct);
+        logger.LogInformation("Configuration consent {RequestId} started for {Tenant} by {User}", request.Id, tenant.DisplayName, actor.Name);
+        await audit.RecordAsync(AuditActions.LinkCreated, AuditOutcome.Success, $"Created a configuration consent link for {tenant.DisplayName}",
+            tenant.Id, "OnboardingRequest", request.Id.ToString(),
+            new Dictionary<string, string>(Details(request)) { ["expiresAt"] = request.ExpiresAt.ToString("O") }, actor);
+        return new(request, null);
+    }
+
+    /// <summary>Turns configuration fixes off (Owners only) and cancels open changes. The client's admin should also remove the app in Entra.</summary>
+    public async Task<bool> DisableConfigurationAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        var actor = await RequireOwnerAsync();
+        if (await tenants.GetAsync(tenantId, ct) is not { } tenant || !await requests.DisableConfigurationAsync(tenantId, ct))
+            return false;
+
+        var cancelled = await configurationChanges.CancelOpenForTenantAsync(tenantId, actor.Name, "Configuration access was turned off.", time.GetUtcNow(), ct);
+        await audit.RecordAsync(AuditActions.ConfigurationDisabled, AuditOutcome.Success, $"Turned off configuration access for {tenant.DisplayName}",
+            tenant.Id, "Tenant", tenant.Id.ToString(), new Dictionary<string, string> { ["cancelledChanges"] = cancelled.Count.ToString() }, actor);
+        foreach (var c in cancelled)
+            await audit.RecordAsync(AuditActions.ConfigChangeCancelled, AuditOutcome.Success,
+                $"{ConfigurationFixes.Find(c.FixId)?.Title ?? c.FixId} cancelled: configuration access was turned off", tenant.Id, "ConfigurationChange",
+                c.Id.ToString(), new Dictionary<string, string> { ["fix"] = c.FixId }, actor);
+        return true;
     }
 
     /// <summary>
@@ -307,7 +376,12 @@ public sealed partial class OnboardingService(
         var url = $"{options.AuthorityHost.TrimEnd('/')}/{request.EntraTenantId}/v2.0/adminconsent";
         return QueryHelpers.AddQueryString(url, new Dictionary<string, string?>
         {
-            ["client_id"] = request.Kind == OnboardingKind.Remediation ? options.RemediationAppClientId : options.AppClientId,
+            ["client_id"] = request.Kind switch
+            {
+                OnboardingKind.Remediation => options.RemediationAppClientId,
+                OnboardingKind.Configuration => options.ConfigurationAppClientId,
+                _ => options.AppClientId
+            },
             ["scope"] = $"{options.GraphBaseUrl.TrimEnd('/')}/.default",
             ["redirect_uri"] = GetRedirectUri(portalBaseUri),
             ["state"] = state

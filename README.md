@@ -293,6 +293,50 @@ without a person approving each one. Four eyes move to the playbook itself:
   per-action approval this week; the Device actions history marks them *Pre-approved*.
 
 
+### Configuration fixes for failed checks
+
+Some failed checks have a reviewed fix: a **Conditional Access policy created in report-only mode**. A
+report-only policy changes no sign-in; Entra logs what it would have done, so the tenant's admin can
+check the impact, exclude break-glass accounts and switch it on in Entra. **SecurePulse never switches a
+policy on**, and the policy body is a constant in the catalog: nothing from a finding or a tenant goes
+into it.
+
+| Fix | When this check fails | Creates (report-only) |
+|---|---|---|
+| Block legacy authentication | `MS.AAD.1.1v1` | Block Exchange ActiveSync and other legacy clients, all users |
+| Require MFA for all users | `MS.AAD.3.2v1` | Require MFA, all users and apps |
+| Require phishing-resistant MFA for highly privileged roles | `MS.AAD.3.6v1` | Phishing-resistant MFA strength for CISA's eight highly privileged roles |
+
+ScubaGear and Maester's CISA tests share these check IDs. Adding a fix is a reviewed code change
+(`ConfigurationFixes`), never configuration.
+
+- **A separate configuration app.** A third Entra app registration holding only
+  `Policy.Read.All` and `Policy.ReadWrite.ConditionalAccess` (Graph needs both to create a policy),
+  with its own certificate. An Owner chooses **Enable configuration fixes** on a tenant's card; the
+  tenant's admin consents; the Worker checks the token carries exactly those two permissions before
+  the tenant gets configuration access. It's independent of remediation access, and **Turn off
+  configuration fixes** cancels open requests (policies already created stay in Entra).
+- **Requests.** An Owner or MSP admin chooses **Propose this fix** on a failed finding (the check must
+  be failing for that tenant right now), or a **finding playbook** proposes it after a scan.
+  Finding playbooks are set up per catalog fix on the **Playbooks** page (*When a check fails*), for one
+  tenant or every tenant with configuration access; Owners only, audited. At most one open change per
+  tenant and fix, and a playbook proposes a fix to a tenant at most once every 7 days.
+- **Approval.** Every change needs an Owner other than the requester (for a playbook, its last editor),
+  under **Configuration changes**. There is no pre-approval for configuration changes. Approval is
+  fail-closed (audit first); requests expire after 72 hours.
+- **Applying (Worker).** Before each change the Worker re-checks configuration access, the approval and
+  the token (exactly the two permissions, right tenant), writes *Configuration change sending* to the
+  audit log, and only then calls Graph once: it lists the tenant's policies and, if one with the
+  catalog name already exists, records it instead of creating a second; otherwise it creates the policy
+  and checks Graph reports it as report-only. Never retried; a timeout says to check Entra first.
+
+Setup: the configuration app registration (multi-tenant, same redirect URI, the two application
+permissions, its own certificate with the private key only on the Worker); portal
+`Onboarding:ConfigurationAppClientId` (different from the other two apps); Worker
+`Configuration:AppClientId`, `Configuration:CertificateThumbprint`, optionally `Configuration:SendTimeout`
+(60 seconds) and `ConfigurationChanges:Enabled`, `PollInterval`, `StuckSendingAfter`. Conditional Access
+needs Entra ID P1 in the tenant.
+
 ## Security scans
 
 The Worker runs [Maester](https://maester.dev), on a Windows Worker
@@ -748,6 +792,7 @@ checks are excluded. Any open **Critical** caps the grade at C.
 | Endpoints (Intune device inventory, device detail) | Built |
 | Defender health per device (Intune antivirus state, Defender for Endpoint sensor via advanced hunting) | Built; tested with stubbed Graph and against PostgreSQL 16; needs a real tenant with Defender for Endpoint to exercise |
 | Remediation playbooks (device-state triggers proposing Sync / Restart / Defender scan or signature update, four-eyes approval; optional 90-day pre-approval by a second Owner for Sync and Defender actions, with a daily cap) | Built; tested with stubbed Graph and against PostgreSQL 16; needs the remediation app and a real tenant to exercise |
+| Configuration fixes for failed checks (report-only Conditional Access from a reviewed catalog, separate configuration app, another Owner approves each) | Built; tested with stubbed Graph and against PostgreSQL 16; needs the configuration app, a P1 tenant and real scans to exercise |
 | Device remote actions (remediation consent, approval queue, Worker sending via Graph) | Built; tested with stubbed Graph and against PostgreSQL 16; needs the remediation app registration and a real tenant to exercise |
 | PostgreSQL persistence (`SecurePulse.Data`) | Built; tested against PostgreSQL 16 |
 | Shared data-protection key ring (PostgreSQL, certificate-encrypted) | Built; tested against PostgreSQL 16 and with two portal instances |

@@ -70,8 +70,15 @@ public class DeviceActionRequestServiceTests
     {
         public bool Fail { get; set; }
 
-        public Task RecordAsync(AuditEvent auditEvent, CancellationToken ct = default) =>
-            Fail ? throw new InvalidOperationException("audit database down") : inner.RecordAsync(auditEvent, ct);
+        /// <summary>Called for each event before it's stored, to check what had happened by then.</summary>
+        public Action<AuditEvent>? OnRecord { get; set; }
+
+        public Task RecordAsync(AuditEvent auditEvent, CancellationToken ct = default)
+        {
+            if (Fail) throw new InvalidOperationException("audit database down");
+            OnRecord?.Invoke(auditEvent);
+            return inner.RecordAsync(auditEvent, ct);
+        }
 
         public Task<IReadOnlyList<AuditEvent>> QueryAsync(AuditQuery query, CancellationToken ct = default) => inner.QueryAsync(query, ct);
     }
@@ -320,7 +327,7 @@ public class DeviceActionRequestServiceTests
     // --- Remediation consent from the portal -------------------------------------------------
 
     private static OnboardingService Onboarding(Harness h, OnboardingOptions? options = null) =>
-        new(h.Store, h.Store, h.Store, new OnboardingServiceTests.Resolver(_ => Guid.NewGuid()), new EphemeralDataProtectionProvider(),
+        new(h.Store, h.Store, h.Store, h.Store, new OnboardingServiceTests.Resolver(_ => Guid.NewGuid()), new EphemeralDataProtectionProvider(),
             options ?? new OnboardingOptions { AppClientId = Guid.NewGuid().ToString(), RemediationAppClientId = RemediationApp.ToString() },
             h.Time, h.User, h.Trail, NullLogger<OnboardingService>.Instance);
 

@@ -43,7 +43,7 @@ else
                             <div style="min-width:0">
                                 <MudText Typo="Typo.subtitle1" Style="font-weight:600">@r.DisplayName</MudText>
                                 <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                    @r.PrimaryDomain@(r.Kind == OnboardingKind.Remediation ? " · remediation access" : "")
+                                    @r.PrimaryDomain@(r.Kind switch { OnboardingKind.Remediation => " · remediation access", OnboardingKind.Configuration => " · configuration access", _ => "" })
                                 </MudText>
                             </div>
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@SecurePulseTheme.ColorOf(r, now)">
@@ -87,6 +87,11 @@ else
                             @ConsentLabel(t.Tenant.ConsentState)
                         </MudChip>
                         <MudChip T="string" Size="Size.Small" Variant="Variant.Text">@(t.Tenant.PartnerName ?? "Direct client")</MudChip>
+                        @if (t.Tenant.CanConfigure)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Info" Icon="@Icons.Material.Rounded.Policy"
+                                     data-testid="configuration-chip">Configuration fixes</MudChip>
+                        }
                     </MudStack>
 
                     @{
@@ -228,6 +233,16 @@ else
                             <MudButton Variant="Variant.Text" Color="Color.Default" Class="px-0" StartIcon="@Icons.Material.Rounded.BuildCircle"
                                        OnClick="@(() => DisableRemediationAsync(t.Tenant))" data-testid="disable-remediation">Turn off remediation</MudButton>
                         }
+                        @if (_isOwner && connected && !t.Tenant.CanConfigure && Onboarding.IsConfigurationConfigured)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Warning" Class="px-0" StartIcon="@Icons.Material.Rounded.Policy"
+                                       OnClick="@(() => EnableConfigurationAsync(t.Tenant))" data-testid="enable-configuration">Enable configuration fixes</MudButton>
+                        }
+                        @if (_isOwner && t.Tenant.CanConfigure)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Default" Class="px-0" StartIcon="@Icons.Material.Rounded.GppMaybe"
+                                       OnClick="@(() => DisableConfigurationAsync(t.Tenant))" data-testid="disable-configuration">Turn off configuration fixes</MudButton>
+                        }
                     </MudStack>
                 </MudPaper>
             </MudItem>
@@ -243,6 +258,27 @@ else
     private IReadOnlyDictionary<(Guid TenantId, string Engine), ScanRun> _scans = new Dictionary<(Guid, string), ScanRun>();
     private bool _isOperator;
     private bool _isOwner;
+
+    private async Task EnableConfigurationAsync(Tenant tenant)
+    {
+        var result = await Onboarding.StartConfigurationAsync(tenant.Id);
+        if (result.Request is { } request)
+            Nav.NavigateTo($"tenants/connect/{request.Id}{(result.Reused ? "?reused=true" : "")}");
+        else
+            Snackbar.Add(result.Error ?? "Couldn't create a configuration consent link.", MudBlazor.Severity.Error);
+    }
+
+    private async Task DisableConfigurationAsync(Tenant tenant)
+    {
+        var confirmed = await Dialogs.ShowMessageBox($"Turn off configuration fixes for {tenant.DisplayName}?",
+            "SecurePulse stops creating Conditional Access policies in this tenant, and open requests are cancelled. Policies it already created " +
+            "stay in Entra. Ask the tenant's admin to also remove the configuration app in Microsoft Entra (Enterprise applications).",
+            yesText: "Turn off", cancelText: "Keep it on");
+        if (confirmed != true) return;
+        var done = await Onboarding.DisableConfigurationAsync(tenant.Id);
+        Snackbar.Add(done ? $"Configuration fixes turned off for {tenant.DisplayName}." : "Configuration fixes were already off.", MudBlazor.Severity.Info);
+        _portfolio = await Posture.GetPortfolioAsync();
+    }
 
     private async Task EnableRemediationAsync(Tenant tenant)
     {

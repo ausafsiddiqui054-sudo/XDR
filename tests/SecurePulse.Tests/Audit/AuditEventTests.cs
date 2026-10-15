@@ -203,7 +203,7 @@ public class OnboardingAuditTests
         public FixedUser User { get; } = FixedUser.MspAdmin();
         private readonly IDataProtectionProvider _protection = new EphemeralDataProtectionProvider();
 
-        public OnboardingService Service => new(Store, Store, Store, new Resolver(), _protection, new OnboardingOptions { AppClientId = Guid.NewGuid().ToString() },
+        public OnboardingService Service => new(Store, Store, Store, Store, new Resolver(), _protection, new OnboardingOptions { AppClientId = Guid.NewGuid().ToString() },
             Time, User, new AuditTrail(Store, User, Time, NullLogger<AuditTrail>.Instance), NullLogger<OnboardingService>.Instance);
 
         public async Task<(OnboardingRequest Request, string State)> StartAsync()

@@ -16,6 +16,7 @@ internal static class EntityMapping
         CredentialReference = e.CredentialReference,
         ConsentState = e.ConsentState,
         RemediationCredentialReference = e.RemediationCredentialReference,
+        ConfigurationCredentialReference = e.ConfigurationCredentialReference,
         WazuhAgentGroup = e.WazuhAgentGroup,
         GoPhishEnabled = e.GoPhishEnabled,
         LastScanAt = e.LastScanAt
@@ -32,6 +33,7 @@ internal static class EntityMapping
         CredentialReference = m.CredentialReference,
         ConsentState = m.ConsentState,
         RemediationCredentialReference = m.RemediationCredentialReference,
+        ConfigurationCredentialReference = m.ConfigurationCredentialReference,
         WazuhAgentGroup = m.WazuhAgentGroup,
         GoPhishEnabled = m.GoPhishEnabled,
         LastScanAt = m.LastScanAt
@@ -310,6 +312,36 @@ internal static class EntityMapping
         Error = m.Error,
         PlaybookId = m.PlaybookId,
         AutoApproved = m.AutoApproved
+    };
+
+    public static ConfigurationChangeRequest ToModel(this ConfigurationChangeEntity e) => new()
+    {
+        Id = e.Id, TenantId = e.TenantId, FixId = e.FixId, CheckId = e.CheckId, Reason = e.Reason, Status = e.Status, RequestedAt = e.RequestedAt,
+        RequestedByUserId = e.RequestedByUserId, RequestedByName = e.RequestedByName, ExpiresAt = e.ExpiresAt, DecidedAt = e.DecidedAt,
+        DecidedByUserId = e.DecidedByUserId, DecidedByName = e.DecidedByName, DecidedByRole = e.DecidedByRole, DecisionNote = e.DecisionNote,
+        CancelledAt = e.CancelledAt, CancelledBy = e.CancelledBy, SentAt = e.SentAt, CompletedAt = e.CompletedAt, Error = e.Error,
+        PolicyId = e.PolicyId, PlaybookId = e.PlaybookId
+    };
+
+    public static ConfigurationChangeEntity ToEntity(this ConfigurationChangeRequest m) => new()
+    {
+        Id = m.Id, TenantId = m.TenantId, FixId = m.FixId, CheckId = m.CheckId, Reason = m.Reason, Status = m.Status, RequestedAt = m.RequestedAt,
+        RequestedByUserId = m.RequestedByUserId, RequestedByName = m.RequestedByName, ExpiresAt = m.ExpiresAt, DecidedAt = m.DecidedAt,
+        DecidedByUserId = m.DecidedByUserId, DecidedByName = m.DecidedByName, DecidedByRole = m.DecidedByRole, DecisionNote = m.DecisionNote,
+        CancelledAt = m.CancelledAt, CancelledBy = m.CancelledBy, SentAt = m.SentAt, CompletedAt = m.CompletedAt, Error = m.Error,
+        PolicyId = m.PolicyId, PlaybookId = m.PlaybookId
+    };
+
+    public static FindingPlaybook ToModel(this FindingPlaybookEntity e) => new()
+    {
+        Id = e.Id, FixId = e.FixId, Enabled = e.Enabled, TenantId = e.TenantId, CreatedAt = e.CreatedAt, UpdatedByUserId = e.UpdatedByUserId,
+        UpdatedByName = e.UpdatedByName, UpdatedAt = e.UpdatedAt, LastRunAt = e.LastRunAt
+    };
+
+    public static FindingPlaybookEntity ToEntity(this FindingPlaybook m) => new()
+    {
+        Id = m.Id, FixId = m.FixId, Enabled = m.Enabled, TenantId = m.TenantId, CreatedAt = m.CreatedAt, UpdatedByUserId = m.UpdatedByUserId,
+        UpdatedByName = m.UpdatedByName, UpdatedAt = m.UpdatedAt, LastRunAt = m.LastRunAt
     };
 
     public static RemediationPlaybook ToModel(this PlaybookEntity e) => new()

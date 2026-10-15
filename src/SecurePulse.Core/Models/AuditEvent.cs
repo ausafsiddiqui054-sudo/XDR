@@ -104,6 +104,24 @@ public static class AuditActions
     /// <summary>A pre-approval was withdrawn (by a person, or because the playbook was changed).</summary>
     public const string PlaybookPreApprovalWithdrawn = "remediation.playbook-preapproval-withdrawn";
 
+    public const string ConfigurationEnabled = "onboarding.configuration-enabled";
+    public const string ConfigurationDisabled = "onboarding.configuration-disabled";
+
+    public const string ConfigChangeRequested = "config.change-requested";
+    public const string ConfigChangeApproved = "config.change-approved";
+    public const string ConfigChangeRejected = "config.change-rejected";
+    public const string ConfigChangeCancelled = "config.change-cancelled";
+    public const string ConfigChangeExpired = "config.change-expired";
+
+    /// <summary>Written by the Worker before the Graph call; if it can't be written, nothing is changed.</summary>
+    public const string ConfigChangeSending = "config.change-sending";
+
+    public const string ConfigChangeResult = "config.change-result";
+
+    public const string FindingPlaybookCreated = "remediation.finding-playbook-created";
+    public const string FindingPlaybookChanged = "remediation.finding-playbook-changed";
+    public const string FindingPlaybookDeleted = "remediation.finding-playbook-deleted";
+
     public const string RemediationEnabled = "onboarding.remediation-enabled";
     public const string RemediationDisabled = "onboarding.remediation-disabled";
 
@@ -126,6 +144,7 @@ public static class AuditActions
         ["onboarding"] = "Onboarding",
         ["device"] = "Devices",
         ["remediation"] = "Remediation playbooks",
+        ["config"] = "Configuration changes",
         ["audit"] = "Audit log",
         ["scan"] = "Scans",
         ["report"] = "Reports"
@@ -164,6 +183,18 @@ public static class AuditActions
         PlaybookPreApproved => "Playbook pre-approved",
         PlaybookPreApprovalWithdrawn => "Playbook pre-approval withdrawn",
         DeviceActionAutoApproved => "Device action approved by pre-approved playbook",
+        ConfigurationEnabled => "Configuration access granted",
+        ConfigurationDisabled => "Configuration access turned off",
+        ConfigChangeRequested => "Configuration change requested",
+        ConfigChangeApproved => "Configuration change approved",
+        ConfigChangeRejected => "Configuration change rejected",
+        ConfigChangeCancelled => "Configuration change cancelled",
+        ConfigChangeExpired => "Configuration change expired",
+        ConfigChangeSending => "Configuration change sending",
+        ConfigChangeResult => "Configuration change result",
+        FindingPlaybookCreated => "Finding playbook created",
+        FindingPlaybookChanged => "Finding playbook changed",
+        FindingPlaybookDeleted => "Finding playbook deleted",
         RemediationEnabled => "Remediation access granted",
         RemediationDisabled => "Remediation access turned off",
         AuditExported => "Audit log exported",

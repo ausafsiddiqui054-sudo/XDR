@@ -15,6 +15,8 @@ public sealed class OnboardingVerificationService(
     IGraphTokenProvider tokens,
     IRemediationTokenProvider remediationTokens,
     RemediationOptions remediation,
+    IConfigurationTokenProvider configurationTokens,
+    ConfigurationOptions configuration,
     DeviceSyncService deviceSync,
     IAuditLog audit,
     IOptions<OnboardingVerificationOptions> options,
@@ -39,6 +41,8 @@ public sealed class OnboardingVerificationService(
         var windowOver = now - (request.ConsentReceivedAt ?? request.CreatedAt) > o.VerificationWindow;
         if (request.Kind == OnboardingKind.Remediation)
             return await VerifyRemediationAsync(request, now, windowOver, ct);
+        if (request.Kind == OnboardingKind.Configuration)
+            return await VerifyConfigurationAsync(request, now, windowOver, ct);
 
         if (!Thumbprints.IsValid(o.CertificateThumbprint))
             return await FailAsync(request, "Onboarding:CertificateThumbprint isn't set to a valid certificate thumbprint in the Worker.", windowOver, ct);
@@ -115,24 +119,54 @@ public sealed class OnboardingVerificationService(
         return true;
     }
 
+    /// <summary>One of the separate write apps: what its token must carry and what verifying it grants.</summary>
+    private sealed record WriteApp(
+        string Name,
+        string Kind,
+        string? Thumbprint,
+        string ThumbprintSetting,
+        Func<Guid, string, CancellationToken, Task<string>> GetToken,
+        IReadOnlyList<string> Required,
+        Func<IEnumerable<string>, IReadOnlyList<string>> Unexpected,
+        Func<IEnumerable<string>, IReadOnlyList<string>> Missing,
+        Func<Guid, string, IReadOnlyList<string>, DateTimeOffset, CancellationToken, Task<Tenant?>> Complete,
+        string EnabledAction,
+        string EnabledSummary);
+
     /// <summary>
     /// Remediation consent: the separate remediation app's token must carry the one Intune
     /// permission remote actions need and nothing else. Only then does an already connected tenant
     /// get remediation access, with the remediation certificate recorded as a reference.
     /// </summary>
-    private async Task<bool> VerifyRemediationAsync(OnboardingRequest request, DateTimeOffset now, bool windowOver, CancellationToken ct)
+    private Task<bool> VerifyRemediationAsync(OnboardingRequest request, DateTimeOffset now, bool windowOver, CancellationToken ct) =>
+        VerifyWriteAppAsync(request, new WriteApp("remediation", "remediation", remediation.CertificateThumbprint, "Remediation:CertificateThumbprint",
+            (tid, thumb, token) => remediationTokens.GetTokenAsync(tid, thumb, token), RemediationPermissions.Required,
+            RemediationPermissions.Unexpected, RemediationPermissions.MissingFrom, requests.CompleteRemediationAsync,
+            AuditActions.RemediationEnabled, "device actions can now be requested"), now, windowOver, ct);
+
+    /// <summary>
+    /// Configuration consent: the separate configuration app's token must carry exactly the Conditional Access
+    /// permissions (<see cref="ConfigurationPermissions.Required"/>). Independent of remediation access.
+    /// </summary>
+    private Task<bool> VerifyConfigurationAsync(OnboardingRequest request, DateTimeOffset now, bool windowOver, CancellationToken ct) =>
+        VerifyWriteAppAsync(request, new WriteApp("configuration", "configuration", configuration.CertificateThumbprint, "Configuration:CertificateThumbprint",
+            (tid, thumb, token) => configurationTokens.GetTokenAsync(tid, thumb, token), ConfigurationPermissions.Required,
+            ConfigurationPermissions.Unexpected, ConfigurationPermissions.MissingFrom, requests.CompleteConfigurationAsync,
+            AuditActions.ConfigurationEnabled, "report-only Conditional Access fixes can now be requested"), now, windowOver, ct);
+
+    private async Task<bool> VerifyWriteAppAsync(OnboardingRequest request, WriteApp app, DateTimeOffset now, bool windowOver, CancellationToken ct)
     {
-        if (!Thumbprints.IsValid(remediation.CertificateThumbprint))
-            return await FailAsync(request, "Remediation:CertificateThumbprint isn't set to a valid certificate thumbprint in the Worker.", windowOver, ct);
+        if (!Thumbprints.IsValid(app.Thumbprint))
+            return await FailAsync(request, $"{app.ThumbprintSetting} isn't set to a valid certificate thumbprint in the Worker.", windowOver, ct);
 
         string token;
         try
         {
-            token = await remediationTokens.GetTokenAsync(request.EntraTenantId, remediation.CertificateThumbprint, ct);
+            token = await app.GetToken(request.EntraTenantId, app.Thumbprint!, ct);
         }
         catch (GraphAuthException ex)
         {
-            return await FailAsync(request, $"Microsoft Entra didn't issue a remediation token for this tenant yet. {ex.Message}", windowOver, ct);
+            return await FailAsync(request, $"Microsoft Entra didn't issue a {app.Name} token for this tenant yet. {ex.Message}", windowOver, ct);
         }
 
         AccessTokenClaims claims;
@@ -148,36 +182,37 @@ public sealed class OnboardingVerificationService(
         if (claims.TenantId != request.EntraTenantId)
             return await FailAsync(request, $"The token was issued for tenant {claims.TenantId}, not {request.EntraTenantId}.", final: true, ct, denied: true);
 
-        var unexpected = RemediationPermissions.Unexpected(claims.Roles);
+        var unexpected = app.Unexpected(claims.Roles);
         if (unexpected.Count > 0)
         {
             return await FailAsync(request,
-                $"The remediation app was granted more than it needs ({string.Join(", ", unexpected)}). It may hold only " +
-                $"{RemediationPermissions.PrivilegedOperations}: remove the others from the app registration, revoke them in the tenant, and consent again.",
+                $"The {app.Name} app was granted more than it needs ({string.Join(", ", unexpected)}). It may hold only " +
+                $"{string.Join(" and ", app.Required)}: remove the others from the app registration, revoke them in the tenant, and consent again.",
                 final: true, ct, denied: true);
         }
 
-        var missing = RemediationPermissions.MissingFrom(claims.Roles);
+        var missing = app.Missing(claims.Roles);
         if (missing.Count > 0)
         {
             return await FailAsync(request,
-                $"These permissions weren't granted: {string.Join(", ", missing)}. Add them to the remediation app and have the admin consent again.",
+                $"These permissions weren't granted: {string.Join(", ", missing)}. Add them to the {app.Name} app and have the admin consent again.",
                 windowOver, ct);
         }
 
         var granted = claims.Roles.Order(StringComparer.OrdinalIgnoreCase).ToList();
-        var tenant = await requests.CompleteRemediationAsync(request.Id, remediation.CertificateThumbprint, granted, now, ct);
+        var tenant = await app.Complete(request.Id, app.Thumbprint!, granted, now, ct);
         if (tenant is null)
         {
             await AuditAsync(request, AuditActions.VerificationFailed, AuditOutcome.Failure,
-                $"Couldn't add remediation access for {request.PrimaryDomain}: the tenant isn't connected any more", null, new() { ["kind"] = "remediation" }, ct);
+                $"Couldn't add {app.Name} access for {request.PrimaryDomain}: the tenant isn't connected any more", null, new() { ["kind"] = app.Kind }, ct);
             return false;
         }
 
-        logger.LogInformation("Onboarding {RequestId}: remediation access verified for {Tenant} ({EntraTenantId})", request.Id, tenant.DisplayName, tenant.EntraTenantId);
-        await AuditAsync(request, AuditActions.RemediationEnabled, AuditOutcome.Success,
-            $"Verified remediation consent for {tenant.DisplayName}; device actions can now be requested", tenant.Id,
-            new() { ["permissions"] = string.Join(", ", granted), ["kind"] = "remediation" }, ct);
+        logger.LogInformation("Onboarding {RequestId}: {App} access verified for {Tenant} ({EntraTenantId})", request.Id, app.Name, tenant.DisplayName,
+            tenant.EntraTenantId);
+        await AuditAsync(request, app.EnabledAction, AuditOutcome.Success,
+            $"Verified {app.Name} consent for {tenant.DisplayName}; {app.EnabledSummary}", tenant.Id,
+            new() { ["permissions"] = string.Join(", ", granted), ["kind"] = app.Kind }, ct);
         return true;
     }
 

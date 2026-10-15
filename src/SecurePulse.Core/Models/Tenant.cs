@@ -33,6 +33,15 @@ public sealed record Tenant
     public bool CanRemediate => ConsentState == TenantConsentState.RemediationGranted && !string.IsNullOrWhiteSpace(RemediationCredentialReference);
 
     /// <summary>
+    /// Thumbprint of the configuration app's certificate, set when the tenant consents to that separate app
+    /// (report-only Conditional Access fixes). Independent of remediation access. A reference only.
+    /// </summary>
+    public string? ConfigurationCredentialReference { get; init; }
+
+    public bool CanConfigure => ConsentState is TenantConsentState.ReadOnlyGranted or TenantConsentState.RemediationGranted
+                                && !string.IsNullOrWhiteSpace(ConfigurationCredentialReference);
+
+    /// <summary>
     /// The Wazuh agent group holding this tenant's agents on the shared Wazuh manager. The Wazuh
     /// engine reads only agents in this group; null means the tenant isn't scanned by Wazuh.
     /// Unique across tenants, so two tenants can never read the same agents.

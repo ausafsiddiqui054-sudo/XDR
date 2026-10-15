@@ -1,0 +1,179 @@
+@page "/configuration/changes"
+@attribute [Authorize(Policy = Policies.Operator)]
+@implements IAsyncDisposable
+@inject ConfigurationChangeRequestService Changes
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject IUserContextAccessor Current
+
+<PageTitle>Configuration changes · SecurePulse</PageTitle>
+
+<MudText Typo="Typo.h4">Configuration changes</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6" Style="max-width:820px">
+    Reviewed fixes for failed checks, created as report-only Conditional Access policies through the separate configuration app.
+    Each one needs an Owner other than the requester to approve it. Requests expire after @((int)ConfigurationChangePolicy.ApprovalWindow.TotalHours) hours.
+</MudText>
+
+@if (_items is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var pending = _items.Where(v => v.Request.Status == DeviceActionStatus.PendingApproval).ToList();
+    var history = _items.Where(v => v.Request.Status != DeviceActionStatus.PendingApproval).ToList();
+
+    <MudText Typo="Typo.h6" Class="mb-3">Waiting for approval (@pending.Count)</MudText>
+    @if (pending.Count == 0)
+    {
+        <MudPaper Class="sp-card pa-6 mb-6" Elevation="0" Outlined="true">
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Nothing is waiting for approval.</MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <MudGrid Spacing="4" Class="mb-6">
+            @foreach (var v in pending)
+            {
+                var c = v.Request;
+                <MudItem xs="12" md="6" xl="4">
+                    <MudPaper Class="sp-card pa-5" Elevation="0" Outlined="true" data-testid="pending-change">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Rounded.Policy" Color="Color.Primary" />
+                                <MudText Typo="Typo.h6">@(v.Fix?.Title ?? c.FixId)</MudText>
+                            </MudStack>
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning">Owner approval</MudChip>
+                        </MudStack>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            @v.TenantName · @c.CheckId · requested by @c.RequestedByName @Dashboard.Ago(c.RequestedAt).ToLowerInvariant()
+                        </MudText>
+                        <MudText Typo="Typo.body2" Class="my-3" Style="overflow-wrap:anywhere">“@c.Reason”</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-3">Creates “@(v.Fix?.PolicyDisplayName)” in report-only mode</MudText>
+                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                            @if (v.WhyCannotApprove is null)
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => DecideAsync(v, ConfigFixDialogMode.Approve))"
+                                           data-testid="approve-change">Approve</MudButton>
+                            }
+                            else
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="true">Approve</MudButton>
+                            }
+                            @if (c.RequestedByUserId != _me)
+                            {
+                                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => DecideAsync(v, ConfigFixDialogMode.Reject))">Reject</MudButton>
+                            }
+                            @if (v.CanCancel)
+                            {
+                                <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="@(() => CancelAsync(c.Id))">Cancel request</MudButton>
+                            }
+                        </MudStack>
+                        @if (v.WhyCannotApprove is { } why)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2" data-testid="cannot-approve-change">@why</MudText>
+                        }
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+
+    <MudText Typo="Typo.h6" Class="mb-3">History</MudText>
+    <MudPaper Class="sp-card pa-2" Elevation="0" Outlined="true">
+        <MudTable Items="history" T="ConfigurationChangeView" Dense="true" Elevation="0" Breakpoint="Breakpoint.Sm" Hover="true">
+            <HeaderContent>
+                <MudTh>Fix</MudTh>
+                <MudTh>Tenant</MudTh>
+                <MudTh>Requested</MudTh>
+                <MudTh>Decided</MudTh>
+                <MudTh>Result</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Fix">
+                    <MudText Typo="Typo.body2" Style="font-weight:600">@(context.Fix?.Title ?? context.Request.FixId)</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Style="overflow-wrap:anywhere">“@context.Request.Reason”</MudText>
+                </MudTd>
+                <MudTd DataLabel="Tenant">@context.TenantName</MudTd>
+                <MudTd DataLabel="Requested">
+                    <MudText Typo="Typo.body2">@context.Request.RequestedByName</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@Dashboard.Ago(context.Request.RequestedAt)</MudText>
+                </MudTd>
+                <MudTd DataLabel="Decided">@(context.Request.DecidedByName ?? context.Request.CancelledBy ?? "—")</MudTd>
+                <MudTd DataLabel="Result">
+                    <DeviceActionStatusChip Status="context.Request.Status" SentLabel="Created in Entra" />
+                    @if (context.Request.PolicyId is { } policy)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">Policy @policy (report-only)</MudText>
+                    }
+                    @if (context.Request.Error is { } err)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block" Style="overflow-wrap:anywhere;max-width:360px">@err</MudText>
+                    }
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">No configuration changes yet.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<ConfigurationChangeView>? _items;
+    private Guid? _me;
+    private PeriodicTimer? _timer;
+    private readonly CancellationTokenSource _cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _me = (await Current.GetAsync()).UserId;
+        _items = await Changes.GetQueueAsync();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender) _ = PollAsync();
+    }
+
+    private async Task PollAsync()
+    {
+        _timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try
+        {
+            while (await _timer.WaitForNextTickAsync(_cts.Token))
+            {
+                _items = await Changes.GetQueueAsync();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task DecideAsync(ConfigurationChangeView v, ConfigFixDialogMode mode)
+    {
+        if (v.Fix is null) return;
+        var dialog = await Dialogs.ShowAsync<ConfigFixDialog>(null, new DialogParameters<ConfigFixDialog>
+        {
+            { x => x.Fix, v.Fix }, { x => x.TenantName, v.TenantName }, { x => x.Request, v.Request }, { x => x.Mode, mode }
+        }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: string note }) return;
+        var outcome = mode == ConfigFixDialogMode.Approve ? await Changes.ApproveAsync(v.Request.Id, note) : await Changes.RejectAsync(v.Request.Id, note);
+        Snackbar.Add(outcome.Message, outcome.Ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
+        _items = await Changes.GetQueueAsync();
+    }
+
+    private async Task CancelAsync(Guid id)
+    {
+        var outcome = await Changes.CancelAsync(id);
+        Snackbar.Add(outcome.Message, outcome.Ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
+        _items = await Changes.GetQueueAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _cts.CancelAsync();
+        _timer?.Dispose();
+        _cts.Dispose();
+    }
+}

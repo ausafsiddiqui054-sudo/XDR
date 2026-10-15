@@ -127,6 +127,104 @@ namespace SecurePulse.Data.Migrations
                     b.ToTable("audit_export_checkpoints", (string)null);
                 });
 
+            modelBuilder.Entity("SecurePulse.Data.Entities.ConfigurationChangeEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CancelledBy")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("CheckId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DecidedByName")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("DecidedByRole")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid?>("DecidedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FixId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("PlaybookId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PolicyId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset>("RequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RequestedByName")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("RequestedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("SentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "DecidedAt");
+
+                    b.HasIndex("TenantId", "FixId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_configuration_changes_open")
+                        .HasFilter("\"Status\" IN ('PendingApproval', 'Approved', 'Sending')");
+
+                    b.HasIndex("PlaybookId", "TenantId", "RequestedAt");
+
+                    b.ToTable("configuration_changes", (string)null);
+                });
+
             modelBuilder.Entity("SecurePulse.Data.Entities.DataProtectionKeyEntity", b =>
                 {
                     b.Property<int>("Id")
@@ -355,6 +453,47 @@ namespace SecurePulse.Data.Migrations
                     b.HasIndex("TenantId", "Source");
 
                     b.ToTable("findings", (string)null);
+                });
+
+            modelBuilder.Entity("SecurePulse.Data.Entities.FindingPlaybookEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("FixId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("LastRunAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedByName")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("finding_playbooks", (string)null);
                 });
 
             modelBuilder.Entity("SecurePulse.Data.Entities.ManagedDeviceEntity", b =>
@@ -708,6 +847,10 @@ namespace SecurePulse.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ConfigurationCredentialReference")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
                     b.Property<string>("ConsentState")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -764,6 +907,15 @@ namespace SecurePulse.Data.Migrations
                     b.ToTable("tenants", (string)null);
                 });
 
+            modelBuilder.Entity("SecurePulse.Data.Entities.ConfigurationChangeEntity", b =>
+                {
+                    b.HasOne("SecurePulse.Data.Entities.TenantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("SecurePulse.Data.Entities.DeviceActionEntity", b =>
                 {
                     b.HasOne("SecurePulse.Data.Entities.TenantEntity", null)
@@ -789,6 +941,14 @@ namespace SecurePulse.Data.Migrations
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("SecurePulse.Data.Entities.FindingPlaybookEntity", b =>
+                {
+                    b.HasOne("SecurePulse.Data.Entities.TenantEntity", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("SecurePulse.Data.Entities.ManagedDeviceEntity", b =>

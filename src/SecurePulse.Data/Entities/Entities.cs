@@ -22,6 +22,9 @@ public sealed class TenantEntity
     /// <summary>Remediation app certificate thumbprint. A reference only, never a secret.</summary>
     public string? RemediationCredentialReference { get; set; }
 
+    /// <summary>Configuration app certificate thumbprint. A reference only, never a secret.</summary>
+    public string? ConfigurationCredentialReference { get; set; }
+
     /// <summary>Wazuh agent group of this tenant's agents. Unique: no two tenants read the same agents.</summary>
     public string? WazuhAgentGroup { get; set; }
 
@@ -239,6 +242,45 @@ public sealed class DeviceActionEntity
     public string? Error { get; set; }
     public Guid? PlaybookId { get; set; }
     public bool AutoApproved { get; set; }
+}
+
+public sealed class ConfigurationChangeEntity
+{
+    public Guid Id { get; set; }
+    public Guid TenantId { get; set; }
+    public string FixId { get; set; } = "";
+    public string? CheckId { get; set; }
+    public string Reason { get; set; } = "";
+    public DeviceActionStatus Status { get; set; }
+    public DateTimeOffset RequestedAt { get; set; }
+    public Guid RequestedByUserId { get; set; }
+    public string RequestedByName { get; set; } = "";
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? DecidedAt { get; set; }
+    public Guid? DecidedByUserId { get; set; }
+    public string? DecidedByName { get; set; }
+    public PortalRole? DecidedByRole { get; set; }
+    public string? DecisionNote { get; set; }
+    public DateTimeOffset? CancelledAt { get; set; }
+    public string? CancelledBy { get; set; }
+    public DateTimeOffset? SentAt { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+    public string? Error { get; set; }
+    public string? PolicyId { get; set; }
+    public Guid? PlaybookId { get; set; }
+}
+
+public sealed class FindingPlaybookEntity
+{
+    public Guid Id { get; set; }
+    public string FixId { get; set; } = "";
+    public bool Enabled { get; set; }
+    public Guid? TenantId { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public Guid UpdatedByUserId { get; set; }
+    public string UpdatedByName { get; set; } = "";
+    public DateTimeOffset UpdatedAt { get; set; }
+    public DateTimeOffset? LastRunAt { get; set; }
 }
 
 public sealed class PlaybookEntity

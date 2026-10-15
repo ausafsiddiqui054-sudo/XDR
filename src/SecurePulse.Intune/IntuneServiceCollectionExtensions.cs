@@ -25,4 +25,14 @@ public static class IntuneServiceCollectionExtensions
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
         return services;
     }
+
+    /// <summary>The configuration app (report-only Conditional Access fixes): its own credential, no retries, no redirects.</summary>
+    public static IServiceCollection AddIntuneConfigurationChanges(this IServiceCollection services, ConfigurationOptions options)
+    {
+        services.AddSingleton(options);
+        services.AddSingleton<IConfigurationTokenProvider, CertificateConfigurationTokenProvider>();
+        services.AddHttpClient<IConditionalAccessWriter, GraphConditionalAccessWriter>(c => c.Timeout = Timeout.InfiniteTimeSpan)
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        return services;
+    }
 }

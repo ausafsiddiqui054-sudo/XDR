@@ -98,6 +98,17 @@ builder.Services.AddOptions<OnboardingVerificationOptions>()
     .Validate(o => o.PollInterval >= TimeSpan.FromSeconds(5), "Onboarding:PollInterval must be at least 5 seconds.")
     .ValidateOnStart();
 builder.Services.AddSingleton(TimeProvider.System);
+// Report-only Conditional Access fixes go through a separate configuration app with its own certificate and consent.
+var configurationApp = builder.Configuration.GetSection("Configuration").Get<ConfigurationOptions>() ?? new ConfigurationOptions();
+builder.Services.AddIntuneConfigurationChanges(configurationApp);
+builder.Services.AddOptions<ConfigurationChangeOptions>()
+    .Bind(builder.Configuration.GetSection("ConfigurationChanges"))
+    .Validate(o => o.PollInterval >= TimeSpan.FromSeconds(5), "ConfigurationChanges:PollInterval must be at least 5 seconds.")
+    .Validate(o => o.StuckSendingAfter > configurationApp.SendTimeout, "ConfigurationChanges:StuckSendingAfter must be longer than Configuration:SendTimeout.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<ConfigurationChangeService>();
+builder.Services.AddHostedService<ConfigurationChangeWorker>();
+if (playbookOptions.Enabled) builder.Services.AddSingleton<FindingPlaybookRunner>();
 builder.Services.AddSingleton<OnboardingVerificationService>();
 builder.Services.AddHostedService<OnboardingVerificationWorker>();
 

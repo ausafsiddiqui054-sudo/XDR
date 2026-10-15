@@ -18,6 +18,8 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
     public DbSet<ScanRunEntity> ScanRuns => Set<ScanRunEntity>();
     public DbSet<DeviceActionEntity> DeviceActions => Set<DeviceActionEntity>();
     public DbSet<PlaybookEntity> Playbooks => Set<PlaybookEntity>();
+    public DbSet<ConfigurationChangeEntity> ConfigurationChanges => Set<ConfigurationChangeEntity>();
+    public DbSet<FindingPlaybookEntity> FindingPlaybooks => Set<FindingPlaybookEntity>();
     public DbSet<DataProtectionKeyEntity> DataProtectionKeys => Set<DataProtectionKeyEntity>();
     public DbSet<AuditExportCheckpointEntity> AuditExportCheckpoints => Set<AuditExportCheckpointEntity>();
 
@@ -40,6 +42,7 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
             e.Property(x => x.Industry).HasMaxLength(128);
             e.Property(x => x.CredentialReference).HasMaxLength(256);
             e.Property(x => x.RemediationCredentialReference).HasMaxLength(256);
+            e.Property(x => x.ConfigurationCredentialReference).HasMaxLength(256);
             e.Property(x => x.WazuhAgentGroup).HasMaxLength(128);
             e.HasIndex(x => x.WazuhAgentGroup).IsUnique();
         });
@@ -180,6 +183,37 @@ public sealed class SecurePulseDbContext(DbContextOptions<SecurePulseDbContext> 
             e.HasIndex(x => new { x.TenantId, x.RequestedAt });
             // Playbook cooldowns look up a playbook's recent proposals. No foreign key: history outlives a deleted playbook.
             e.HasIndex(x => new { x.PlaybookId, x.TenantId, x.RequestedAt });
+            e.HasOne<TenantEntity>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<ConfigurationChangeEntity>(e =>
+        {
+            e.ToTable("configuration_changes");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.FixId).HasMaxLength(64);
+            e.Property(x => x.CheckId).HasMaxLength(128);
+            e.Property(x => x.Reason).HasMaxLength(DeviceActionPolicy.MaxReasonLength);
+            e.Property(x => x.RequestedByName).HasMaxLength(512);
+            e.Property(x => x.DecidedByName).HasMaxLength(512);
+            e.Property(x => x.DecisionNote).HasMaxLength(DeviceActionPolicy.MaxNoteLength);
+            e.Property(x => x.CancelledBy).HasMaxLength(512);
+            e.Property(x => x.Error).HasMaxLength(2000);
+            e.Property(x => x.PolicyId).HasMaxLength(64);
+            // At most one open change per tenant and fix.
+            e.HasIndex(x => new { x.TenantId, x.FixId }).IsUnique()
+                .HasFilter("\"Status\" IN ('PendingApproval', 'Approved', 'Sending')")
+                .HasDatabaseName("IX_configuration_changes_open");
+            e.HasIndex(x => new { x.Status, x.DecidedAt });
+            e.HasIndex(x => new { x.PlaybookId, x.TenantId, x.RequestedAt });
+            e.HasOne<TenantEntity>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<FindingPlaybookEntity>(e =>
+        {
+            e.ToTable("finding_playbooks");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.FixId).HasMaxLength(64);
+            e.Property(x => x.UpdatedByName).HasMaxLength(512);
             e.HasOne<TenantEntity>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
         });
 

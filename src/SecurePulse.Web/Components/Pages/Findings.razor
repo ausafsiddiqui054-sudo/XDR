@@ -1,5 +1,8 @@
 @page "/findings"
 @inject PostureService Posture
+@inject ConfigurationChangeRequestService Changes
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
 
 <PageTitle>Findings · SecurePulse</PageTitle>
 
@@ -57,7 +60,7 @@ else
         <MudItem xs="12" lg="@(_selected is null ? 12 : 7)">
             <MudPaper Class="sp-card pa-2" Elevation="0" Outlined="true">
                 <MudTable Items="Filtered" T="Row" Hover="true" Elevation="0" Breakpoint="Breakpoint.Sm" Dense="true"
-                          RowClass="sp-clickable-row" OnRowClick="@(e => _selected = e.Item)">
+                          RowClass="sp-clickable-row" OnRowClick="@(e => SelectAsync(e.Item!))">
                     <HeaderContent>
                         <MudTh>Check</MudTh>
                         <MudTh>Tenant</MudTh>
@@ -90,7 +93,7 @@ else
                     <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start">
                         <MudText Typo="Typo.h6">@sel.Finding.Title</MudText>
                         <MudIconButton Icon="@Icons.Material.Rounded.Close" Size="Size.Small" aria-label="Close details"
-                                       OnClick="@(() => _selected = null)" />
+                                       OnClick="@(() => { _selected = null; _fix = null; })" />
                     </MudStack>
                     <MudStack Row="true" Spacing="1" Class="my-3" Wrap="Wrap.Wrap">
                         <SeverityChip Severity="sel.Finding.Severity" />
@@ -124,6 +127,18 @@ else
                         </MudLink>
                     }
 
+                    @if (_fix is { } fix)
+                    {
+                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Start" Class="sp-note mb-4" data-testid="config-fix">
+                            <MudIcon Icon="@Icons.Material.Rounded.Policy" Size="Size.Small" Color="Color.Primary" />
+                            <div>
+                                <MudText Typo="Typo.body2"><b>@fix.Title</b> is available as a reviewed fix (report-only Conditional Access policy).</MudText>
+                                <MudButton Variant="Variant.Text" Color="Color.Primary" Class="px-0 mt-1" OnClick="@(() => ProposeFixAsync(sel, fix))"
+                                           data-testid="propose-fix">Propose this fix</MudButton>
+                            </div>
+                        </MudStack>
+                    }
+
                     <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
                         Source: @sel.Finding.Source@(sel.Finding.SourceCheckId is { } id ? $" ({id})" : "")
                     </MudText>
@@ -145,7 +160,26 @@ else
     private string? _search;
     private Row? _selected;
 
+    private ConfigurationFix? _fix;
+
     protected override async Task OnInitializedAsync() => _portfolio = await Posture.GetPortfolioAsync();
+
+    private async Task SelectAsync(Row row)
+    {
+        _selected = row;
+        _fix = await Changes.FixForAsync(row.Finding);
+    }
+
+    private async Task ProposeFixAsync(Row row, ConfigurationFix fix)
+    {
+        var dialog = await Dialogs.ShowAsync<ConfigFixDialog>(null, new DialogParameters<ConfigFixDialog>
+        {
+            { x => x.Fix, fix }, { x => x.TenantName, row.Tenant.DisplayName }, { x => x.Mode, ConfigFixDialogMode.Request }
+        }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: string reason }) return;
+        var outcome = await Changes.RequestAsync(row.Tenant.Id, row.Finding.SourceCheckId!, reason);
+        Snackbar.Add(outcome.Message, outcome.Ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
+    }
 
     private IEnumerable<Row> Filtered =>
         (_portfolio?.Scanned ?? [])

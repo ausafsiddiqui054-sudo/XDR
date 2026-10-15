@@ -55,6 +55,23 @@ public sealed partial class DeviceActionHttpTests(PortalAuthEndpointTests.Portal
     }
 
     [Fact]
+    public async Task OperatorsSeeConfigurationChanges_ViewersDont()
+    {
+        var html = await (await SignInAsync("msp-admin")).GetStringAsync("/configuration/changes");
+        Assert.Contains("Configuration changes", html);
+        Assert.Contains("report-only Conditional Access policies", html);
+
+        var tenant = (await factory.Services.GetRequiredService<ITenantRepository>().GetAllAsync()).First();
+        var response = await (await SignInAsync($"viewer:{tenant.Id}")).GetAsync("/configuration/changes");
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains("/access-pending", response.Headers.Location!.ToString());
+
+        var playbooks = await (await SignInAsync("owner")).GetStringAsync("/devices/playbooks");
+        Assert.Contains("When a check fails", playbooks);
+        Assert.Contains("Block legacy authentication", playbooks);
+    }
+
+    [Fact]
     public async Task ClientViewersCantOpenPlaybooks()
     {
         var tenant = (await factory.Services.GetRequiredService<ITenantRepository>().GetAllAsync()).First(t => t.CanRemediate);

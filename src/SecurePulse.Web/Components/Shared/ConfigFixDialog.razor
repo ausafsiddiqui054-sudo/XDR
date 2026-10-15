@@ -1,0 +1,59 @@
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@(Mode == ConfigFixDialogMode.Reject ? Icons.Material.Rounded.Block : Icons.Material.Rounded.Policy)"
+                     Color="@(Mode == ConfigFixDialogMode.Reject ? Color.Error : Color.Primary)" />
+            <MudText Typo="Typo.h6">
+                @(Mode switch { ConfigFixDialogMode.Request => "Request", ConfigFixDialogMode.Approve => "Approve", _ => "Reject" }): @Fix.Title
+            </MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        <dl class="sp-props mb-4">
+            <dt>Tenant</dt><dd>@TenantName</dd>
+            <dt>Policy</dt><dd>@Fix.PolicyDisplayName</dd>
+            <dt>Fixes</dt><dd>@string.Join(", ", Fix.CheckIds)</dd>
+            @if (Request is { } r)
+            {
+                <dt>Requested by</dt><dd>@r.RequestedByName</dd>
+                <dt>Reason</dt><dd>@r.Reason</dd>
+            }
+        </dl>
+        <MudText Typo="Typo.body2" Class="mb-3">@Fix.Description</MudText>
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Start" Class="sp-note mb-4">
+            <MudIcon Icon="@Icons.Material.Rounded.Visibility" Size="Size.Small" Color="Color.Primary" />
+            <MudText Typo="Typo.caption">
+                Report-only: the policy changes no sign-in. Entra logs what it would have done, so the tenant's admin can check the impact,
+                exclude break-glass accounts, and switch it on in Entra Conditional Access. SecurePulse never switches it on.
+            </MudText>
+        </MudStack>
+        <MudTextField T="string" @bind-Value="_text" Variant="Variant.Outlined" Lines="2" Immediate="true"
+                      Label="@(Mode switch { ConfigFixDialogMode.Request => "Reason", ConfigFixDialogMode.Approve => "Note (optional)", _ => "Why are you rejecting it?" })"
+                      MaxLength="DeviceActionPolicy.MaxReasonLength" Counter="DeviceActionPolicy.MaxReasonLength"
+                      HelperText="@(Mode == ConfigFixDialogMode.Request ? "The approving Owner sees it; kept in the audit log" : "Kept with the request and in the audit log")"
+                      UserAttributes="@(new() { ["data-testid"] = "config-fix-text" })" />
+        @if (Mode == ConfigFixDialogMode.Request)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">An Owner other than you has to approve it before anything changes.</MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="@(Mode == ConfigFixDialogMode.Reject ? Color.Error : Color.Primary)" Disabled="!CanSubmit"
+                   OnClick="@(() => MudDialog.Close(DialogResult.Ok(_text?.Trim() ?? "")))" data-testid="config-fix-submit">
+            @(Mode switch { ConfigFixDialogMode.Request => "Request approval", ConfigFixDialogMode.Approve => "Approve", _ => "Reject" })
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter, EditorRequired] public ConfigurationFix Fix { get; set; } = default!;
+    [Parameter, EditorRequired] public string TenantName { get; set; } = "";
+    [Parameter] public ConfigurationChangeRequest? Request { get; set; }
+    [Parameter] public ConfigFixDialogMode Mode { get; set; }
+
+    private string? _text;
+
+    private bool CanSubmit => Mode == ConfigFixDialogMode.Approve || !string.IsNullOrWhiteSpace(_text);
+}

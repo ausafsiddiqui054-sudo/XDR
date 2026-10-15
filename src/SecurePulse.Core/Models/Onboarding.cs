@@ -7,7 +7,10 @@ public enum OnboardingKind
     Assessment,
 
     /// <summary>Write consent to the separate remediation app, for an already connected tenant.</summary>
-    Remediation
+    Remediation,
+
+    /// <summary>Consent to the separate configuration app (Conditional Access), for an already connected tenant.</summary>
+    Configuration
 }
 
 public enum OnboardingStatus

@@ -1,0 +1,18 @@
+@inject ConfigurationChangeRequestService Changes
+
+<MudNavLink Href="configuration/changes" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Rounded.Policy">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+        <span>Configuration changes</span>
+        @if (_waiting > 0)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled" Class="ma-0"
+                     title="Waiting for your approval" data-testid="config-approvals-badge">@_waiting</MudChip>
+        }
+    </MudStack>
+</MudNavLink>
+
+@code {
+    private int _waiting;
+
+    protected override async Task OnInitializedAsync() => _waiting = await Changes.CountAwaitingMyApprovalAsync();
+}

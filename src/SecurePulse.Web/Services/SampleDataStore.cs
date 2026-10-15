@@ -10,10 +10,12 @@ namespace SecurePulse.Web.Services;
 /// repositories once the Worker starts writing real scan results.
 /// </summary>
 public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDeviceRepository, IOnboardingRepository, IPortalUserRepository, IAuditLog,
-    IScanRunRepository, IDeviceActionRepository, IAuditExportStore, IPlaybookRepository
+    IScanRunRepository, IDeviceActionRepository, IAuditExportStore, IPlaybookRepository, IConfigurationChangeRepository, IFindingPlaybookRepository
 {
     private readonly List<DeviceActionRequest> _actions = [];
     private readonly List<RemediationPlaybook> _playbooks = [];
+    private readonly List<ConfigurationChangeRequest> _changes = [];
+    private readonly List<FindingPlaybook> _findingPlaybooks = [];
     private readonly List<ScanRun> _scanRuns = [];
     private readonly List<AuditEvent> _audit = [];
     private readonly List<PortalUser> _users = [];
@@ -543,6 +545,46 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
         }
     }
 
+    public Task<Tenant?> CompleteConfigurationAsync(Guid id, string credentialReference, IReadOnlyList<string> grantedPermissions,
+        DateTimeOffset at, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            if (!_onboarding.TryGetValue(id, out var e) || e.Request.Status != OnboardingStatus.Verifying || e.Request.Kind != OnboardingKind.Configuration)
+                throw new InvalidOperationException($"Onboarding request {id} isn't a configuration request being verified.");
+            var index = _tenants.FindIndex(t => t.EntraTenantId == e.Request.EntraTenantId
+                && t.ConsentState is TenantConsentState.ReadOnlyGranted or TenantConsentState.RemediationGranted);
+            if (index < 0)
+            {
+                _onboarding[id] = (e.Request with
+                {
+                    Status = OnboardingStatus.Failed, ProtectedState = null,
+                    LastError = "The tenant isn't connected for assessment any more, so configuration access can't be added."
+                }, e.StateHash);
+                return Task.FromResult<Tenant?>(null);
+            }
+            var stored = _tenants[index] with { ConfigurationCredentialReference = credentialReference };
+            _tenants[index] = stored;
+            _onboarding[id] = (e.Request with
+            {
+                Status = OnboardingStatus.Completed, CompletedAt = at, TenantId = stored.Id, LastError = null,
+                GrantedPermissions = grantedPermissions, ProtectedState = null
+            }, e.StateHash);
+            return Task.FromResult<Tenant?>(stored);
+        }
+    }
+
+    public Task<bool> DisableConfigurationAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        lock (_gate)
+        {
+            var index = _tenants.FindIndex(t => t.Id == tenantId && t.ConfigurationCredentialReference != null);
+            if (index < 0) return Task.FromResult(false);
+            _tenants[index] = _tenants[index] with { ConfigurationCredentialReference = null };
+            return Task.FromResult(true);
+        }
+    }
+
     public Task<bool> DisableRemediationAsync(Guid tenantId, CancellationToken ct = default)
     {
         lock (_gate)
@@ -969,5 +1011,163 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
             }
             return Task.FromResult<IReadOnlyList<DeviceActionRequest>>(changed);
         }
+    }
+
+    // --- Configuration changes and finding playbooks --------------------------------------------------
+
+    Task<(ConfigurationChangeRequest Request, bool Created)> IConfigurationChangeRepository.AddAsync(ConfigurationChangeRequest request, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            var open = _changes.FirstOrDefault(c => c.TenantId == request.TenantId && c.FixId == request.FixId && c.IsOpen);
+            if (open is not null) return Task.FromResult((open, false));
+            _changes.Add(request);
+            return Task.FromResult((request, true));
+        }
+    }
+
+    Task<ConfigurationChangeRequest?> IConfigurationChangeRepository.GetAsync(Guid id, CancellationToken ct)
+    {
+        lock (_gate) return Task.FromResult(_changes.FirstOrDefault(c => c.Id == id));
+    }
+
+    Task<IReadOnlyList<ConfigurationChangeRequest>> IConfigurationChangeRepository.QueryAsync(ConfigurationChangeQuery query, CancellationToken ct)
+    {
+        lock (_gate)
+            return Task.FromResult<IReadOnlyList<ConfigurationChangeRequest>>(_changes
+                .Where(c => (query.TenantId is null || c.TenantId == query.TenantId) && (!query.OpenOnly || c.IsOpen))
+                .OrderByDescending(c => c.RequestedAt).Take(query.Limit).ToList());
+    }
+
+    Task<ConfigurationChangeRequest?> IConfigurationChangeRepository.DecideAsync(Guid id, bool approve, Guid deciderId, string deciderName,
+        PortalRole deciderRole, string? note, DateTimeOffset at, CancellationToken ct) =>
+        ChangeTransition(id, c => c.Status == DeviceActionStatus.PendingApproval && c.ExpiresAt > at, c => c with
+        {
+            Status = approve ? DeviceActionStatus.Approved : DeviceActionStatus.Rejected,
+            DecidedAt = at, DecidedByUserId = deciderId, DecidedByName = deciderName, DecidedByRole = deciderRole, DecisionNote = note
+        });
+
+    Task<ConfigurationChangeRequest?> IConfigurationChangeRepository.CancelAsync(Guid id, string cancelledBy, string? reason, DateTimeOffset at,
+        CancellationToken ct) =>
+        ChangeTransition(id, c => c.Status is DeviceActionStatus.PendingApproval or DeviceActionStatus.Approved,
+            c => c with { Status = DeviceActionStatus.Cancelled, CancelledAt = at, CancelledBy = cancelledBy, Error = reason });
+
+    Task<IReadOnlyList<ConfigurationChangeRequest>> IConfigurationChangeRepository.CancelOpenForTenantAsync(Guid tenantId, string cancelledBy,
+        string reason, DateTimeOffset at, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            var changed = new List<ConfigurationChangeRequest>();
+            for (var i = 0; i < _changes.Count; i++)
+            {
+                if (_changes[i].TenantId != tenantId || _changes[i].Status is not (DeviceActionStatus.PendingApproval or DeviceActionStatus.Approved)) continue;
+                _changes[i] = _changes[i] with { Status = DeviceActionStatus.Cancelled, CancelledAt = at, CancelledBy = cancelledBy, Error = reason };
+                changed.Add(_changes[i]);
+            }
+            return Task.FromResult<IReadOnlyList<ConfigurationChangeRequest>>(changed);
+        }
+    }
+
+    Task<ConfigurationChangeRequest?> IConfigurationChangeRepository.ClaimNextApprovedAsync(DateTimeOffset at, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            var next = _changes.Where(c => c.Status == DeviceActionStatus.Approved).OrderBy(c => c.DecidedAt).FirstOrDefault();
+            if (next is null) return Task.FromResult<ConfigurationChangeRequest?>(null);
+            var claimed = next with { Status = DeviceActionStatus.Sending, SentAt = at };
+            _changes[_changes.IndexOf(next)] = claimed;
+            return Task.FromResult<ConfigurationChangeRequest?>(claimed);
+        }
+    }
+
+    async Task IConfigurationChangeRepository.CompleteAsync(Guid id, bool succeeded, string? error, string? policyId, DateTimeOffset at,
+        CancellationToken ct) =>
+        await ChangeTransition(id, c => c.Status == DeviceActionStatus.Sending, c => c with
+        {
+            Status = succeeded ? DeviceActionStatus.Sent : DeviceActionStatus.Failed, CompletedAt = at, Error = error, PolicyId = policyId
+        });
+
+    Task<IReadOnlyList<ConfigurationChangeRequest>> IConfigurationChangeRepository.ExpireAsync(DateTimeOffset at, TimeSpan sendWindow,
+        DateTimeOffset sendingBefore, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            var changed = new List<ConfigurationChangeRequest>();
+            for (var i = 0; i < _changes.Count; i++)
+            {
+                var c = _changes[i];
+                ConfigurationChangeRequest? next =
+                    c.Status == DeviceActionStatus.PendingApproval && c.ExpiresAt <= at
+                        ? c with { Status = DeviceActionStatus.Expired, CompletedAt = at, Error = SecurePulse.Data.EfDeviceActionRepository.ExpiredPendingMessage }
+                    : c.Status == DeviceActionStatus.Approved && c.DecidedAt < at - sendWindow
+                        ? c with { Status = DeviceActionStatus.Expired, CompletedAt = at, Error = SecurePulse.Data.EfDeviceActionRepository.ExpiredApprovedMessage }
+                    : c.Status == DeviceActionStatus.Sending && c.SentAt < sendingBefore
+                        ? c with { Status = DeviceActionStatus.Failed, CompletedAt = at, Error = SecurePulse.Data.EfConfigurationChangeRepository.StuckSendingMessage }
+                    : null;
+                if (next is null) continue;
+                _changes[i] = next;
+                changed.Add(next);
+            }
+            return Task.FromResult<IReadOnlyList<ConfigurationChangeRequest>>(changed);
+        }
+    }
+
+    Task<bool> IConfigurationChangeRepository.HasPlaybookProposalSinceAsync(Guid playbookId, Guid tenantId, DateTimeOffset since, CancellationToken ct)
+    {
+        lock (_gate) return Task.FromResult(_changes.Any(c => c.PlaybookId == playbookId && c.TenantId == tenantId && c.RequestedAt >= since));
+    }
+
+    private Task<ConfigurationChangeRequest?> ChangeTransition(Guid id, Func<ConfigurationChangeRequest, bool> when,
+        Func<ConfigurationChangeRequest, ConfigurationChangeRequest> change)
+    {
+        lock (_gate)
+        {
+            var index = _changes.FindIndex(c => c.Id == id && when(c));
+            if (index < 0) return Task.FromResult<ConfigurationChangeRequest?>(null);
+            _changes[index] = change(_changes[index]);
+            return Task.FromResult<ConfigurationChangeRequest?>(_changes[index]);
+        }
+    }
+
+    Task<IReadOnlyList<FindingPlaybook>> IFindingPlaybookRepository.GetAllAsync(CancellationToken ct)
+    {
+        lock (_gate) return Task.FromResult<IReadOnlyList<FindingPlaybook>>(_findingPlaybooks.OrderBy(p => p.FixId, StringComparer.Ordinal).ToList());
+    }
+
+    Task<FindingPlaybook?> IFindingPlaybookRepository.GetAsync(Guid id, CancellationToken ct)
+    {
+        lock (_gate) return Task.FromResult(_findingPlaybooks.FirstOrDefault(p => p.Id == id));
+    }
+
+    Task IFindingPlaybookRepository.AddAsync(FindingPlaybook playbook, CancellationToken ct)
+    {
+        lock (_gate) _findingPlaybooks.Add(playbook);
+        return Task.CompletedTask;
+    }
+
+    Task<bool> IFindingPlaybookRepository.UpdateAsync(FindingPlaybook playbook, DateTimeOffset expectedUpdatedAt, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            var index = _findingPlaybooks.FindIndex(p => p.Id == playbook.Id && p.UpdatedAt == expectedUpdatedAt);
+            if (index < 0) return Task.FromResult(false);
+            _findingPlaybooks[index] = playbook with { CreatedAt = _findingPlaybooks[index].CreatedAt, LastRunAt = _findingPlaybooks[index].LastRunAt };
+            return Task.FromResult(true);
+        }
+    }
+
+    Task<bool> IFindingPlaybookRepository.DeleteAsync(Guid id, CancellationToken ct)
+    {
+        lock (_gate) return Task.FromResult(_findingPlaybooks.RemoveAll(p => p.Id == id) > 0);
+    }
+
+    Task IFindingPlaybookRepository.RecordRunAsync(Guid id, DateTimeOffset at, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            var index = _findingPlaybooks.FindIndex(p => p.Id == id);
+            if (index >= 0) _findingPlaybooks[index] = _findingPlaybooks[index] with { LastRunAt = at };
+        }
+        return Task.CompletedTask;
     }
 }

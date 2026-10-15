@@ -11,6 +11,12 @@ public sealed class OnboardingOptions
     /// </summary>
     public string RemediationAppClientId { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Client ID of the separate configuration app, which holds only the Conditional Access permissions
+    /// report-only fixes need. Empty: configuration fixes can't be turned on.
+    /// </summary>
+    public string ConfigurationAppClientId { get; set; } = string.Empty;
+
     /// <summary>Entra authority. Use https://login.microsoftonline.us for US Government clouds.</summary>
     public string AuthorityHost { get; set; } = "https://login.microsoftonline.com";
 

@@ -12,6 +12,19 @@ public class OnboardingVerificationServiceTests
 {
     private const string Thumbprint = "0123456789ABCDEF0123456789ABCDEF01234567";
     private const string RemediationThumbprint = "FEDCBA9876543210FEDCBA9876543210FEDCBA98";
+    private const string ConfigurationThumbprint = "ABCDEF0123456789ABCDEF0123456789ABCDEF01";
+
+    public sealed class ConfigurationTokens(Func<Guid, string> issue) : IConfigurationTokenProvider
+    {
+        public List<(Guid TenantId, string Thumbprint)> Requests { get; } = [];
+
+        public Task<string> GetTokenAsync(Guid entraTenantId, string thumbprint, CancellationToken cancellationToken = default)
+        {
+            Requests.Add((entraTenantId, thumbprint));
+            return Task.FromResult(issue(entraTenantId));
+        }
+    }
+
 
     public sealed class RemediationTokens(Func<Guid, string> issue) : IRemediationTokenProvider
     {
@@ -63,7 +76,10 @@ public class OnboardingVerificationServiceTests
         public RemediationTokens RemediationTokens { get; init; } = new(_ => throw new InvalidOperationException("No remediation token expected."));
         public RemediationOptions Remediation { get; } = new() { AppClientId = Guid.NewGuid().ToString(), CertificateThumbprint = RemediationThumbprint };
 
-        public OnboardingVerificationService Service => new(Store, Tokens, RemediationTokens, Remediation,
+        public ConfigurationTokens ConfigurationTokens { get; init; } = new(_ => throw new InvalidOperationException("No configuration token expected."));
+        public ConfigurationOptions Configuration { get; } = new() { AppClientId = Guid.NewGuid().ToString(), CertificateThumbprint = ConfigurationThumbprint };
+
+        public OnboardingVerificationService Service => new(Store, Tokens, RemediationTokens, Remediation, ConfigurationTokens, Configuration,
             new DeviceSyncService(Store, Store, Source, Microsoft.Extensions.Options.Options.Create(new DeviceSyncOptions()), NullLogger<DeviceSyncService>.Instance),
             Store, Microsoft.Extensions.Options.Options.Create(Options), Time, NullLogger<OnboardingVerificationService>.Instance);
 
@@ -413,5 +429,77 @@ public class OnboardingVerificationServiceTests
 
         Assert.Equal(OnboardingStatus.Failed, (await h.ReloadAsync(request))!.Status);
         Assert.Equal(TenantConsentState.ReadOnlyGranted, (await h.Store.GetAsync(tenant.Id))!.ConsentState);
+    }
+
+    // --- Configuration consent -------------------------------------------------------------
+
+    private static async Task<OnboardingRequest> ConfigurationRequestAsync(Harness h, Guid entraTenantId)
+    {
+        var request = new OnboardingRequest
+        {
+            Id = Guid.NewGuid(), Kind = OnboardingKind.Configuration, DisplayName = "Palm Dental Studio", PrimaryDomain = "palmdental.example",
+            EntraTenantId = entraTenantId, Status = OnboardingStatus.AwaitingConsent, CreatedAt = T0.AddMinutes(-5), ExpiresAt = T0.AddDays(7)
+        };
+        IOnboardingRepository repo = h.Store;
+        await repo.AddAsync(request, Guid.NewGuid().ToString("N"));
+        Assert.True(await repo.MarkConsentReceivedAsync(request.Id, T0));
+        return (await repo.GetAsync(request.Id))!;
+    }
+
+    [Fact]
+    public async Task ConfigurationConsentWithExactlyTheConditionalAccessPermissionsEnablesConfigurationFixes()
+    {
+        var h = new Harness { Tokens = NoAssessmentTokens(), ConfigurationTokens = new ConfigurationTokens(tid => Jwt.With(tid, [.. ConfigurationPermissions.Required])) };
+        var tenant = await ConnectedTenantAsync(h);
+        var request = await ConfigurationRequestAsync(h, tenant.EntraTenantId);
+
+        Assert.True(await h.Service.VerifyAsync(request));
+
+        var updated = (await h.Store.GetAsync(tenant.Id))!;
+        Assert.Equal(ConfigurationThumbprint, updated.ConfigurationCredentialReference);
+        Assert.True(updated.CanConfigure);
+        Assert.Equal(TenantConsentState.ReadOnlyGranted, updated.ConsentState); // independent of remediation
+        Assert.False(updated.CanRemediate);
+        Assert.Equal([(tenant.EntraTenantId, ConfigurationThumbprint)], h.ConfigurationTokens.Requests);
+        Assert.Equal(OnboardingStatus.Completed, (await h.ReloadAsync(request))!.Status);
+        var e = await Audit.AuditAssert.SingleAsync(h.Store, AuditActions.ConfigurationEnabled, AuditOutcome.Success);
+        Assert.Equal("configuration", e.Details["kind"]);
+    }
+
+    [Theory]
+    [InlineData("Policy.ReadWrite.Authorization")]
+    [InlineData("DeviceManagementManagedDevices.PrivilegedOperations.All")]
+    public async Task ConfigurationAppWithAnyExtraPermissionIsRefused(string extra)
+    {
+        var h = new Harness
+        {
+            Tokens = NoAssessmentTokens(),
+            ConfigurationTokens = new ConfigurationTokens(tid => Jwt.With(tid, [.. ConfigurationPermissions.Required, extra]))
+        };
+        var tenant = await ConnectedTenantAsync(h);
+        var request = await ConfigurationRequestAsync(h, tenant.EntraTenantId);
+
+        Assert.False(await h.Service.VerifyAsync(request));
+
+        var failed = (await h.ReloadAsync(request))!;
+        Assert.Equal(OnboardingStatus.Failed, failed.Status);
+        Assert.Contains(extra, failed.LastError);
+        Assert.Null((await h.Store.GetAsync(tenant.Id))!.ConfigurationCredentialReference);
+        await Audit.AuditAssert.SingleAsync(h.Store, AuditActions.VerificationFailed, AuditOutcome.Denied);
+    }
+
+    [Fact]
+    public async Task ConfigurationAppMissingAPermissionKeepsWaiting()
+    {
+        var h = new Harness { Tokens = NoAssessmentTokens(), ConfigurationTokens = new ConfigurationTokens(tid => Jwt.With(tid, [ConfigurationPermissions.PolicyRead])) };
+        var tenant = await ConnectedTenantAsync(h);
+        var request = await ConfigurationRequestAsync(h, tenant.EntraTenantId);
+
+        Assert.False(await h.Service.VerifyAsync(request));
+
+        var pending = (await h.ReloadAsync(request))!;
+        Assert.Equal(OnboardingStatus.Verifying, pending.Status);
+        Assert.Contains(ConfigurationPermissions.ConditionalAccessWrite, pending.LastError);
+        Assert.False((await h.Store.GetAsync(tenant.Id))!.CanConfigure);
     }
 }
