@@ -1,10 +1,21 @@
 @page "/findings"
 @inject PostureService Posture
+@inject ConfigurationChangeRequestService Changes
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
 
 <PageTitle>Findings · SecurePulse</PageTitle>
 
-<MudText Typo="Typo.h4">Findings</MudText>
-<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">Every check from every engine, normalized into one list</MudText>
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
+    <div>
+        <MudText Typo="Typo.h4">Findings</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Every check from every engine, normalized into one list</MudText>
+    </div>
+    @if (TenantId is { } reportTenant && _portfolio?.Scanned.Any(t => t.Tenant.Id == reportTenant) == true)
+    {
+        <ReportButton TenantId="reportTenant" />
+    }
+</MudStack>
 
 @if (_portfolio is null)
 {
@@ -15,7 +26,7 @@ else
     <MudPaper Class="sp-card pa-4 mb-4" Elevation="0" Outlined="true">
         <MudGrid Spacing="3">
             <MudItem xs="12" md="4">
-                <MudSelect T="Guid?" Label="Tenant" @bind-Value="TenantId" Clearable="true" Variant="Variant.Outlined" Dense="true">
+                <MudSelect T="Guid?" Label="Tenant" @bind-Value="TenantId" Clearable="true" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
                     @foreach (var t in _portfolio.Scanned)
                     {
                         <MudSelectItem T="Guid?" Value="@t.Tenant.Id">@t.Tenant.DisplayName</MudSelectItem>
@@ -23,7 +34,7 @@ else
                 </MudSelect>
             </MudItem>
             <MudItem xs="6" md="2">
-                <MudSelect T="Severity?" Label="Severity" @bind-Value="_severity" Clearable="true" Variant="Variant.Outlined" Dense="true">
+                <MudSelect T="Severity?" Label="Severity" @bind-Value="_severity" Clearable="true" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
                     @foreach (var s in Enum.GetValues<Severity>().Reverse())
                     {
                         <MudSelectItem T="Severity?" Value="@s">@s</MudSelectItem>
@@ -31,7 +42,7 @@ else
                 </MudSelect>
             </MudItem>
             <MudItem xs="6" md="2">
-                <MudSelect T="FindingStatus?" Label="Status" @bind-Value="_status" Clearable="true" Variant="Variant.Outlined" Dense="true">
+                <MudSelect T="FindingStatus?" Label="Status" @bind-Value="_status" Clearable="true" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
                     @foreach (var s in Enum.GetValues<FindingStatus>())
                     {
                         <MudSelectItem T="FindingStatus?" Value="@s">@SecurePulseTheme.Label(s)</MudSelectItem>
@@ -39,7 +50,7 @@ else
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" md="4">
-                <MudTextField T="string" @bind-Value="_search" Label="Search" Variant="Variant.Outlined" Dense="true" Immediate="true"
+                <MudTextField T="string" @bind-Value="_search" Label="Search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true"
                               Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Clearable="true" />
             </MudItem>
         </MudGrid>
@@ -49,7 +60,7 @@ else
         <MudItem xs="12" lg="@(_selected is null ? 12 : 7)">
             <MudPaper Class="sp-card pa-2" Elevation="0" Outlined="true">
                 <MudTable Items="Filtered" T="Row" Hover="true" Elevation="0" Breakpoint="Breakpoint.Sm" Dense="true"
-                          RowClass="sp-clickable-row" OnRowClick="@(e => _selected = e.Item)">
+                          RowClass="sp-clickable-row" OnRowClick="@(e => SelectAsync(e.Item!))">
                     <HeaderContent>
                         <MudTh>Check</MudTh>
                         <MudTh>Tenant</MudTh>
@@ -82,7 +93,7 @@ else
                     <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start">
                         <MudText Typo="Typo.h6">@sel.Finding.Title</MudText>
                         <MudIconButton Icon="@Icons.Material.Rounded.Close" Size="Size.Small" aria-label="Close details"
-                                       OnClick="@(() => _selected = null)" />
+                                       OnClick="@(() => { _selected = null; _fix = null; })" />
                     </MudStack>
                     <MudStack Row="true" Spacing="1" Class="my-3" Wrap="Wrap.Wrap">
                         <SeverityChip Severity="sel.Finding.Severity" />
@@ -108,7 +119,27 @@ else
                         <MudText Typo="Typo.body2" Class="mb-4">@sel.Finding.Remediation</MudText>
                     }
 
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    @if (SafeLink(sel.Finding.HelpUrl) is { } help)
+                    {
+                        <MudLink Href="@help" Target="_blank" UserAttributes="@(new() { ["rel"] = "noopener noreferrer", ["data-testid"] = "finding-help" })"
+                                 Typo="Typo.body2" Class="d-inline-flex align-center mb-4">
+                            More about this check <MudIcon Icon="@Icons.Material.Rounded.OpenInNew" Size="Size.Small" Class="ml-1" />
+                        </MudLink>
+                    }
+
+                    @if (_fix is { } fix)
+                    {
+                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Start" Class="sp-note mb-4" data-testid="config-fix">
+                            <MudIcon Icon="@Icons.Material.Rounded.Policy" Size="Size.Small" Color="Color.Primary" />
+                            <div>
+                                <MudText Typo="Typo.body2"><b>@fix.Title</b> is available as a reviewed fix (report-only Conditional Access policy).</MudText>
+                                <MudButton Variant="Variant.Text" Color="Color.Primary" Class="px-0 mt-1" OnClick="@(() => ProposeFixAsync(sel, fix))"
+                                           data-testid="propose-fix">Propose this fix</MudButton>
+                            </div>
+                        </MudStack>
+                    }
+
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
                         Source: @sel.Finding.Source@(sel.Finding.SourceCheckId is { } id ? $" ({id})" : "")
                     </MudText>
                 </MudPaper>
@@ -129,7 +160,26 @@ else
     private string? _search;
     private Row? _selected;
 
+    private ConfigurationFix? _fix;
+
     protected override async Task OnInitializedAsync() => _portfolio = await Posture.GetPortfolioAsync();
+
+    private async Task SelectAsync(Row row)
+    {
+        _selected = row;
+        _fix = await Changes.FixForAsync(row.Finding);
+    }
+
+    private async Task ProposeFixAsync(Row row, ConfigurationFix fix)
+    {
+        var dialog = await Dialogs.ShowAsync<ConfigFixDialog>(null, new DialogParameters<ConfigFixDialog>
+        {
+            { x => x.Fix, fix }, { x => x.TenantName, row.Tenant.DisplayName }, { x => x.Mode, ConfigFixDialogMode.Request }
+        }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: string reason }) return;
+        var outcome = await Changes.RequestAsync(row.Tenant.Id, row.Finding.SourceCheckId!, reason);
+        Snackbar.Add(outcome.Message, outcome.Ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
+    }
 
     private IEnumerable<Row> Filtered =>
         (_portfolio?.Scanned ?? [])
@@ -144,4 +194,8 @@ else
             .OrderByDescending(r => r.Finding.Status == FindingStatus.Failed)
             .ThenByDescending(r => r.Finding.Severity)
             .ThenBy(r => r.Tenant.DisplayName);
+
+    /// <summary>Help links come from engine output: only absolute https links are shown (never javascript: or relative ones).</summary>
+    internal static string? SafeLink(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps ? uri.AbsoluteUri : null;
 }

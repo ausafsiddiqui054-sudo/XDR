@@ -106,4 +106,120 @@ public static class SecurePulseTheme
         FindingStatus.NotEvaluated => "Not evaluated",
         _ => status.ToString()
     };
+
+    public static Color ColorOf(DeviceComplianceState state) => state switch
+    {
+        DeviceComplianceState.Compliant => Color.Success,
+        DeviceComplianceState.InGracePeriod => Color.Warning,
+        DeviceComplianceState.Noncompliant => Color.Error,
+        _ => Color.Default
+    };
+
+    public static string Label(DeviceComplianceState state) => state switch
+    {
+        DeviceComplianceState.InGracePeriod => "In grace period",
+        _ => state.ToString()
+    };
+
+    public static string IconOf(DevicePlatform platform) => platform switch
+    {
+        DevicePlatform.Windows => Icons.Material.Rounded.LaptopWindows,
+        DevicePlatform.MacOS => Icons.Material.Rounded.LaptopMac,
+        DevicePlatform.iOS => Icons.Material.Rounded.PhoneIphone,
+        DevicePlatform.Android => Icons.Material.Rounded.PhoneAndroid,
+        _ => Icons.Material.Rounded.Computer
+    };
+
+    public static string Label(DevicePlatform platform) => platform switch
+    {
+        DevicePlatform.MacOS => "macOS",
+        _ => platform.ToString()
+    };
+
+    public static string Label(DefenderState state) => state switch
+    {
+        DefenderState.Protected => "Protected",
+        DefenderState.Unhealthy => "Unhealthy",
+        DefenderState.NotOnboarded => "Not onboarded",
+        _ => "Unknown"
+    };
+
+    public static Color ColorOf(DefenderState state) => state switch
+    {
+        DefenderState.Protected => Color.Success,
+        DefenderState.Unhealthy => Color.Error,
+        DefenderState.NotOnboarded => Color.Warning,
+        _ => Color.Default
+    };
+
+    public static string IconOf(DefenderState state) => state switch
+    {
+        DefenderState.Protected => Icons.Material.Rounded.GppGood,
+        DefenderState.Unhealthy => Icons.Material.Rounded.GppBad,
+        DefenderState.NotOnboarded => Icons.Material.Rounded.GppMaybe,
+        _ => Icons.Material.Rounded.Shield
+    };
+
+    public static string Label(DefenderOnboarding status) => status switch
+    {
+        DefenderOnboarding.Onboarded => "Onboarded",
+        DefenderOnboarding.CanBeOnboarded => "Not onboarded (discovered on the network)",
+        DefenderOnboarding.Unsupported => "Unsupported OS",
+        DefenderOnboarding.InsufficientInfo => "Insufficient information",
+        _ => "Unknown"
+    };
+
+    public static string Label(DefenderSensorHealth health) => health switch
+    {
+        DefenderSensorHealth.Active => "Active",
+        DefenderSensorHealth.Inactive => "Inactive",
+        DefenderSensorHealth.ImpairedCommunication => "Impaired communication",
+        DefenderSensorHealth.NoSensorData => "No sensor data",
+        _ => "Unknown"
+    };
+
+    public static Color ColorOf(DefenderSensorHealth health) => health switch
+    {
+        DefenderSensorHealth.Active => Color.Success,
+        DefenderSensorHealth.Unknown => Color.Default,
+        _ => Color.Error
+    };
+
+    public static string Label(DefenderThreatState state) => state switch
+    {
+        DefenderThreatState.Clean => "No active threats",
+        DefenderThreatState.FullScanPending => "Full scan pending",
+        DefenderThreatState.RebootPending => "Restart pending",
+        DefenderThreatState.ManualStepsPending => "Manual steps pending",
+        DefenderThreatState.OfflineScanPending => "Offline scan pending",
+        DefenderThreatState.Critical => "Critical",
+        _ => "Not reported"
+    };
+
+    public static Color ColorOf(DefenderThreatState state) => state switch
+    {
+        DefenderThreatState.Clean => Color.Success,
+        DefenderThreatState.Unknown => Color.Default,
+        _ => Color.Error
+    };
+
+    public static string Label(OnboardingRequest request, DateTimeOffset now) => request.Status switch
+    {
+        _ when request.IsExpired(now) => "Link expired",
+        OnboardingStatus.AwaitingConsent => "Awaiting consent",
+        OnboardingStatus.Verifying => "Verifying",
+        OnboardingStatus.Completed => "Connected",
+        OnboardingStatus.Failed => "Failed",
+        _ => "Cancelled"
+    };
+
+    public static Color ColorOf(OnboardingRequest request, DateTimeOffset now) => request.Status switch
+    {
+        _ when request.IsExpired(now) => Color.Default,
+        OnboardingStatus.AwaitingConsent => Color.Info,
+        OnboardingStatus.Verifying => Color.Primary,
+        OnboardingStatus.Completed => Color.Success,
+        OnboardingStatus.Failed => Color.Error,
+        _ => Color.Default
+    };
 }

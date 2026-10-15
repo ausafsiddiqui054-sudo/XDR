@@ -1,0 +1,59 @@
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@DeviceActions.Icon(Action)" Color="@(Destructive ? Color.Error : Color.Primary)" />
+            <MudText Typo="Typo.h6">@DeviceActions.Label(Action) @DeviceName?</MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-4">@DeviceActions.Description(Action)</MudText>
+
+        @if (Destructive)
+        {
+            <MudAlert Severity="MudBlazor.Severity.Error" Variant="Variant.Text" Dense="true" Class="mb-4">
+                This can't be undone once it reaches the device.
+            </MudAlert>
+        }
+
+        <MudTextField T="string" @bind-Value="_reason" Label="Reason" Variant="Variant.Outlined" Lines="2" Immediate="true"
+                      MaxLength="DeviceActionPolicy.MaxReasonLength" Counter="DeviceActionPolicy.MaxReasonLength"
+                      HelperText="Shown to the approver and kept in the audit log" Class="mb-3" />
+
+        @if (Destructive)
+        {
+            <MudTextField T="string" @bind-Value="_confirm" Label="@($"Type {DeviceName} to confirm")" Variant="Variant.Outlined"
+                          Immediate="true" Margin="Margin.Dense" Class="mb-3" />
+        }
+
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Start" Class="sp-note">
+            <MudIcon Icon="@Icons.Material.Rounded.HowToReg" Size="Size.Small" Color="Color.Primary" />
+            <MudText Typo="Typo.caption">
+                Nothing is sent to the device until a second admin approves@(Destructive ? " (an Owner, for this action)" : ""). The request, the approver and the
+                result are written to the audit log for @TenantName.
+            </MudText>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="@(Destructive ? Color.Error : Color.Primary)" Disabled="!CanSubmit"
+                   OnClick="@(() => MudDialog.Close(DialogResult.Ok(_reason!.Trim())))">
+            Request approval
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public DeviceAction Action { get; set; }
+    [Parameter, EditorRequired] public string DeviceName { get; set; } = "";
+    [Parameter, EditorRequired] public string TenantName { get; set; } = "";
+
+    private string? _reason;
+    private string? _confirm;
+
+    private bool Destructive => DeviceActions.IsDestructive(Action);
+
+    private bool CanSubmit => !string.IsNullOrWhiteSpace(_reason)
+                              && (!Destructive || string.Equals(_confirm?.Trim(), DeviceName, StringComparison.Ordinal));
+}

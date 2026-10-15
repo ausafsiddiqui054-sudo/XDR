@@ -1,0 +1,218 @@
+@page "/settings/users"
+@attribute [Authorize(Policy = Policies.Operator)]
+@using SecurePulse.Core.Abstractions
+@inject PortalUserService People
+@inject ITenantRepository Tenants
+@inject IUserContextAccessor Current
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<PageTitle>People · SecurePulse</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
+    <div>
+        <MudText Typo="Typo.h4">People</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Who can sign in to SecurePulse, and what they can see</MudText>
+    </div>
+    @if (!_inviting)
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.PersonAdd" OnClick="StartInvite">Invite</MudButton>
+    }
+</MudStack>
+
+@if (_inviting)
+{
+    <MudPaper Class="sp-card pa-6 mb-4" Elevation="0" Outlined="true">
+        <MudText Typo="Typo.h6" Class="mb-4">Invite someone</MudText>
+        @if (_error is not null)
+        {
+            <MudAlert Severity="MudBlazor.Severity.Error" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px">@_error</MudAlert>
+        }
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="5">
+                <MudTextField T="string" @bind-Value="_form.SignInName" Label="Sign-in name" Variant="Variant.Outlined" Placeholder="name@contoso.com"
+                              HelperText="Exactly as they sign in to Microsoft 365" Immediate="true" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="PortalRole" @bind-Value="_form.Role" Label="Role" Variant="Variant.Outlined">
+                    @foreach (var role in Enum.GetValues<PortalRole>().Where(r => PortalUserService.CanManage(_me, r)))
+                    {
+                        <MudSelectItem T="PortalRole" Value="@role">@RoleLabel(role)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                @if (_form.Role == PortalRole.ClientViewer)
+                {
+                    <MudSelect T="Guid?" @bind-Value="_form.ClientTenantId" Label="Can see" Variant="Variant.Outlined">
+                        @foreach (var t in _connected)
+                        {
+                            <MudSelectItem T="Guid?" Value="@t.Id">@t.DisplayName</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                else
+                {
+                    <MudTextField T="string" Value="@("All tenants")" Label="Can see" Variant="Variant.Outlined" ReadOnly="true" />
+                }
+            </MudItem>
+        </MudGrid>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-3">
+            @(_form.Role == PortalRole.ClientViewer
+                ? "They sign in with their own organization's account. Access is read-only and limited to that tenant."
+                : $"They sign in from your organization (tenant {People.OperatorTenantId}).")
+            Access starts at their first sign-in.
+        </MudText>
+        <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2" Class="mt-4">
+            <MudButton Variant="Variant.Text" OnClick="@(() => _inviting = false)">Cancel</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="InviteAsync">Send invitation</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+
+@if (_users is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Class="sp-card pa-2" Elevation="0" Outlined="true">
+        <MudTable Items="_users" T="PortalUser" Elevation="0" Breakpoint="Breakpoint.Sm" Hover="true">
+            <HeaderContent>
+                <MudTh>Person</MudTh>
+                <MudTh>Role</MudTh>
+                <MudTh>Can see</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Person">
+                    <MudText Typo="Typo.body2" Style="font-weight:600">
+                        @(context.DisplayName ?? context.UserPrincipalName)
+                        @if (context.Id == _me.UserId)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Inline="true"> (you)</MudText>
+                        }
+                    </MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@context.UserPrincipalName</MudText>
+                </MudTd>
+                <MudTd DataLabel="Role">
+                    @if (_me.IsOwner && context.Role != PortalRole.ClientViewer)
+                    {
+                        <MudSelect T="PortalRole" Value="context.Role" ValueChanged="@(r => ChangeRoleAsync(context, r))" Dense="true"
+                                   Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width:170px">
+                            <MudSelectItem T="PortalRole" Value="PortalRole.Owner">@RoleLabel(PortalRole.Owner)</MudSelectItem>
+                            <MudSelectItem T="PortalRole" Value="PortalRole.MspAdmin">@RoleLabel(PortalRole.MspAdmin)</MudSelectItem>
+                        </MudSelect>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@RoleColor(context.Role)">@RoleLabel(context.Role)</MudChip>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Can see">
+                    @(context.ClientTenantId is { } id ? _tenantNames.GetValueOrDefault(id, "Removed tenant") : "All tenants")
+                </MudTd>
+                <MudTd DataLabel="Status">
+                    @if (context.IsInvitationPending)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Info">Invited</MudChip>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2">Last sign-in @Dashboard.Ago(context.LastSignInAt).ToLowerInvariant()</MudText>
+                    }
+                </MudTd>
+                <MudTd Style="text-align:right">
+                    @if (PortalUserService.CanManage(_me, context.Role))
+                    {
+                        <MudTooltip Text="Remove access">
+                            <MudIconButton Icon="@Icons.Material.Rounded.PersonRemove" Size="Size.Small" aria-label="@($"Remove {context.UserPrincipalName}")"
+                                           OnClick="@(() => RemoveAsync(context))" />
+                        </MudTooltip>
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<PortalUser>? _users;
+    private IReadOnlyList<Tenant> _connected = [];
+    private Dictionary<Guid, string> _tenantNames = [];
+    private UserContext _me = UserContext.Anonymous;
+    private InviteForm _form = new();
+    private bool _inviting;
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _me = await Current.GetAsync();
+        var tenants = await Tenants.GetAllAsync();
+        _tenantNames = tenants.ToDictionary(t => t.Id, t => t.DisplayName);
+        _connected = tenants.Where(t => t.ConsentState is TenantConsentState.ReadOnlyGranted or TenantConsentState.RemediationGranted)
+            .OrderBy(t => t.DisplayName).ToList();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => _users = await People.GetAllAsync();
+
+    private void StartInvite()
+    {
+        _form = new InviteForm { Role = PortalRole.ClientViewer };
+        _error = null;
+        _inviting = true;
+    }
+
+    private async Task InviteAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await People.InviteAsync(_form);
+            if (result.Error is not null)
+            {
+                _error = result.Error;
+                return;
+            }
+            _inviting = false;
+            Snackbar.Add($"Invited {result.User!.UserPrincipalName}. Access starts at their first sign-in.", MudBlazor.Severity.Success);
+            await LoadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ChangeRoleAsync(PortalUser user, PortalRole role)
+    {
+        if (role == user.Role) return;
+        var error = await People.ChangeRoleAsync(user.Id, role);
+        Snackbar.Add(error ?? $"{user.UserPrincipalName} is now {RoleLabel(role)}.", error is null ? MudBlazor.Severity.Success : MudBlazor.Severity.Error);
+        await LoadAsync();
+    }
+
+    private async Task RemoveAsync(PortalUser user)
+    {
+        var confirmed = await Dialogs.ShowMessageBox("Remove access?",
+            $"{user.UserPrincipalName} won't be able to sign in to SecurePulse. Open sessions end within a minute.",
+            yesText: "Remove", cancelText: "Cancel");
+        if (confirmed != true) return;
+
+        var error = await People.RemoveAsync(user.Id);
+        Snackbar.Add(error ?? $"Removed {user.UserPrincipalName}.", error is null ? MudBlazor.Severity.Success : MudBlazor.Severity.Error);
+        await LoadAsync();
+    }
+
+    internal static string RoleLabel(PortalRole role) => AuthSetup.RoleLabel(role);
+
+    private static Color RoleColor(PortalRole role) => role switch
+    {
+        PortalRole.Owner => Color.Primary,
+        PortalRole.MspAdmin => Color.Secondary,
+        _ => Color.Default
+    };
+}

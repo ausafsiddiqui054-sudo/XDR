@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>securepulse-worker</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Security.KeyVault.Secrets" Version="4.11.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SecurePulse.Core\SecurePulse.Core.csproj" />
+    <ProjectReference Include="..\SecurePulse.Data\SecurePulse.Data.csproj" />
+    <ProjectReference Include="..\SecurePulse.Engines\SecurePulse.Engines.csproj" />
+    <ProjectReference Include="..\SecurePulse.Intune\SecurePulse.Intune.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,3 @@
+@* Every page needs a portal role unless it opts out with [AllowAnonymous] or its own [Authorize].
+   (Endpoints also have a fallback policy; this covers navigation inside an open circuit.) *@
+@attribute [Authorize(Policy = Policies.Member)]

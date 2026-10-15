@@ -1,0 +1,55 @@
+@page "/onboarding/consent-result"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@layout PublicLayout
+@using SecurePulse.Web.Services.Onboarding
+
+@* Shown to the client's admin after the Entra consent prompt. Keep it free of any tenant data. *@
+<PageTitle>@_title · SecurePulse</PageTitle>
+
+<MudPaper Class="sp-card pa-8" Elevation="0" Outlined="true">
+    <MudStack AlignItems="AlignItems.Center" Spacing="3">
+        <span class="sp-icon-badge sp-icon-badge-lg"><MudIcon Icon="@_icon" Color="@_color" Size="Size.Large" /></span>
+        <MudText Typo="Typo.h5" Align="Align.Center">@_title</MudText>
+        <MudText Typo="Typo.body1" Color="Color.Secondary" Align="Align.Center">@_message</MudText>
+        @if (_outcome == ConsentCallbackOutcome.Received)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center">
+                SecurePulse has read-only access. It can't change settings, users or devices in your organization.
+                An admin can remove it any time under Enterprise applications in the Microsoft Entra admin center.
+            </MudText>
+        }
+    </MudStack>
+</MudPaper>
+
+@code {
+    [SupplyParameterFromQuery(Name = "outcome")]
+    public string? Outcome { get; set; }
+
+    private ConsentCallbackOutcome _outcome;
+    private string _title = "", _message = "", _icon = "";
+    private Color _color;
+
+    protected override void OnParametersSet()
+    {
+        _outcome = Enum.TryParse<ConsentCallbackOutcome>(Outcome, out var o) ? o : ConsentCallbackOutcome.Invalid;
+        (_title, _message, _icon, _color) = _outcome switch
+        {
+            ConsentCallbackOutcome.Received => ("Access granted, thank you",
+                "SecurePulse is confirming the connection now. Your IT provider will see it shortly. You can close this window.",
+                Icons.Material.Rounded.CheckCircle, Color.Success),
+            ConsentCallbackOutcome.Declined => ("Access wasn't granted",
+                "Nothing was changed. If that was a mistake, open the same link again, or ask your IT provider for help.",
+                Icons.Material.Rounded.DoNotDisturbOn, Color.Warning),
+            ConsentCallbackOutcome.WrongTenant => ("Signed in to a different organization",
+                "The admin account you used belongs to another Microsoft 365 organization. Open the link again and sign in with an admin account from the organization being connected.",
+                Icons.Material.Rounded.SwitchAccount, Color.Warning),
+            ConsentCallbackOutcome.ExpiredOrUsed => ("This link has expired or was already used",
+                "Ask your IT provider for a new link.",
+                Icons.Material.Rounded.LinkOff, Color.Default),
+            _ => ("Something didn't match",
+                "The response from Microsoft was incomplete. Ask your IT provider for a new link.",
+                Icons.Material.Rounded.ErrorOutline, Color.Error)
+        };
+    }
+}

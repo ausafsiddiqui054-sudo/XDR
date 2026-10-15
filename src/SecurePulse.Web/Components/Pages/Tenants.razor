@@ -1,7 +1,13 @@
 @page "/tenants"
 @inject PostureService Posture
 @inject NavigationManager Nav
+@inject SecurePulse.Web.Services.Onboarding.OnboardingService Onboarding
+@inject TimeProvider Time
+@inject ScanRequestService Scans
+@inject IUserContextAccessor Current
 @inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@implements IAsyncDisposable
 
 <PageTitle>Tenants · SecurePulse</PageTitle>
 
@@ -10,9 +16,11 @@
         <MudText Typo="Typo.h4">Tenants</MudText>
         <MudText Typo="Typo.body2" Color="Color.Secondary">Client Microsoft 365 tenants and their consent status</MudText>
     </div>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add" OnClick="Connect">
-        Connect tenant
-    </MudButton>
+    <AuthorizeView Policy="@Policies.Operator">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add" Href="tenants/connect">
+            Connect tenant
+        </MudButton>
+    </AuthorizeView>
 </MudStack>
 
 @if (_portfolio is null)
@@ -21,7 +29,44 @@
 }
 else
 {
-    <MudGrid Spacing="4">
+    @if (_pending.Count > 0)
+    {
+        var now = Time.GetUtcNow();
+        <MudText Typo="Typo.overline" Color="Color.Secondary">Connections in progress</MudText>
+        <MudGrid Spacing="4" Class="mb-6 mt-0">
+            @foreach (var r in _pending)
+            {
+                <MudItem xs="12" sm="6" lg="4">
+                    <MudPaper Class="sp-card sp-lift pa-5 sp-clickable-row" Elevation="0" Outlined="true"
+                              @onclick="@(() => Nav.NavigateTo($"tenants/connect/{r.Id}"))">
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start">
+                            <div style="min-width:0">
+                                <MudText Typo="Typo.subtitle1" Style="font-weight:600">@r.DisplayName</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @r.PrimaryDomain@(r.Kind switch { OnboardingKind.Remediation => " · remediation access", OnboardingKind.Configuration => " · configuration access", _ => "" })
+                                </MudText>
+                            </div>
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@SecurePulseTheme.ColorOf(r, now)">
+                                @SecurePulseTheme.Label(r, now)
+                            </MudChip>
+                        </MudStack>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-3">
+                            @(r.Status switch
+                            {
+                                _ when r.IsExpired(now) => "Create a new link to try again.",
+                                OnboardingStatus.AwaitingConsent => r.LastError ?? $"Link expires {r.ExpiresAt.ToLocalTime():d MMM}.",
+                                OnboardingStatus.Verifying => "Admin approved; confirming access.",
+                                _ => r.LastError ?? "Verification failed."
+                            })
+                        </MudText>
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+        <MudText Typo="Typo.overline" Color="Color.Secondary">Connected and pending tenants</MudText>
+    }
+
+    <MudGrid Spacing="4" Class="mt-0">
         @foreach (var t in _portfolio.Tenants)
         {
             <MudItem xs="12" sm="6" lg="4">
@@ -42,20 +87,163 @@ else
                             @ConsentLabel(t.Tenant.ConsentState)
                         </MudChip>
                         <MudChip T="string" Size="Size.Small" Variant="Variant.Text">@(t.Tenant.PartnerName ?? "Direct client")</MudChip>
+                        @if (t.Tenant.CanConfigure)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Info" Icon="@Icons.Material.Rounded.Policy"
+                                     data-testid="configuration-chip">Configuration fixes</MudChip>
+                        }
                     </MudStack>
 
+                    @{
+                        var connected = t.Tenant.ConsentState is TenantConsentState.ReadOnlyGranted or TenantConsentState.RemediationGranted;
+                        var engineRuns = Scans.Engines.Where(e => ScanEngines.AppliesTo(e, t.Tenant))
+                            .Select(e => (Engine: e, Run: _scans.GetValueOrDefault((t.Tenant.Id, e)))).ToList();
+                        var wazuh = Scans.Engines.Contains(ScanEngines.Wazuh);
+                        var goPhish = Scans.Engines.Contains(ScanEngines.GoPhish);
+                    }
                     @if (t.Score is { } score)
                     {
                         <MudText Typo="Typo.body2" Color="Color.Secondary">
-                            @score.Failed failing · @score.Investigate to investigate · last scan @Dashboard.Ago(t.Tenant.LastScanAt)
+                            @score.Failed failing · @score.Investigate to investigate · last results @Dashboard.Ago(t.Tenant.LastScanAt).ToLowerInvariant()
                         </MudText>
-                        <MudButton Variant="Variant.Text" Color="Color.Primary" Class="mt-2 px-0"
-                                   OnClick="@(() => Nav.NavigateTo($"findings?tenant={t.Tenant.Id}"))">View findings</MudButton>
+                    }
+                    else if (connected)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Connected. No scan results yet.</MudText>
                     }
                     else
                     {
                         <MudText Typo="Typo.body2" Color="Color.Secondary">Waiting for an admin to grant read-only consent.</MudText>
                     }
+
+                    @if (connected)
+                    {
+                        <MudStack Spacing="1" Class="mt-3">
+                            @foreach (var (engine, run) in engineRuns)
+                            {
+                                // With one engine the label adds nothing; with several each line says whose status it is.
+                                var who = Scans.Engines.Count > 1 ? $"{engine}: " : "";
+                                <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" data-testid="scan-status" data-engine="@engine">
+                                    @switch (run?.Status)
+                                    {
+                                        case ScanRunStatus.Running:
+                                            <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" Style="width:18px;height:18px" />
+                                            <MudText Typo="Typo.caption">@(who)Scanning now (started @Dashboard.Ago(run.StartedAt).ToLowerInvariant())</MudText>
+                                            break;
+                                        case ScanRunStatus.Queued:
+                                            <MudIcon Icon="@Icons.Material.Rounded.HourglassTop" Size="Size.Small" Color="Color.Info" />
+                                            <MudText Typo="Typo.caption">@(who)Scan queued@(run.RequestedBy is { } by ? $" by {by}" : "")</MudText>
+                                            break;
+                                        case ScanRunStatus.Failed:
+                                            <MudIcon Icon="@Icons.Material.Rounded.ErrorOutline" Size="Size.Small" Color="Color.Error" />
+                                            <div style="min-width:0">
+                                                <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block">@(who)Last scan failed @Dashboard.Ago(run.CompletedAt).ToLowerInvariant()</MudText>
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="overflow-wrap:anywhere">@Clip(run.Error)</MudText>
+                                            </div>
+                                            break;
+                                        case ScanRunStatus.Succeeded:
+                                            <MudIcon Icon="@Icons.Material.Rounded.CheckCircle" Size="Size.Small" Color="Color.Success" />
+                                            <MudText Typo="Typo.caption">@(who)Last scan @Dashboard.Ago(run.CompletedAt).ToLowerInvariant() · @run.FindingCount checks</MudText>
+                                            break;
+                                        default:
+                                            <MudIcon Icon="@Icons.Material.Rounded.Schedule" Size="Size.Small" Color="Color.Default" />
+                                            <MudText Typo="Typo.caption">@(who)@(ScanRequestService.IsOnboarded(t.Tenant) ? "First scan starts shortly" : "Not ready to scan: no certificate configured")</MudText>
+                                            break;
+                                    }
+                                </MudStack>
+                            }
+                            @if (wazuh)
+                            {
+                                <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" data-testid="wazuh-group">
+                                    <MudIcon Icon="@Icons.Material.Rounded.Lan" Size="Size.Small" Color="@(t.Tenant.WazuhAgentGroup is null ? Color.Default : Color.Primary)" />
+                                    <MudText Typo="Typo.caption">
+                                        @if (t.Tenant.WazuhAgentGroup is { } group)
+                                        {
+                                            <span>Wazuh agent group <b>@group</b></span>
+                                        }
+                                        else
+                                        {
+                                            <span>Wazuh: no agent group set, so this tenant isn't scanned by Wazuh</span>
+                                        }
+                                    </MudText>
+                                </MudStack>
+                            }
+                            @if (goPhish)
+                            {
+                                <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" data-testid="gophish-status">
+                                    <MudIcon Icon="@Icons.Material.Rounded.Phishing" Size="Size.Small" Color="@(t.Tenant.GoPhishEnabled ? Color.Primary : Color.Default)" />
+                                    <MudText Typo="Typo.caption" Style="overflow-wrap:anywhere">
+                                        @if (!t.Tenant.GoPhishEnabled)
+                                        {
+                                            <span>GoPhish: off, so phishing simulation results aren't imported</span>
+                                        }
+                                        else if (_isOwner)
+                                        {
+                                            <span>GoPhish results on · API key in Key Vault secret <b>@GoPhishSecrets.ApiKeySecretName(t.Tenant.Id)</b></span>
+                                        }
+                                        else
+                                        {
+                                            <span>GoPhish phishing simulation results imported</span>
+                                        }
+                                    </MudText>
+                                </MudStack>
+                            }
+                        </MudStack>
+                    }
+
+                    <MudStack Row="true" Spacing="3" Class="mt-2" Wrap="Wrap.Wrap">
+                        @if (t.Score is not null)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" Class="px-0"
+                                       OnClick="@(() => Nav.NavigateTo($"findings?tenant={t.Tenant.Id}"))">View findings</MudButton>
+                            <ReportButton TenantId="t.Tenant.Id" Variant="Variant.Text" Label="Report" Class="px-0" />
+                        }
+                        @if (connected)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" Class="px-0"
+                                       OnClick="@(() => Nav.NavigateTo($"endpoints?tenant={t.Tenant.Id}"))">View devices</MudButton>
+                        }
+                        @if (_isOperator && connected)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" Class="px-0" StartIcon="@Icons.Material.Rounded.PlayArrow"
+                                       Disabled="@(engineRuns.All(r => r.Run?.IsActive == true) || !ScanRequestService.IsOnboarded(t.Tenant))"
+                                       OnClick="@(() => ScanNowAsync(t.Tenant))">Scan now</MudButton>
+                            <MudButton Variant="Variant.Text" Color="Color.Default" Class="px-0" StartIcon="@Icons.Material.Rounded.VerifiedUser"
+                                       Href="@ReconsentUrl(t.Tenant)">Re-consent</MudButton>
+                        }
+                        @if (_isOwner && connected && wazuh)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Default" Class="px-0" StartIcon="@Icons.Material.Rounded.Lan"
+                                       OnClick="@(() => EditWazuhGroupAsync(t.Tenant))" data-testid="edit-wazuh-group">Wazuh group</MudButton>
+                        }
+                        @if (_isOwner && connected && goPhish)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Default" Class="px-0" StartIcon="@Icons.Material.Rounded.Phishing"
+                                       OnClick="@(() => SetGoPhishAsync(t.Tenant, !t.Tenant.GoPhishEnabled))" data-testid="toggle-gophish">
+                                @(t.Tenant.GoPhishEnabled ? "Turn off GoPhish" : "Turn on GoPhish")
+                            </MudButton>
+                        }
+                        @if (_isOwner && t.Tenant.ConsentState == TenantConsentState.ReadOnlyGranted && Onboarding.IsRemediationConfigured)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Warning" Class="px-0" StartIcon="@Icons.Material.Rounded.Build"
+                                       OnClick="@(() => EnableRemediationAsync(t.Tenant))" data-testid="enable-remediation">Enable remediation</MudButton>
+                        }
+                        @if (_isOwner && t.Tenant.ConsentState == TenantConsentState.RemediationGranted)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Default" Class="px-0" StartIcon="@Icons.Material.Rounded.BuildCircle"
+                                       OnClick="@(() => DisableRemediationAsync(t.Tenant))" data-testid="disable-remediation">Turn off remediation</MudButton>
+                        }
+                        @if (_isOwner && connected && !t.Tenant.CanConfigure && Onboarding.IsConfigurationConfigured)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Warning" Class="px-0" StartIcon="@Icons.Material.Rounded.Policy"
+                                       OnClick="@(() => EnableConfigurationAsync(t.Tenant))" data-testid="enable-configuration">Enable configuration fixes</MudButton>
+                        }
+                        @if (_isOwner && t.Tenant.CanConfigure)
+                        {
+                            <MudButton Variant="Variant.Text" Color="Color.Default" Class="px-0" StartIcon="@Icons.Material.Rounded.GppMaybe"
+                                       OnClick="@(() => DisableConfigurationAsync(t.Tenant))" data-testid="disable-configuration">Turn off configuration fixes</MudButton>
+                        }
+                    </MudStack>
                 </MudPaper>
             </MudItem>
         }
@@ -65,10 +253,141 @@ else
 @code {
     private PortfolioPosture? _portfolio;
 
-    protected override async Task OnInitializedAsync() => _portfolio = await Posture.GetPortfolioAsync();
+    private IReadOnlyList<OnboardingRequest> _pending = [];
 
-    private void Connect() =>
-        Snackbar.Add("The admin-consent onboarding flow is the next build step.", MudBlazor.Severity.Info);
+    private IReadOnlyDictionary<(Guid TenantId, string Engine), ScanRun> _scans = new Dictionary<(Guid, string), ScanRun>();
+    private bool _isOperator;
+    private bool _isOwner;
+
+    private async Task EnableConfigurationAsync(Tenant tenant)
+    {
+        var result = await Onboarding.StartConfigurationAsync(tenant.Id);
+        if (result.Request is { } request)
+            Nav.NavigateTo($"tenants/connect/{request.Id}{(result.Reused ? "?reused=true" : "")}");
+        else
+            Snackbar.Add(result.Error ?? "Couldn't create a configuration consent link.", MudBlazor.Severity.Error);
+    }
+
+    private async Task DisableConfigurationAsync(Tenant tenant)
+    {
+        var confirmed = await Dialogs.ShowMessageBox($"Turn off configuration fixes for {tenant.DisplayName}?",
+            "SecurePulse stops creating Conditional Access policies in this tenant, and open requests are cancelled. Policies it already created " +
+            "stay in Entra. Ask the tenant's admin to also remove the configuration app in Microsoft Entra (Enterprise applications).",
+            yesText: "Turn off", cancelText: "Keep it on");
+        if (confirmed != true) return;
+        var done = await Onboarding.DisableConfigurationAsync(tenant.Id);
+        Snackbar.Add(done ? $"Configuration fixes turned off for {tenant.DisplayName}." : "Configuration fixes were already off.", MudBlazor.Severity.Info);
+        _portfolio = await Posture.GetPortfolioAsync();
+    }
+
+    private async Task EnableRemediationAsync(Tenant tenant)
+    {
+        var result = await Onboarding.StartRemediationAsync(tenant.Id);
+        if (result.Request is { } request)
+            Nav.NavigateTo($"tenants/connect/{request.Id}{(result.Reused ? "?reused=true" : "")}");
+        else
+            Snackbar.Add(result.Error ?? "Couldn't create a remediation consent link.", MudBlazor.Severity.Error);
+    }
+
+    private async Task EditWazuhGroupAsync(Tenant tenant)
+    {
+        var parameters = new DialogParameters<WazuhGroupDialog> { { x => x.TenantName, tenant.DisplayName }, { x => x.Group, tenant.WazuhAgentGroup } };
+        var dialog = await Dialogs.ShowAsync<WazuhGroupDialog>(null, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: string group }) return;
+
+        var (ok, message) = await Onboarding.SetWazuhAgentGroupAsync(tenant.Id, group);
+        Snackbar.Add(message, ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
+        _portfolio = await Posture.GetPortfolioAsync();
+    }
+
+    private async Task SetGoPhishAsync(Tenant tenant, bool enabled)
+    {
+        if (enabled)
+        {
+            var confirmed = await Dialogs.ShowMessageBox($"Import GoPhish results for {tenant.DisplayName}?",
+                (MarkupString)($"SecurePulse reads only the totals of each campaign (sent, opened, clicked, entered data, reported), never who did what, " +
+                $"and never launches campaigns or sends email.<br/><br/>Create a GoPhish user with the standard <b>User</b> role for this tenant, " +
+                $"run the tenant's campaigns as that user, and store that user's API key in Key Vault as " +
+                $"<b>{GoPhishSecrets.ApiKeySecretName(tenant.Id)}</b>. Keys of GoPhish admins are refused."),
+                yesText: "Turn on", cancelText: "Cancel");
+            if (confirmed != true) return;
+        }
+        var (ok, message) = await Onboarding.SetGoPhishEnabledAsync(tenant.Id, enabled);
+        Snackbar.Add(message, ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
+        _portfolio = await Posture.GetPortfolioAsync();
+    }
+
+    private async Task DisableRemediationAsync(Tenant tenant)
+    {
+        var confirmed = await Dialogs.ShowMessageBox($"Turn off remediation for {tenant.DisplayName}?",
+            "SecurePulse stops sending device actions to this tenant, and open requests are cancelled. Ask the tenant's admin to also " +
+            "remove the remediation app in Microsoft Entra (Enterprise applications).",
+            yesText: "Turn off", cancelText: "Keep it on");
+        if (confirmed != true) return;
+        var done = await Onboarding.DisableRemediationAsync(tenant.Id);
+        Snackbar.Add(done ? $"Remediation turned off for {tenant.DisplayName}." : "Remediation was already off.", MudBlazor.Severity.Info);
+        _portfolio = await Posture.GetPortfolioAsync();
+    }
+    private PeriodicTimer? _timer;
+    private readonly CancellationTokenSource _cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var me = await Current.GetAsync();
+        _isOperator = me.IsOperator;
+        _isOwner = me.IsOwner;
+        _portfolio = await Posture.GetPortfolioAsync();
+        _pending = await Onboarding.GetOpenAsync();
+        _scans = await Scans.GetLatestAsync();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender) _ = PollAsync();
+    }
+
+    /// <summary>While any scan is queued or running, refresh so status and results update without a reload.</summary>
+    private async Task PollAsync()
+    {
+        _timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try
+        {
+            while (await _timer.WaitForNextTickAsync(_cts.Token))
+            {
+                if (!_scans.Values.Any(r => r.IsActive)) continue;
+                var before = _scans;
+                _scans = await Scans.GetLatestAsync();
+                if (before.Values.Any(r => r.IsActive && _scans.GetValueOrDefault((r.TenantId, r.Engine))?.IsActive != true))
+                    _portfolio = await Posture.GetPortfolioAsync(); // a scan finished: pick up its results
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task ScanNowAsync(Tenant tenant)
+    {
+        var queued = await Scans.RequestAsync([tenant.Id]);
+        Snackbar.Add(queued > 0 ? $"Scan of {tenant.DisplayName} queued." : $"Scans of {tenant.DisplayName} are already queued or running.",
+            queued > 0 ? MudBlazor.Severity.Success : MudBlazor.Severity.Info);
+        _scans = await Scans.GetLatestAsync();
+    }
+
+    private static string ReconsentUrl(Tenant t) =>
+        Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString("tenants/connect", new Dictionary<string, string?>
+        {
+            ["name"] = t.DisplayName, ["domain"] = t.PrimaryDomain, ["partner"] = t.PartnerName, ["industry"] = t.Industry
+        }.Where(kv => kv.Value is not null));
+
+    private static string? Clip(string? s) => s is { Length: > 180 } ? s[..180] + "…" : s;
+
+    public async ValueTask DisposeAsync()
+    {
+        await _cts.CancelAsync();
+        _timer?.Dispose();
+        _cts.Dispose();
+    }
 
     private static string ConsentLabel(TenantConsentState s) => s switch
     {

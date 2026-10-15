@@ -1,0 +1,17 @@
+@* One on/off Defender setting as a property row (inside a dl.sp-props): green when good, red when not, grey when not reported. *@
+<dt>@Label</dt>
+<dd>
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+        <MudIcon Size="Size.Small"
+                 Icon="@(Value switch { true => Icons.Material.Rounded.CheckCircle, false => Icons.Material.Rounded.Cancel, _ => Icons.Material.Rounded.HelpOutline })"
+                 Color="@(Value switch { true => Color.Success, false => Color.Error, _ => Color.Default })" />
+        <span>@(Value switch { true => On, false => Off, _ => "Not reported" })</span>
+    </MudStack>
+</dd>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public bool? Value { get; set; }
+    [Parameter] public string On { get; set; } = "On";
+    [Parameter] public string Off { get; set; } = "Off";
+}

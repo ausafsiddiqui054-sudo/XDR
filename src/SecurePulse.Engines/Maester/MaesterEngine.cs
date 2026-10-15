@@ -1,5 +1,4 @@
-using System.Diagnostics;
-using System.Text.RegularExpressions;
+using System.Text.Json;
 using SecurePulse.Core.Abstractions;
 using SecurePulse.Core.Models;
 
@@ -20,6 +19,12 @@ public sealed class MaesterOptions
     public string WorkRoot { get; set; } = Path.Combine(Path.GetTempPath(), "securepulse-scans");
 
     public TimeSpan Timeout { get; set; } = TimeSpan.FromMinutes(20);
+
+    /// <summary>
+    /// Exact Maester module version to load (e.g. "2.3.0"). Empty loads the newest installed one;
+    /// pin it so a module update can't change scan results without you knowing.
+    /// </summary>
+    public string ModuleVersion { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -27,9 +32,9 @@ public sealed class MaesterOptions
 /// then parses the JSON output. The certificate must already be installed in the worker's
 /// certificate store; the tenant's <see cref="Tenant.CredentialReference"/> holds its thumbprint.
 /// </summary>
-public sealed partial class MaesterEngine(MaesterOptions options) : IScanEngine
+public sealed class MaesterEngine(MaesterOptions options) : IScanEngine
 {
-    public string Name => "Maester";
+    public string Name => ScanEngines.Maester;
 
     // Parameters are passed through -File with ArgumentList (never string-concatenated),
     // so tenant data can't inject PowerShell. Verify cmdlet parameters against the
@@ -40,13 +45,15 @@ public sealed partial class MaesterEngine(MaesterOptions options) : IScanEngine
             [Parameter(Mandatory)][string]$ClientId,
             [Parameter(Mandatory)][string]$Thumbprint,
             [Parameter(Mandatory)][string]$TestsPath,
-            [Parameter(Mandatory)][string]$OutputJson
+            [Parameter(Mandatory)][string]$OutputJson,
+            [string]$ModuleVersion = ''
         )
         $ErrorActionPreference = 'Stop'
-        Import-Module Maester
+        if ($ModuleVersion) { Import-Module Maester -RequiredVersion $ModuleVersion } else { Import-Module Maester }
         Connect-MgGraph -TenantId $TenantId -ClientId $ClientId -CertificateThumbprint $Thumbprint -NoWelcome
         try {
-            Invoke-Maester -Path $TestsPath -OutputJsonFile $OutputJson -NonInteractive -SkipVersionCheck | Out-Null
+            # Parameters verified against Maester 2.3.0. Telemetry off: scans cover client tenants.
+            Invoke-Maester -Path $TestsPath -OutputJsonFile $OutputJson -NonInteractive -SkipVersionCheck -DisableTelemetry -NoLogo | Out-Null
         }
         finally {
             Disconnect-MgGraph | Out-Null
@@ -57,98 +64,65 @@ public sealed partial class MaesterEngine(MaesterOptions options) : IScanEngine
     {
         var started = DateTimeOffset.UtcNow;
 
-        if (tenant.ConsentState is not (TenantConsentState.ReadOnlyGranted or TenantConsentState.RemediationGranted))
-            return Fail(tenant, started, "Tenant has not granted consent.");
+        if (OutOfProcessScan.Validate(tenant, "Maester", options.AppClientId, options.ModuleVersion, out var clientId) is { } invalid)
+            return Fail(tenant, started, invalid);
+        var testsPath = Path.GetFullPath(options.TestsPath);
+        if (!Directory.Exists(testsPath))
+            return Fail(tenant, started, $"Maester tests folder not found at {testsPath}. Run Install-MaesterTests there first.");
 
-        var thumbprint = tenant.CredentialReference ?? string.Empty;
-        if (!ThumbprintPattern().IsMatch(thumbprint))
-            return Fail(tenant, started, "Tenant credential reference is not a valid certificate thumbprint.");
-
-        var workDir = Path.Combine(options.WorkRoot, $"{tenant.Id:N}-{started:yyyyMMddHHmmss}");
-        Directory.CreateDirectory(workDir);
-        var scriptPath = Path.Combine(workDir, "scan.ps1");
-        var outputJson = Path.Combine(workDir, "maester-results.json");
-        await File.WriteAllTextAsync(scriptPath, ScanScript, cancellationToken);
-
-        var psi = new ProcessStartInfo(options.PwshPath)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            WorkingDirectory = workDir
-        };
-        foreach (var arg in new[]
-                 {
-                     "-NoProfile", "-NonInteractive", "-File", scriptPath,
-                     "-TenantId", tenant.EntraTenantId.ToString(),
-                     "-ClientId", options.AppClientId,
-                     "-Thumbprint", thumbprint,
-                     "-TestsPath", Path.GetFullPath(options.TestsPath),
-                     "-OutputJson", outputJson
-                 })
-        {
-            psi.ArgumentList.Add(arg);
-        }
-
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(options.Timeout);
-
+        // A unique folder per run; deleted afterwards because it holds the tenant's results.
+        var workDir = OutOfProcessScan.CreateWorkDirectory(options.WorkRoot, tenant.Id, started);
         try
         {
-            using var process = Process.Start(psi) ?? throw new InvalidOperationException("Could not start pwsh.");
-            var stderrTask = process.StandardError.ReadToEndAsync(timeout.Token);
-            _ = process.StandardOutput.ReadToEndAsync(timeout.Token); // drain to avoid blocking
+            var scriptPath = Path.Combine(workDir, "scan.ps1");
+            var outputJson = Path.Combine(workDir, "maester-results.json");
+            await File.WriteAllTextAsync(scriptPath, ScanScript, cancellationToken);
 
-            try
-            {
-                await process.WaitForExitAsync(timeout.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                process.Kill(entireProcessTree: true);
+            List<string> args =
+            [
+                "-NoProfile", "-NonInteractive", "-File", scriptPath,
+                "-TenantId", tenant.EntraTenantId.ToString(),
+                "-ClientId", clientId.ToString(),
+                "-Thumbprint", tenant.CredentialReference!,
+                "-TestsPath", testsPath,
+                "-OutputJson", outputJson
+            ];
+            if (!string.IsNullOrEmpty(options.ModuleVersion))
+                args.AddRange(["-ModuleVersion", options.ModuleVersion]);
+
+            var outcome = await OutOfProcessScan.RunAsync(options.PwshPath, args, workDir, options.Timeout, cancellationToken);
+            if (outcome.StartError is not null)
+                return Fail(tenant, started, $"Could not start PowerShell 7 at '{options.PwshPath}': {outcome.StartError}");
+            if (outcome.TimedOut)
                 return Fail(tenant, started, "Maester scan timed out or was cancelled.");
-            }
-
             if (!File.Exists(outputJson))
-            {
-                var stderr = await stderrTask;
-                return Fail(tenant, started, $"Maester produced no results (exit {process.ExitCode}). {Trim(stderr)}");
-            }
+                return Fail(tenant, started, $"Maester produced no results (exit {outcome.ExitCode}). {OutOfProcessScan.Clip(outcome.StandardError)}");
 
             var json = await File.ReadAllTextAsync(outputJson, cancellationToken);
+            IReadOnlyList<Finding> findings;
+            try
+            {
+                findings = MaesterResultParser.Parse(json, tenant.Id, started);
+            }
+            catch (JsonException ex)
+            {
+                return Fail(tenant, started, $"Maester results weren't valid JSON: {ex.Message}");
+            }
+
             return new ScanResult
             {
                 TenantId = tenant.Id,
                 Source = Name,
                 StartedAt = started,
                 CompletedAt = DateTimeOffset.UtcNow,
-                Findings = MaesterResultParser.Parse(json, tenant.Id, started)
+                Findings = findings
             };
         }
         finally
         {
-            TryDelete(scriptPath);
+            OutOfProcessScan.TryDeleteDirectory(workDir);
         }
     }
 
-    private ScanResult Fail(Tenant tenant, DateTimeOffset started, string error) => new()
-    {
-        TenantId = tenant.Id,
-        Source = Name,
-        StartedAt = started,
-        CompletedAt = DateTimeOffset.UtcNow,
-        Findings = [],
-        Succeeded = false,
-        Error = error
-    };
-
-    private static string Trim(string s) => s.Length > 500 ? s[..500] + "…" : s;
-
-    private static void TryDelete(string path)
-    {
-        try { File.Delete(path); } catch { /* best effort */ }
-    }
-
-    [GeneratedRegex("^[A-Fa-f0-9]{40}$")]
-    private static partial Regex ThumbprintPattern();
+    private ScanResult Fail(Tenant tenant, DateTimeOffset started, string error) => OutOfProcessScan.Failed(tenant, Name, started, error);
 }

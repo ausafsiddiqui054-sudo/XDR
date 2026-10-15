@@ -1,0 +1,259 @@
+@page "/settings/audit"
+@attribute [Authorize(Policy = Policies.Operator)]
+@using SecurePulse.Core.Abstractions
+@inject IAuditLog Log
+@inject IAuditExportStore Exports
+@inject ITenantRepository Tenants
+@inject TimeProvider Time
+
+<PageTitle>Audit log · SecurePulse</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
+    <div>
+        <MudText Typo="Typo.h4">Audit log</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Sign-ins, people changes, onboarding and device requests. Entries can't be edited; only the retention job removes old ones.</MudText>
+    </div>
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Download"
+               Href="@($"settings/audit/export.csv{_filter.ToQueryString()}")" UserAttributes="@(new() { ["download"] = "" })">
+        Export CSV
+    </MudButton>
+</MudStack>
+
+<MudAlert Severity="@(_lastPurge?.Outcome == AuditOutcome.Failure ? MudBlazor.Severity.Warning : MudBlazor.Severity.Info)"
+          Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px" Icon="@Icons.Material.Rounded.History" data-testid="retention">
+    @if (_lastPurge is null)
+    {
+        <span>No audit events have been removed. Events are kept until a retention period is set for the Worker (<code>AuditRetention:RetainFor</code>).</span>
+    }
+    else if (_lastPurge.Outcome == AuditOutcome.Success)
+    {
+        <span>
+            Retention: events older than @Days(_lastPurge) days are removed.
+            Last run @Dashboard.Ago(_lastPurge.OccurredAt).ToLowerInvariant() removed @Count(_lastPurge, "deleted") events from before @Cutoff(_lastPurge).
+            @if (_lastPurge.Details.ContainsKey("heldForExport"))
+            {
+                <text> @Count(_lastPurge, "heldForExport") older events were kept because Microsoft Sentinel doesn't have them yet.</text>
+            }
+        </span>
+    }
+    else
+    {
+        <span><b>The last retention run didn't finish</b> (@Dashboard.Ago(_lastPurge.OccurredAt).ToLowerInvariant()): @_lastPurge.Summary</span>
+    }
+</MudAlert>
+
+@if (_export is { } export)
+{
+    <MudAlert Severity="@(export.LastError is null ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning)" Variant="Variant.Outlined"
+              Class="mb-4" Style="border-radius:16px" Icon="@Icons.Material.Rounded.CloudUpload" data-testid="sentinel-export">
+        @if (export.LastError is { } error)
+        {
+            <span>
+                <b>Sending audit events to Microsoft Sentinel is failing.</b> @export.Pending.ToString("N0") events are waiting and are
+                kept until they're sent. Last attempt @Dashboard.Ago(export.LastAttemptAt).ToLowerInvariant(): @error
+            </span>
+        }
+        else
+        {
+            <span>
+                Microsoft Sentinel: @export.ExportedCount.ToString("N0") events sent@(export.LastExportedAt is { } sentAt ? $", last {Dashboard.Ago(sentAt).ToLowerInvariant()}" : "").
+                @(export.Pending == 0 ? "Up to date." : $"{export.Pending:N0} newer events go with the next run.")
+            </span>
+        }
+    </MudAlert>
+}
+
+<MudPaper Class="sp-card pa-4 mb-4" Elevation="0" Outlined="true">
+    <MudGrid Spacing="3">
+        <MudItem xs="6" md="2">
+            <MudSelect T="string" Value="_filter.Period" ValueChanged="@(v => ApplyAsync(_filter with { Period = v }))" Label="Period"
+                       Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
+                @foreach (var p in AuditFilter.Periods)
+                {
+                    <MudSelectItem T="string" Value="@p.Key">@p.Label</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="6" md="2">
+            <MudSelect T="string" Value="_filter.Category" ValueChanged="@(v => ApplyAsync(_filter with { Category = v }))" Label="Area"
+                       Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" Clearable="true">
+                @foreach (var (key, label) in AuditActions.Categories)
+                {
+                    <MudSelectItem T="string" Value="@key">@label</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="6" md="2">
+            <MudSelect T="AuditOutcome?" Value="_filter.Outcome" ValueChanged="@(v => ApplyAsync(_filter with { Outcome = v }))" Label="Outcome"
+                       Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" Clearable="true">
+                @foreach (var o in Enum.GetValues<AuditOutcome>())
+                {
+                    <MudSelectItem T="AuditOutcome?" Value="@o">@o</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <MudSelect T="Guid?" Value="_filter.TenantId" ValueChanged="@(v => ApplyAsync(_filter with { TenantId = v }))" Label="Tenant"
+                       Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense" Clearable="true">
+                @foreach (var (id, name) in _tenantNames.OrderBy(t => t.Value))
+                {
+                    <MudSelectItem T="Guid?" Value="@id">@name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudTextField T="string" Value="_filter.Search" ValueChanged="@(v => ApplyAsync(_filter with { Search = v }))" Label="Search person or text"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" DebounceInterval="400" Clearable="true"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" />
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudPaper Class="sp-card pa-2" Elevation="0" Outlined="true">
+    @if (_events is null)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    else
+    {
+        <MudTable Items="_events" T="AuditEvent" Elevation="0" Breakpoint="Breakpoint.Sm" Dense="true" Hover="true"
+                  RowClass="sp-clickable-row" OnRowClick="@(e => _open = _open == e.Item!.Id ? null : e.Item!.Id)">
+            <HeaderContent>
+                <MudTh>When</MudTh>
+                <MudTh>Event</MudTh>
+                <MudTh Style="min-width:230px">Who</MudTh>
+                <MudTh>Tenant</MudTh>
+                <MudTh>Outcome</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="When" Style="white-space:nowrap">
+                    <MudText Typo="Typo.body2">@context.OccurredAt.ToLocalTime().ToString("d MMM, HH:mm:ss")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@Dashboard.Ago(context.OccurredAt)</MudText>
+                </MudTd>
+                <MudTd DataLabel="Event">
+                    <MudText Typo="Typo.body2" Style="font-weight:600">@AuditActions.Label(context.Action)</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Summary</MudText>
+                </MudTd>
+                <MudTd DataLabel="Who">
+                    @{ var (name, signInName) = SplitActor(context.ActorName); }
+                    <MudText Typo="Typo.body2">@name</MudText>
+                    @if (signInName is not null)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Style="overflow-wrap:anywhere">@signInName</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Tenant">@(context.TenantId is { } id ? _tenantNames.GetValueOrDefault(id, "Removed tenant") : "—")</MudTd>
+                <MudTd DataLabel="Outcome">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@OutcomeColor(context.Outcome)">@context.Outcome</MudChip>
+                </MudTd>
+            </RowTemplate>
+            <ChildRowContent>
+                @if (_open == context.Id)
+                {
+                    <td colspan="5" class="px-4 pb-4">
+                        <dl class="sp-props sp-evidence" style="font-family:inherit">
+                            <dt>Event</dt><dd><code>@context.Action</code></dd>
+                            @if (context.TargetType is not null)
+                            {
+                                <dt>Target</dt><dd>@context.TargetType <code>@context.TargetId</code></dd>
+                            }
+                            @if (context.ActorUserId is { } actorId)
+                            {
+                                <dt>Portal user ID</dt><dd><code>@actorId</code></dd>
+                            }
+                            @if (context.IpAddress is not null)
+                            {
+                                <dt>IP address</dt><dd><code>@context.IpAddress</code></dd>
+                            }
+                            @foreach (var (key, value) in context.Details.OrderBy(d => d.Key))
+                            {
+                                <dt>@key</dt><dd>@value</dd>
+                            }
+                            <dt>Time (UTC)</dt><dd>@context.OccurredAt.UtcDateTime.ToString("u")</dd>
+                        </dl>
+                    </td>
+                }
+            </ChildRowContent>
+            <NoRecordsContent>
+                <MudText Class="pa-6" Color="Color.Secondary">No events match these filters.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+
+        @if (_hasMore)
+        {
+            <MudStack AlignItems="AlignItems.Center" Class="py-3">
+                <MudButton Variant="Variant.Text" Color="Color.Primary" Disabled="_loading" OnClick="LoadOlderAsync">Load older events</MudButton>
+            </MudStack>
+        }
+    }
+</MudPaper>
+
+@code {
+    private const int PageSize = 50;
+
+    private AuditFilter _filter = new();
+    private List<AuditEvent>? _events;
+    private Dictionary<Guid, string> _tenantNames = [];
+    private Guid? _open;
+    private bool _hasMore;
+    private bool _loading;
+    private AuditEvent? _lastPurge;
+    private AuditExportStatus? _export;
+
+    private static string Days(AuditEvent e) => e.Details.GetValueOrDefault("retainForDays", "?");
+
+    private static string Count(AuditEvent e, string key) =>
+        long.TryParse(e.Details.GetValueOrDefault(key), System.Globalization.CultureInfo.InvariantCulture, out var n) ? n.ToString("N0") : "?";
+
+    private static string Cutoff(AuditEvent e) =>
+        DateTimeOffset.TryParse(e.Details.GetValueOrDefault("cutoff"), System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.RoundtripKind, out var at) ? at.ToLocalTime().ToString("d MMM yyyy") : "?";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _tenantNames = (await Tenants.GetAllAsync()).ToDictionary(t => t.Id, t => t.DisplayName);
+        _lastPurge = (await Log.QueryAsync(new AuditQuery { Action = AuditActions.AuditPurged, Limit = 1 })).FirstOrDefault();
+        _export = await Exports.GetStatusAsync(AuditExportDestinations.Sentinel);
+        await ApplyAsync(_filter);
+    }
+
+    private async Task ApplyAsync(AuditFilter filter)
+    {
+        _filter = filter;
+        _open = null;
+        var page = await Log.QueryAsync(filter.ToQuery(Time.GetUtcNow(), PageSize));
+        _events = page.ToList();
+        _hasMore = page.Count == PageSize;
+    }
+
+    private async Task LoadOlderAsync()
+    {
+        if (_events is not { Count: > 0 }) return;
+        _loading = true;
+        try
+        {
+            var last = _events[^1];
+            var page = await Log.QueryAsync(_filter.ToQuery(Time.GetUtcNow(), PageSize, (last.OccurredAt, last.Id)));
+            _events.AddRange(page);
+            _hasMore = page.Count == PageSize;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    /// <summary>"Name &lt;sign-in name&gt;" → (Name, sign-in name), so long addresses don't break the name.</summary>
+    private static (string Name, string? SignInName) SplitActor(string actor)
+    {
+        var open = actor.LastIndexOf(" <", StringComparison.Ordinal);
+        return open > 0 && actor.EndsWith('>') ? (actor[..open], actor[(open + 2)..^1]) : (actor, null);
+    }
+
+    private static Color OutcomeColor(AuditOutcome outcome) => outcome switch
+    {
+        AuditOutcome.Success => Color.Success,
+        AuditOutcome.Denied => Color.Error,
+        _ => Color.Warning
+    };
+}

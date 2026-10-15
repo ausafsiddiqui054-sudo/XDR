@@ -1,0 +1,387 @@
+@page "/tenants/connect/{Id:guid}"
+@attribute [Authorize(Policy = Policies.Operator)]
+@using SecurePulse.Core.Abstractions
+@using SecurePulse.Web.Services.Onboarding
+@implements IAsyncDisposable
+@inject OnboardingService Onboarding
+@inject IDeviceRepository Devices
+@inject PortalMode Mode
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject TimeProvider Time
+
+<PageTitle>Connect @(_request?.DisplayName ?? "tenant") · SecurePulse</PageTitle>
+
+<MudBreadcrumbs Items="_breadcrumbs" Class="px-0 pt-0" />
+
+@if (!_loaded)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_request is null)
+{
+    <MudPaper Class="sp-card pa-8" Elevation="0" Outlined="true">
+        <MudStack AlignItems="AlignItems.Center" Spacing="2">
+            <MudText Typo="Typo.h6">Connection not found</MudText>
+            <MudButton Variant="Variant.Text" Color="Color.Primary" Href="tenants/connect">Start a new connection</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+else
+{
+    var r = _request;
+    var now = Time.GetUtcNow();
+    var expired = r.IsExpired(now);
+    var consentUrl = Onboarding.GetConsentUrl(r, Nav.BaseUri);
+    var remediation = r.Kind == OnboardingKind.Remediation;
+    var configuration = r.Kind == OnboardingKind.Configuration;
+
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
+        <div>
+            <MudText Typo="Typo.h4">@r.DisplayName</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@r.PrimaryDomain · @(r.PartnerName ?? "Direct client") · @r.Industry</MudText>
+        </div>
+        <MudStack Row="true" Spacing="1">
+            @if (remediation)
+            {
+                <MudChip T="string" Variant="Variant.Outlined" Color="Color.Warning" Icon="@Icons.Material.Rounded.Build">Remediation access</MudChip>
+            }
+            @if (configuration)
+            {
+                <MudChip T="string" Variant="Variant.Outlined" Color="Color.Warning" Icon="@Icons.Material.Rounded.Policy">Configuration access</MudChip>
+            }
+            <MudChip T="string" Variant="Variant.Outlined" Color="@SecurePulseTheme.ColorOf(r, now)">@SecurePulseTheme.Label(r, now)</MudChip>
+        </MudStack>
+    </MudStack>
+
+    @if (remediation && r.Status is OnboardingStatus.AwaitingConsent or OnboardingStatus.Verifying)
+    {
+        <MudAlert Severity="MudBlazor.Severity.Warning" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px" data-testid="remediation-explainer">
+            This grants SecurePulse's separate remediation app permission to sync, restart, retire and wipe this tenant's Intune devices
+            (DeviceManagementManagedDevices.PrivilegedOperations.All, nothing else). Each action still needs a reason, a second admin's
+            approval (an Owner's for retire and wipe) and is written to the audit log.
+        </MudAlert>
+    }
+
+    @if (configuration && r.Status is OnboardingStatus.AwaitingConsent or OnboardingStatus.Verifying)
+    {
+        <MudAlert Severity="MudBlazor.Severity.Warning" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px" data-testid="configuration-explainer">
+            This grants SecurePulse's separate configuration app permission to read policies and create Conditional Access policies
+            (Policy.Read.All and Policy.ReadWrite.ConditionalAccess, nothing else). SecurePulse only creates reviewed policies in report-only mode,
+            each approved by an Owner other than the requester, and never switches them on: the tenant's admin does that in Entra.
+        </MudAlert>
+    }
+
+    @if (r.Kind == OnboardingKind.Assessment && _reconsentFor is { } existingTenant && r.Status is OnboardingStatus.AwaitingConsent or OnboardingStatus.Verifying)
+    {
+        <MudAlert Severity="MudBlazor.Severity.Info" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px">
+            Re-consent: @existingTenant.DisplayName is already connected. Approving again updates the permissions SecurePulse has there;
+            nothing else about the tenant changes.
+        </MudAlert>
+    }
+    @if (Reused)
+    {
+        <MudAlert Severity="MudBlazor.Severity.Info" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px">
+            A connection for this Microsoft 365 tenant was already in progress, so here it is.
+        </MudAlert>
+    }
+    @if (!Mode.UsesDatabase && r.Status is OnboardingStatus.AwaitingConsent or OnboardingStatus.Verifying)
+    {
+        <MudAlert Severity="MudBlazor.Severity.Info" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px">
+            Sample data mode: no Worker is running, so consent won't be verified. Configure PostgreSQL and run the Worker to finish onboarding.
+        </MudAlert>
+    }
+
+    <MudGrid Spacing="4">
+        <MudItem xs="12" md="7">
+            <MudPaper Class="sp-card pa-6" Elevation="0" Outlined="true">
+                @if (r.Status == OnboardingStatus.AwaitingConsent && !expired)
+                {
+                    <MudText Typo="Typo.h6">Send this link to the client's admin</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                        A Global Administrator of @r.PrimaryDomain signs in and approves @(remediation ? "remediation" : "read-only") access.
+                        If that's you, open it yourself. It expires @r.ExpiresAt.ToLocalTime().ToString("d MMM yyyy, HH:mm").
+                    </MudText>
+
+                    @if (consentUrl is not null)
+                    {
+                        <div class="sp-link-box mb-4" data-testid="consent-link">@consentUrl</div>
+                        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.ContentCopy"
+                                       OnClick="@(() => CopyAsync(consentUrl))">Copy link</MudButton>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" EndIcon="@Icons.Material.Rounded.OpenInNew"
+                                       Href="@consentUrl" Target="_blank">Open consent page</MudButton>
+                            <MudSpacer />
+                            <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="CancelAsync">Cancel connection</MudButton>
+                        </MudStack>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-4">
+                            The app registration needs this Web redirect URI: <code>@Onboarding.GetRedirectUri(Nav.BaseUri)</code>
+                        </MudText>
+                    }
+                    else
+                    {
+                        <MudAlert Severity="MudBlazor.Severity.Warning" Variant="Variant.Text" Dense="true">
+                            This link can't be shown any more (the portal's data-protection keys changed). Create a new one.
+                        </MudAlert>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="StartOverAsync">Create a new link</MudButton>
+                    }
+                }
+                else if (expired)
+                {
+                    <MudText Typo="Typo.h6" Class="mb-2">The consent link expired</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">Nobody approved it before @r.ExpiresAt.ToLocalTime().ToString("d MMM yyyy").</MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Link" OnClick="StartOverAsync">Create a new link</MudButton>
+                }
+                else if (r.Status == OnboardingStatus.Verifying)
+                {
+                    <MudText Typo="Typo.h6" Class="mb-2">Confirming access with Microsoft</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                        The admin approved access @Dashboard.Ago(r.ConsentReceivedAt).ToLowerInvariant(). SecurePulse is checking the permissions
+                        it was actually given. New consent can take a few minutes to reach every Microsoft region.
+                    </MudText>
+                    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Rounded="true" />
+                }
+                else if (r.Status == OnboardingStatus.Completed)
+                {
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Class="mb-3">
+                        <span class="sp-icon-badge"><MudIcon Icon="@Icons.Material.Rounded.CheckCircle" Color="Color.Success" /></span>
+                        <div>
+                            <MudText Typo="Typo.h6">@(remediation ? "Remediation access granted" : configuration ? "Configuration access granted" : "Connected")</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Verified @Dashboard.Ago(r.CompletedAt).ToLowerInvariant()</MudText>
+                        </div>
+                    </MudStack>
+                    <MudText Typo="Typo.overline" Color="Color.Secondary">Permissions granted</MudText>
+                    <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="mb-4">
+                        @foreach (var p in r.GrantedPermissions)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary">@p</MudChip>
+                        }
+                    </MudStack>
+                    <MudStack Row="true" Spacing="2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="@($"endpoints?tenant={r.TenantId}")"
+                                   StartIcon="@Icons.Material.Rounded.Devices">View devices</MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="tenants">All tenants</MudButton>
+                    </MudStack>
+                }
+                else if (r.Status == OnboardingStatus.Failed)
+                {
+                    <MudText Typo="Typo.h6" Class="mb-2">Couldn't verify access</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                        Fix the problem below, then create a new link for the admin to approve again.
+                    </MudText>
+                    <MudStack Row="true" Spacing="2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Link" OnClick="StartOverAsync">Create a new link</MudButton>
+                        <MudButton Variant="Variant.Text" OnClick="CancelAsync">Dismiss</MudButton>
+                    </MudStack>
+                }
+                else
+                {
+                    <MudText Typo="Typo.h6" Class="mb-2">Connection cancelled</MudText>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Href="tenants/connect">Start a new connection</MudButton>
+                }
+
+                @if (r.LastError is { } error && r.Status != OnboardingStatus.Completed)
+                {
+                    <MudAlert Severity="@(r.Status == OnboardingStatus.Failed ? MudBlazor.Severity.Error : MudBlazor.Severity.Warning)"
+                              Variant="Variant.Outlined" Class="mt-4" Style="border-radius:16px">
+                        @error
+                    </MudAlert>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            <MudPaper Class="sp-card pa-6" Elevation="0" Outlined="true">
+                <MudText Typo="Typo.h6" Class="mb-4">Progress</MudText>
+                <ol class="sp-steps">
+                    @foreach (var step in Steps(r, now))
+                    {
+                        <li class="@step.Css">
+                            <span class="sp-step-dot">
+                                @if (step.Css == "sp-done")
+                                {
+                                    <MudIcon Icon="@Icons.Material.Rounded.Check" Size="Size.Small" />
+                                }
+                                else if (step.Css == "sp-failed")
+                                {
+                                    <MudIcon Icon="@Icons.Material.Rounded.Close" Size="Size.Small" />
+                                }
+                                else
+                                {
+                                    @step.Number
+                                }
+                            </span>
+                            <div>
+                                <MudText Typo="Typo.body2" Style="font-weight:600">@step.Title</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@step.Detail</MudText>
+                            </div>
+                        </li>
+                    }
+                </ol>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "reused")]
+    public bool Reused { get; set; }
+
+    private static readonly TimeSpan PollEvery = TimeSpan.FromSeconds(3);
+
+    private OnboardingRequest? _request;
+    private DeviceSyncStatus? _sync;
+    private bool _loaded;
+    private List<BreadcrumbItem> _breadcrumbs = [];
+    private PeriodicTimer? _timer;
+    private readonly CancellationTokenSource _cts = new();
+
+    private sealed record Step(int Number, string Title, string Detail, string Css);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+        _loaded = true;
+        _breadcrumbs = [new("Tenants", href: "tenants"), new(_request?.DisplayName ?? "Connect", href: null, disabled: true)];
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender) _ = PollAsync();
+    }
+
+    private Tenant? _reconsentFor;
+
+    private async Task LoadAsync()
+    {
+        _request = await Onboarding.GetAsync(Id);
+        _reconsentFor = _request is null ? null : await Onboarding.GetConnectedTenantAsync(_request);
+        _sync = _request?.TenantId is { } tenantId ? await Devices.GetSyncStatusAsync(tenantId) : null;
+    }
+
+    /// <summary>Refreshes while something is still expected to change: consent, verification or the first sync.</summary>
+    private async Task PollAsync()
+    {
+        _timer = new PeriodicTimer(PollEvery);
+        try
+        {
+            while (await _timer.WaitForNextTickAsync(_cts.Token))
+            {
+                if (_request is null) continue;
+                var waiting = _request.Status is OnboardingStatus.AwaitingConsent or OnboardingStatus.Verifying && !_request.IsExpired(Time.GetUtcNow())
+                              || _request.Status == OnboardingStatus.Completed && _sync is null;
+                if (!waiting) continue;
+
+                await LoadAsync();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private IEnumerable<Step> Steps(OnboardingRequest r, DateTimeOffset now)
+    {
+        var consented = r.ConsentReceivedAt is not null;
+        yield return new(1, "Consent link created", r.CreatedAt.ToLocalTime().ToString("d MMM, HH:mm"), "sp-done");
+
+        yield return consented
+            ? new(2, "Admin approved access", r.ConsentReceivedAt!.Value.ToLocalTime().ToString("d MMM, HH:mm"), "sp-done")
+            : r.IsExpired(now)
+                ? new(2, "Admin approves access", "Link expired", "sp-failed")
+                : new(2, "Admin approves access", "Waiting for the client's Global Administrator", r.Status == OnboardingStatus.AwaitingConsent ? "sp-current" : "");
+
+        yield return r.Status switch
+        {
+            OnboardingStatus.Completed => new(3, "Access verified",
+                r.Kind switch
+                {
+                    OnboardingKind.Remediation => "Device actions permission only",
+                    OnboardingKind.Configuration => "Conditional Access permissions only",
+                    _ => $"{r.GrantedPermissions.Count} read-only permissions"
+                }, "sp-done"),
+            OnboardingStatus.Verifying => new(3, "Verifying access", r.VerificationAttempts > 0 ? $"Attempt {r.VerificationAttempts + 1}" : "Checking with Microsoft Entra", "sp-current"),
+            OnboardingStatus.Failed when consented => new(3, "Verify access", "Verification failed", "sp-failed"),
+            _ => new(3, "Verify access", "SecurePulse confirms the permissions it was given", "")
+        };
+
+        if (r.Kind == OnboardingKind.Remediation)
+        {
+            yield return r.Status == OnboardingStatus.Completed
+                ? new(4, "Device actions available", "Request them from a device's page", "sp-done")
+                : new(4, "Device actions available", "As soon as access is verified", "");
+            yield break;
+        }
+        if (r.Kind == OnboardingKind.Configuration)
+        {
+            yield return r.Status == OnboardingStatus.Completed
+                ? new(4, "Configuration fixes available", "Propose them from a failed finding", "sp-done")
+                : new(4, "Configuration fixes available", "As soon as access is verified", "");
+            yield break;
+        }
+
+        yield return (r.Status, _sync) switch
+        {
+            (OnboardingStatus.Completed, { Succeeded: true } s) => new(4, "First device sync", $"{s.DeviceCount} devices", "sp-done"),
+            (OnboardingStatus.Completed, { Succeeded: false }) => new(4, "First device sync", "Failed; see the Endpoints page", "sp-failed"),
+            (OnboardingStatus.Completed, null) => new(4, "First device sync", "Reading devices from Intune", "sp-current"),
+            _ => new(4, "First device sync", "Starts as soon as access is verified", "")
+        };
+    }
+
+    private async Task CopyAsync(string url)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", url);
+            Snackbar.Add("Consent link copied", MudBlazor.Severity.Success);
+        }
+        catch (JSException)
+        {
+            Snackbar.Add("Couldn't copy automatically. Select the link and copy it.", MudBlazor.Severity.Warning);
+        }
+    }
+
+    private async Task CancelAsync()
+    {
+        await Onboarding.CancelAsync(Id);
+        Nav.NavigateTo("tenants");
+    }
+
+    private async Task StartOverAsync()
+    {
+        if (_request is null) return;
+        await Onboarding.CancelAsync(_request.Id);
+        if (_request.Kind is OnboardingKind.Remediation or OnboardingKind.Configuration)
+        {
+            var again = _reconsentFor is not { } tenant ? new StartOnboardingResult(null, "The tenant isn't connected any more.")
+                : _request.Kind == OnboardingKind.Remediation ? await Onboarding.StartRemediationAsync(tenant.Id)
+                : await Onboarding.StartConfigurationAsync(tenant.Id);
+            if (again.Request is { } nextRemediation)
+                Nav.NavigateTo($"tenants/connect/{nextRemediation.Id}");
+            else
+                Snackbar.Add(again.Error ?? "Couldn't create a new link.", MudBlazor.Severity.Error);
+            return;
+        }
+        var result = await Onboarding.StartAsync(new ConnectTenantForm
+        {
+            DisplayName = _request.DisplayName,
+            PrimaryDomain = _request.PrimaryDomain,
+            PartnerName = _request.PartnerName,
+            Industry = _request.Industry
+        });
+        if (result.Request is { } next)
+            Nav.NavigateTo($"tenants/connect/{next.Id}");
+        else
+            Snackbar.Add(result.Error ?? "Couldn't create a new link.", MudBlazor.Severity.Error);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _cts.CancelAsync();
+        _timer?.Dispose();
+        _cts.Dispose();
+    }
+}

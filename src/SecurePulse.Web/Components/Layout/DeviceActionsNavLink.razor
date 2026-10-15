@@ -1,0 +1,18 @@
+@inject DeviceActionRequestService Actions
+
+<MudNavLink Href="devices/actions" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Rounded.HowToReg">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+        <span>Device actions</span>
+        @if (_waiting > 0)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled" Class="ma-0"
+                     title="Waiting for your approval" data-testid="approvals-badge">@_waiting</MudChip>
+        }
+    </MudStack>
+</MudNavLink>
+
+@code {
+    private int _waiting;
+
+    protected override async Task OnInitializedAsync() => _waiting = await Actions.CountAwaitingMyApprovalAsync();
+}

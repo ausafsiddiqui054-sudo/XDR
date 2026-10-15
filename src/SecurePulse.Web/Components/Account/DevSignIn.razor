@@ -1,0 +1,58 @@
+@page "/dev/sign-in"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@layout PublicLayout
+@using SecurePulse.Core.Abstractions
+@inject SignInMode Mode
+@inject ITenantRepository Tenants
+
+<PageTitle>Development sign-in · SecurePulse</PageTitle>
+
+<MudPaper Class="sp-card pa-8" Elevation="0" Outlined="true">
+    @if (Mode.UsesEntra)
+    {
+        <MudText Typo="Typo.h6">Development sign-in is off</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">This portal signs in with Microsoft Entra ID.</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="authentication/login">Sign in</MudButton>
+    }
+    else
+    {
+        <MudAlert Severity="MudBlazor.Severity.Warning" Variant="Variant.Outlined" Class="mb-6" Style="border-radius:16px">
+            Development sign-in: AzureAd:ClientId isn't set, so you pick who to be. This page only exists in Development.
+        </MudAlert>
+        <MudText Typo="Typo.h5" Class="mb-1">Sign in as</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">Each persona goes through the same invitation and role checks as a real sign-in.</MudText>
+
+        <form method="post" action="authentication/dev-login">
+            <AntiforgeryToken />
+            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+            <MudStack Spacing="2">
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                           name="persona" value="owner" StartIcon="@Icons.Material.Rounded.AdminPanelSettings">Owner</MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
+                           name="persona" value="msp-admin" StartIcon="@Icons.Material.Rounded.SupportAgent">MSP admin</MudButton>
+                @foreach (var tenant in _tenants)
+                {
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Color="Color.Secondary" FullWidth="true"
+                               name="persona" value="@($"viewer:{tenant.Id}")" StartIcon="@Icons.Material.Rounded.Visibility">
+                        Client viewer · @tenant.DisplayName
+                    </MudButton>
+                }
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Text" FullWidth="true"
+                           name="persona" value="unassigned" StartIcon="@Icons.Material.Rounded.PersonOff">Someone without access</MudButton>
+            </MudStack>
+        </form>
+    }
+</MudPaper>
+
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    private IReadOnlyList<Tenant> _tenants = [];
+
+    protected override async Task OnInitializedAsync() =>
+        _tenants = (await Tenants.GetAllAsync())
+            .Where(t => t.ConsentState is TenantConsentState.ReadOnlyGranted or TenantConsentState.RemediationGranted)
+            .OrderBy(t => t.DisplayName).ToList();
+}

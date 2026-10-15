@@ -12,25 +12,769 @@ and a client-ready report.
 ```
 SecurePulse.slnx
 ├── samples/maester-results.sample.json   Example Maester output used for testing the parser
+├── samples/scubagear-results.sample.json ScubaGear 1.8.0's own sample report (CC0; raw tenant export removed)
 └── src/
-    ├── SecurePulse.Core        Domain models (Finding, Tenant, ScanResult, RiskScore) + interfaces
-    ├── SecurePulse.Engines     Engine adapters. Maester: out-of-process runner + JSON parser
-    ├── SecurePulse.Reporting   RiskScoreCalculator (0–100 score, grade, top risks)
-    └── SecurePulse.Web         Blazor Server portal (MudBlazor, M3 Expressive-style theme)
+    ├── SecurePulse.Core        Domain models (Finding, Tenant, ManagedDevice, RiskScore) + interfaces
+    ├── SecurePulse.Data        EF Core + PostgreSQL repositories, migrations, dev seeder
+    ├── SecurePulse.Engines     Engine adapters (Maester, ScubaGear): out-of-process runners + JSON parsers
+    ├── SecurePulse.Intune      Intune device inventory over Microsoft Graph (certificate auth)
+    ├── SecurePulse.Reporting   RiskScoreCalculator (0–100 score, grade, top risks) and the branded PDF report (QuestPDF)
+    ├── SecurePulse.Web         Blazor Server portal (MudBlazor, M3 Expressive-style theme), consent links
+    └── SecurePulse.Worker      Background service: consent verification, Intune device sync, scheduled engine scans
+tests/
+    └── SecurePulse.Tests       xUnit: parser, scoring, Graph client, onboarding, sync, scans, PostgreSQL repositories
 ```
 
 ## Run it
 
-Requirements: .NET 10 SDK.
+Requirements: .NET 10 SDK. PostgreSQL 14+ for the database mode.
 
 ```bash
 dotnet restore
 dotnet run --project src/SecurePulse.Web
+dotnet test
 ```
 
-The portal starts with **sample data** (five fictional tenants) so you can design and demo
-the UI before connecting any real tenant. Pages: Overview (`/`), Findings (`/findings`),
+Without a connection string the portal runs on **in-memory sample data** (five fictional
+tenants), so you can design and demo the UI with nothing else installed. Without
+`AzureAd:ClientId`, Development offers a **development sign-in** page to pick a persona
+(Owner, MSP admin, a client viewer, or someone without access); outside Development the portal
+refuses to start without Entra sign-in. Pages: Overview (`/`),
+Findings (`/findings`), Endpoints (`/endpoints`, device detail at `/endpoints/{tenant}/{device}`),
 Tenants (`/tenants`). Dark mode toggle is in the top bar.
+
+### With PostgreSQL and the Worker
+
+Connection strings carry a password, so keep them out of `appsettings.json`: use user-secrets
+in development or the `ConnectionStrings__SecurePulse` environment variable elsewhere.
+
+```bash
+CS="Host=localhost;Database=securepulse;Username=securepulse;Password=..."
+dotnet user-secrets set ConnectionStrings:SecurePulse "$CS" --project src/SecurePulse.Web
+dotnet user-secrets set ConnectionStrings:SecurePulse "$CS" --project src/SecurePulse.Worker
+dotnet user-secrets set Intune:AppClientId "<multi-tenant app client ID>" --project src/SecurePulse.Worker
+
+dotnet run --project src/SecurePulse.Web      # Development: migrates, seeds demo data if empty
+dotnet run --project src/SecurePulse.Worker   # migrates, syncs Intune devices every 4 hours, scans daily
+```
+
+The Worker syncs tenants that have granted consent **and** have a certificate thumbprint in
+`CredentialReference`. The certificate (with private key) must be in the Worker's
+`CurrentUser\My` or `LocalMachine\My` store. Settings live under `DeviceSync` (interval,
+parallel tenants) and `Intune` (Graph and authority URLs for national clouds, retries,
+timeout) in `src/SecurePulse.Worker/appsettings.json`.
+
+Graph application permissions (read-only, admin consent in each client tenant):
+
+- `DeviceManagementManagedDevices.Read.All`: device inventory, compliance state and Defender
+  Antivirus state
+- `DeviceManagementConfiguration.Read.All`: per-setting compliance results for devices that
+  aren't compliant (one extra call per such device; turn off with `Intune:FetchComplianceSettings`)
+- `ThreatHunting.Read.All`: Defender for Endpoint sensor health (one advanced hunting query per
+  tenant). Maester needs it too, so connected tenants already have it.
+
+A failed sync keeps the tenant's last good inventory and shows a warning on the Endpoints
+page.
+
+### Defender health
+
+Each sync also reads Microsoft Defender health for every device, with no extra consent:
+
+- **Antivirus** (Windows): Intune's `windowsProtectionState` per device (Graph v1.0): antivirus
+  and real-time protection on, tamper protection, security intelligence up to date, threat state,
+  versions and last scan.
+- **EDR sensor** (all platforms): the latest `DeviceInfo` row per device from advanced hunting
+  (`POST /security/runHuntingQuery`, last 30 days): onboarding status, sensor health and
+  exposure level. Devices are matched by Entra device ID, falling back to the host name only
+  when the name is unique on both sides. The KQL is a fixed constant; nothing from a tenant is
+  put into it.
+
+`DefenderHealthEvaluator` (in Core) turns that into the device's state, and the sample data
+uses the same rules:
+
+| State | When |
+|---|---|
+| Unhealthy | Antivirus or real-time protection off, tamper protection off, signatures out of date, a threat waiting on remediation, or an onboarded sensor that isn't active |
+| Not onboarded | Defender for Endpoint data was read and a Windows, macOS or Linux device isn't onboarded (or a device was only discovered on the network). Phones aren't flagged: mobile onboarding is optional |
+| Protected | No issues, and antivirus is confirmed on or the sensor is active |
+| Unknown | Nothing to go on (e.g. a phone without mobile Defender, or no data yet) |
+
+Defender data never fails a sync. If the tenant has no Defender for Endpoint licence, or the
+hunting query fails, the inventory is still saved, a missing sensor counts as "not checked"
+rather than "not onboarded", and the Endpoints page shows the sync's warning. Antivirus calls
+that return 404 (not reported yet) aren't errors. Turn the extra calls off with
+`Intune:FetchDefenderHealth`.
+
+The Endpoints page shows Protected / Unhealthy / Not onboarded / Unknown tiles and the most
+common issues. Click a tile or an issue to filter the device list. Each device page has a
+Defender card with the issues, antivirus settings and sensor details. PDF reports include the
+same counts and top issues.
+
+To run the PostgreSQL repository tests, point `SECUREPULSE_TEST_POSTGRES` at a server
+(no `Database=`) with a role that can create databases. Each test class creates and drops its
+own database. Without the variable those tests are reported as skipped.
+
+## Running more than one portal instance
+
+The portal uses ASP.NET Core data protection for the sign-in cookie, antiforgery tokens and the
+state behind consent links. Every instance needs the same keys, otherwise a user signed in on one
+instance is signed out on the next and consent links can't be shown again. With PostgreSQL the key
+ring lives in the `data_protection_keys` table, shared by all instances.
+
+The database never holds the keys in the clear: each key is encrypted with a **key-encryption
+certificate** before it's stored, and the repository refuses to store a key that isn't encrypted.
+Use a certificate of its own (not the Graph app's), with its private key, in `CurrentUser\My` or
+`LocalMachine\My` on every portal host:
+
+| Setting | Default | |
+|---|---|---|
+| `DataProtection:Store` | `Auto` | `Auto`: the database when PostgreSQL is configured (local in Development without a certificate), otherwise local. `Database` or `Local` to choose. |
+| `DataProtection:CertificateThumbprint` | | The key-encryption certificate. Required for the database store. |
+| `DataProtection:PreviousCertificateThumbprints` | `[]` | Certificates rotated out, kept until the keys they encrypted have expired (keys live 90 days). |
+
+The portal won't start if the database store is used without a certificate, the thumbprint is
+malformed, or a certificate (current or previous) isn't found with its private key. It logs which
+store it uses, and warns when a certificate expires within 30 days. `Local` keeps ASP.NET Core's
+per-machine folder, for a single instance only; outside Development the portal warns about it.
+
+To rotate the certificate: install the new one on every host, set it as
+`CertificateThumbprint`, move the old thumbprint to `PreviousCertificateThumbprints`, and restart
+the instances. Remove the old one after 90 days. Switching an existing deployment to the shared
+store signs everyone out once, and consent links made before the switch can't be shown again
+(create new ones). The Worker applies the migration that creates the table, so update it first.
+Blazor Server keeps each user's session on one instance, so the load balancer needs sticky
+sessions as well.
+
+## Connecting a client tenant
+
+Tenants → **Connect tenant** creates an Entra admin-consent link for the client's domain. Send
+it to the client's Global Administrator (or open it yourself if you are one). After they
+approve, Entra redirects to `/onboarding/consent-callback`, and the Worker verifies the consent
+before the tenant counts as connected:
+
+1. The portal resolves the domain to its Entra tenant ID through the public OpenID discovery
+   document, and builds a link bound to that tenant with a random, single-use `state` (stored
+   only as a SHA-256 hash; an encrypted copy lets the link be shown again). Links expire after
+   `Onboarding:LinkLifetime` (7 days).
+2. The callback accepts consent only for a known, unexpired state from the expected tenant.
+   It never connects anything by itself, because its query string comes from a browser.
+3. The Worker gets an app-only token for the tenant with its certificate and reads the granted
+   permissions (`roles`). It requires every permission in `AssessmentPermissions.Required` and
+   rejects anything that isn't read-only. New consent can take minutes to propagate, so it
+   retries for `Onboarding:VerificationWindow` (30 minutes).
+4. On success it creates the tenant (or updates the existing one on re-consent) with the
+   Worker's certificate thumbprint as `CredentialReference`, then runs the first device sync.
+   The Connect page updates live through each step.
+
+App registration setup (one multi-tenant app):
+
+- **Supported account types:** accounts in any organizational directory (multi-tenant).
+- **Redirect URI (Web):** `https://<portal>/onboarding/consent-callback` (shown on the Connect page).
+- **API permissions (Application):** every permission listed on the Connect page (the two Intune
+  ones above plus Maester's, see [Security scans](#security-scans)). All are read-only. Nothing
+  with Write, Send or FullControl; verification fails if any are granted.
+- **Certificates:** upload the public key; install the certificate with its private key only on
+  the Worker. Portal: `Onboarding:AppClientId`. Worker: `Intune:AppClientId` and
+  `Onboarding:CertificateThumbprint`.
+
+The consent callback and result page are the only portal pages that work without signing in;
+the result page shows no tenant data.
+
+## Device remote actions
+
+Sync, restart, retire and wipe for Intune devices, plus a Defender Antivirus quick scan and signature
+update on Windows devices, from a device's page. They are write actions,
+so each one needs three things: remediation consent on the tenant, a second person's approval,
+and audit entries from request to result.
+
+**Remediation consent (a separate app).** Device actions use a second Entra app registration that
+holds only `DeviceManagementManagedDevices.PrivilegedOperations.All` (Graph, application), with its
+own certificate. The read-only assessment app never gets write permissions. On a connected tenant,
+an Owner chooses **Enable remediation**, which creates a consent link for the remediation app (the
+same single-use, expiring, tenant-bound link as onboarding). After the admin approves, the Worker
+gets a token for the remediation app and checks its `roles`: it must hold that one permission and
+nothing else, or verification fails. Only then does the tenant become *Remediation access*, with
+the remediation certificate's thumbprint stored as a reference next to the read-only one.
+**Turn off remediation** (Owner) moves the tenant back to read-only and cancels open requests; the
+tenant's admin should also remove the remediation app under Enterprise applications.
+
+**Request and approval.**
+
+| | Who |
+|---|---|
+| Request (with a reason) | Owner or MSP admin, on a tenant with remediation access |
+| Approve sync or restart | Another Owner or MSP admin |
+| Approve retire or wipe | Another Owner (typing the device name to confirm) |
+| Reject (with a reason) | Another Owner or MSP admin |
+| Cancel | Any Owner or MSP admin, until the Worker starts sending |
+
+Nobody approves their own request. A device has one open request at a time. Requests not approved
+within 24 hours expire, and approved ones not sent within an hour expire rather than going out
+late. Approval is fail-closed: its audit entry is written first, and if that fails the approval
+isn't applied. Pending requests appear under **Device actions**, with a count of the ones waiting
+for you in the menu.
+
+**Sending (Worker).** Every 15 seconds (`DeviceActions:PollInterval`) the Worker claims approved
+actions (`FOR UPDATE SKIP LOCKED`, so several Workers never send one twice) and for each:
+
+1. re-checks that the tenant still has remediation access and that the stored approval meets the
+   policy above (it doesn't trust the queue alone);
+2. gets a fresh token for the remediation app and checks its tenant and `roles` again;
+3. writes the *sending* audit entry, and sends nothing if that write fails;
+4. calls Graph v1.0 once (`syncDevice`, `rebootNow`, `retire`, `wipe` with no data kept,
+   `windowsDefenderScan` as a quick scan, or `windowsDefenderUpdateSignatures`).
+
+Failures are recorded with the reason and never retried; request it again if it's still needed.
+A timeout or a Worker that stopped mid-call is reported as *outcome unknown: check the device in
+Intune*, since the action may have reached it. *Sent* means Intune accepted it; it runs when the
+device next checks in.
+
+Setup:
+
+- **Remediation app registration:** multi-tenant, the same redirect URI as the main app, API
+  permission `DeviceManagementManagedDevices.PrivilegedOperations.All` (Application) only, and a
+  certificate of its own (private key only on the Worker).
+- **Portal:** `Onboarding:RemediationAppClientId` (must differ from `Onboarding:AppClientId`).
+- **Worker:** `Remediation:AppClientId`, `Remediation:CertificateThumbprint` (in the Worker user's
+  store), optionally `Remediation:SendTimeout` (60 seconds), `DeviceActions:Enabled`,
+  `DeviceActions:PollInterval` and `DeviceActions:StuckSendingAfter` (10 minutes).
+
+### Remediation playbooks
+
+Playbooks propose device actions automatically, n8n-style (*when this happens, do that*), and leave
+the decision to a person: **a playbook never sends anything itself.** After each successful device
+sync the Worker checks the tenant's fresh inventory against the enabled playbooks and adds a pending
+request to **Device actions** for each matching device. From there it is an ordinary request: another
+admin approves or rejects it, and the Worker re-checks the policy, remediation access and token before
+sending. The two Defender actions need the same single permission as the others, so tenants don't
+consent again.
+
+| When a device… | Can propose |
+|---|---|
+| hasn't checked in for N days (1–90) | Sync, Restart |
+| is noncompliant in Intune | Sync, Restart |
+| has Defender signatures out of date | Update Defender signatures, Sync |
+| has a Defender quick scan overdue | Defender quick scan |
+| needs a restart for Defender | Restart |
+
+- **Owners** create, change, switch on/off and delete playbooks under **Playbooks** (each change is
+  in the audit log as *Playbook created / changed / deleted*); MSP admins can see them. Edits are
+  conditional on the version you opened, so two Owners can't overwrite each other.
+- **Four eyes.** Proposals are requested in the name of whoever last saved the playbook, so that
+  person can't approve them. **Retire and wipe are never automated.** Defender actions only go to
+  Windows devices.
+- **Limits.** A playbook applies to one tenant or to every tenant with remediation access; it proposes
+  at most *N* actions per tenant per sync (default 20, up to 100) and at most one per device per
+  cooldown (default 1 day), whatever happened to the last one. A device that already has an open
+  request is left alone. Proposals expire after 24 hours like any request.
+- **Audit.** Each proposal records *Device action requested* with the playbook as the actor and its
+  ID in the details. Deleting a playbook stops new proposals; pending ones stay for a person to decide.
+- `Playbooks:Enabled` (Worker, default `true`) switches the whole feature off.
+
+**Pre-approved playbooks.** For actions that don't interrupt the person at the device (**Sync, Defender
+quick scan, Update Defender signatures**), an Owner can pre-approve a playbook so its proposals go out
+without a person approving each one. Four eyes move to the playbook itself:
+
+- **Who:** an Owner other than the playbook's last editor (**Pre-approve** on the card, after a
+  confirmation that spells out the trigger, action and limits). It covers exactly the version that
+  Owner saw: **any save withdraws it**, even switching the playbook off, and any Owner or MSP admin
+  can **Withdraw pre-approval** at any time. Restart always needs a per-action approval; retire and
+  wipe can't be in a playbook.
+- **For how long:** 90 days, then it lapses and proposals wait for a person until an Owner
+  pre-approves again. It also stops if the pre-approving person is no longer an Owner.
+- **How much:** each playbook has a daily limit per tenant (default 25, up to 100) over a rolling
+  24 hours; proposals beyond it wait for a person.
+- **Fail-closed:** pre-approving writes *Playbook pre-approved* to the audit log first, and nothing is
+  granted if that fails. For each automatic approval the Worker writes *Device action approved by
+  pre-approved playbook* first; if that fails the request waits for a person. The request records the
+  pre-approving Owner as the approver, and before sending the Worker re-checks that the pre-approval
+  still holds (same playbook, action and Owner, not expired or withdrawn), on top of the usual checks.
+- The card shows who pre-approved it and until when, and how many actions went out without a
+  per-action approval this week; the Device actions history marks them *Pre-approved*.
+
+
+### Configuration fixes for failed checks
+
+Some failed checks have a reviewed fix: a **Conditional Access policy created in report-only mode**. A
+report-only policy changes no sign-in; Entra logs what it would have done, so the tenant's admin can
+check the impact, exclude break-glass accounts and switch it on in Entra. **SecurePulse never switches a
+policy on**, and the policy body is a constant in the catalog: nothing from a finding or a tenant goes
+into it.
+
+| Fix | When this check fails | Creates (report-only) |
+|---|---|---|
+| Block legacy authentication | `MS.AAD.1.1v1` | Block Exchange ActiveSync and other legacy clients, all users |
+| Require MFA for all users | `MS.AAD.3.2v1` | Require MFA, all users and apps |
+| Require phishing-resistant MFA for highly privileged roles | `MS.AAD.3.6v1` | Phishing-resistant MFA strength for CISA's eight highly privileged roles |
+
+ScubaGear and Maester's CISA tests share these check IDs. Adding a fix is a reviewed code change
+(`ConfigurationFixes`), never configuration.
+
+- **A separate configuration app.** A third Entra app registration holding only
+  `Policy.Read.All` and `Policy.ReadWrite.ConditionalAccess` (Graph needs both to create a policy),
+  with its own certificate. An Owner chooses **Enable configuration fixes** on a tenant's card; the
+  tenant's admin consents; the Worker checks the token carries exactly those two permissions before
+  the tenant gets configuration access. It's independent of remediation access, and **Turn off
+  configuration fixes** cancels open requests (policies already created stay in Entra).
+- **Requests.** An Owner or MSP admin chooses **Propose this fix** on a failed finding (the check must
+  be failing for that tenant right now), or a **finding playbook** proposes it after a scan.
+  Finding playbooks are set up per catalog fix on the **Playbooks** page (*When a check fails*), for one
+  tenant or every tenant with configuration access; Owners only, audited. At most one open change per
+  tenant and fix, and a playbook proposes a fix to a tenant at most once every 7 days.
+- **Approval.** Every change needs an Owner other than the requester (for a playbook, its last editor),
+  under **Configuration changes**. There is no pre-approval for configuration changes. Approval is
+  fail-closed (audit first); requests expire after 72 hours.
+- **Applying (Worker).** Before each change the Worker re-checks configuration access, the approval and
+  the token (exactly the two permissions, right tenant), writes *Configuration change sending* to the
+  audit log, and only then calls Graph once: it lists the tenant's policies and, if one with the
+  catalog name already exists, records it instead of creating a second; otherwise it creates the policy
+  and checks Graph reports it as report-only. Never retried; a timeout says to check Entra first.
+
+Setup: the configuration app registration (multi-tenant, same redirect URI, the two application
+permissions, its own certificate with the private key only on the Worker); portal
+`Onboarding:ConfigurationAppClientId` (different from the other two apps); Worker
+`Configuration:AppClientId`, `Configuration:CertificateThumbprint`, optionally `Configuration:SendTimeout`
+(60 seconds) and `ConfigurationChanges:Enabled`, `PollInterval`, `StuckSendingAfter`. Conditional Access
+needs Entra ID P1 in the tenant.
+
+## Security scans
+
+The Worker runs [Maester](https://maester.dev), on a Windows Worker
+[ScubaGear](https://github.com/cisagov/ScubaGear) (CISA's SCuBA baselines), and
+[Wazuh](https://wazuh.com) SCA results for tenants mapped to a Wazuh agent group, and imports
+[GoPhish](https://getgophish.com) phishing simulation results for tenants where it's turned on, against each
+connected tenant (consent granted and a certificate in `CredentialReference`). Results are stored as
+findings, which drive the score and the fix list; each engine replaces only its own findings.
+
+`Scans:Engines` (default `["Maester"]`) says which engines a Worker runs. ScubaGear needs
+Windows PowerShell 5.1, so a typical setup is a Linux Worker with `Maester` and a Windows Worker
+with `ScubaGear` (device sync and onboarding turned off there with `DeviceSync:Enabled` and
+`Onboarding:Enabled`); both share the queue and each claims only its own engines' runs. Set the
+portal's `Scans:Engines` to all the engines your Workers run: the portal shows one status line per
+engine and queues **Scan now** for each. In environment variables: `Scans__Engines__0=Maester`,
+`Scans__Engines__1=ScubaGear`.
+
+- **Schedule:** a tenant is scanned when it has never been scanned, `Scans:Interval` (1 day)
+  after its last scan, or `Scans:RetryFailedAfter` (2 hours) after a failed one. A new tenant
+  gets its first scan within `Scans:PollInterval` (1 minute) of connecting.
+- **Queue:** runs live in the `scan_runs` table (Queued → Running → Succeeded/Failed), so they
+  survive restarts and several Workers can share the work. A tenant has at most one queued or
+  running scan per engine (enforced by a unique index); claims use `FOR UPDATE SKIP LOCKED`.
+  Manual scans go ahead of scheduled ones. Up to `Scans:MaxParallelScans` (2) run at once; a run
+  stuck in Running for `Scans:StaleAfter` (45 minutes, longer than every engine's `Timeout`) is
+  failed so it can be retried.
+- **Portal:** Owners and MSP admins can **Run scan** (Overview, all ready tenants) or **Scan
+  now** (Tenants, one tenant). The portal only queues the run and records *Scan requested* in the
+  audit log; the Worker does the work. Each tenant card shows the latest run (queued, running
+  with start time, failed with the error, or the last result) and updates while a scan runs.
+- **Failures** keep the tenant's previous findings. Before each scan the Worker gets a token
+  and checks its `roles` like onboarding does: anything that isn't read-only stops the scan, and
+  missing permissions for *that engine* fail it with "Re-consent needed: …" (so a tenant that
+  hasn't re-consented for ScubaGear keeps its Maester scans).
+- **Re-consent:** tenants connected before a permission was added must approve again. **Re-consent**
+  on the tenant card opens the Connect page filled in; the new consent updates the same tenant.
+
+### Maester
+
+Worker setup (Windows or Linux):
+
+```powershell
+# PowerShell 7 on the Worker host
+Install-Module Maester -Scope AllUsers            # also installs Pester and Microsoft.Graph.Authentication
+Install-MaesterTests -Path /srv/securepulse/maester-tests
+```
+
+Then set `Maester:TestsPath` to that folder and, optionally, `Maester:PwshPath` and
+`Maester:ModuleVersion` (pin a tested version, e.g. `2.3.0`; empty loads the newest installed).
+`Maester:AppClientId` defaults to `Intune:AppClientId`. The scan signs in with the same
+certificate as device sync (`Connect-MgGraph -CertificateThumbprint`), so it must be in the
+Worker user's certificate store. Each run gets its own owner-only work folder under
+`Maester:WorkRoot`, deleted afterwards; arguments go through `ArgumentList`, and tenant names
+never reach the command line.
+
+Graph application permissions Maester needs for unattended runs (2.3.0), all read-only:
+`AuditLog.Read.All`, `DeviceManagementConfiguration.Read.All`,
+`DeviceManagementManagedDevices.Read.All`, `DeviceManagementRBAC.Read.All`,
+`DeviceManagementServiceConfig.Read.All`, `Directory.Read.All`,
+`DirectoryRecommendations.Read.All`, `EntitlementManagement.Read.All`,
+`IdentityRiskEvent.Read.All`, `NetworkAccess.Read.All`,
+`OnPremDirectorySynchronization.Read.All`, `OrgSettings-AppsAndServices.Read.All`,
+`OrgSettings-Forms.Read.All`, `Policy.Read.All`, `Policy.Read.ConditionalAccess`,
+`Reports.Read.All`, `ReportSettings.Read.All`, `RoleEligibilitySchedule.Read.Directory`,
+`RoleManagement.Read.All`, `RoleManagementAlert.Read.Directory`,
+`SecurityIdentitiesHealth.Read.All`, `SecurityIdentitiesSensors.Read.All`,
+`SharePointTenantSettings.Read.All`, `ThreatHunting.Read.All`,
+`UserAuthenticationMethod.Read.All`.
+
+Maester's optional extras are not requested because they aren't read-only:
+`ReportSettings.ReadWrite.All`, `Sites.FullControl.All` and the Exchange `Exchange.ManageAsApp`
+role. Checks that need them (Exchange Online, Teams, some SharePoint settings) are reported as
+skipped, and skipped checks don't count toward the score.
+
+### ScubaGear
+
+ScubaGear assesses the tenant's **Entra ID** configuration against CISA's SCuBA baseline
+(`-ProductNames aad`). Its other products aren't run, because unattended runs need permissions
+SecurePulse's read-only consent doesn't grant: Exchange Online and Defender need
+`Exchange.ManageAsApp` plus the Global Reader role, Teams needs Global Reader, SharePoint needs
+`Sites.FullControl.All`, and Power Platform needs an interactive registration. A token with
+`Exchange.ManageAsApp` or `Sites.FullControl.All` would also stop every scan at the read-only
+check. Maester covers some of the same Exchange and Teams settings when they're licensed.
+
+Worker setup (Windows only, Windows PowerShell 5.1, ScubaGear 1.8.0):
+
+```powershell
+# Windows PowerShell 5.1 (not pwsh), as the account the Worker runs under
+Install-Module ScubaGear -Scope CurrentUser
+Install-ScubaDependencies                         # Graph auth + powershell-yaml modules and OPA (~/.scubagear/Tools)
+```
+
+Then add `ScubaGear` to the Windows Worker's `Scans:Engines` and, optionally, set
+`ScubaGear:ModuleVersion` (pin e.g. `1.8.0`; the parser is written against its output),
+`ScubaGear:OpaPath`, `ScubaGear:PowerShellPath` (default `powershell.exe`) and
+`ScubaGear:Timeout` (30 minutes). `ScubaGear:AppClientId` defaults to `Intune:AppClientId`. The
+certificate must be in the Worker user's `Cert:\CurrentUser\My`. The script runs with
+`-ExecutionPolicy RemoteSigned` (a Group Policy setting still wins). Each run gets its own work
+folder, deleted afterwards because ScubaGear exports the tenant's configuration there.
+
+Extra Graph application permissions (ScubaGear 1.8.0, Entra ID), all read-only, on top of
+`Directory.Read.All` and `Policy.Read.All`: `PrivilegedAccess.Read.AzureADGroup`,
+`PrivilegedEligibilitySchedule.Read.AzureADGroup`, `RoleManagement.Read.Directory`,
+`RoleManagementPolicy.Read.AzureADGroup`, `User.Read.All`. Add them to the app registration;
+tenants connected earlier need **Re-consent** before their ScubaGear scans succeed.
+
+How results map: each control becomes a finding with the control ID (e.g. `MS.AAD.1.1v1`), the
+requirement as its title and a link to its section of the baseline. *SHALL* controls are High,
+*SHOULD* Medium and *MAY* Low; Fail and Warning (a SHOULD not met) count as failed; N/A (manual
+or third-party checks), errors and omissions aren't evaluated. Findings carry the framework
+"CISA SCuBA" and a "BOD 25-01" tag where CISA marks the control as required by that directive. If
+ScubaGear can't evaluate any control (for example, sign-in failed), the scan fails and the
+previous results are kept.
+
+### Wazuh
+
+The Wazuh engine reads **Security Configuration Assessment** (SCA, CIS benchmark) results for each
+tenant's endpoints from your shared Wazuh manager, through the Wazuh server API (4.x, tested against
+the 4.14 API). It doesn't run a process: it makes read-only HTTP calls from the Worker.
+
+- **One group per tenant.** Agents are tied to a tenant by their Wazuh agent group. An Owner sets the
+  group on the tenant's card (**Wazuh group**); each change is in the audit log (*Wazuh agent group
+  changed*). A group belongs to one tenant only (enforced by a unique index), `default` is refused
+  (every unassigned agent is in it), and an agent that is also in another tenant's group is left out
+  of both. Tenants without a group aren't scanned by Wazuh.
+- **Findings:** one per SCA check per policy (e.g. *CIS Microsoft Windows 11 Enterprise Benchmark*),
+  across the tenant's agents: **Failed** if it failed on any agent (the evidence names them),
+  **Passed** if it passed everywhere it applies, otherwise *not evaluated*. Compliance mappings
+  (CIS, PCI DSS, ISO 27001, NIST 800-53, HIPAA…) become the finding's frameworks, under the
+  *Endpoint hardening* category. Only https references become links.
+- **Severity and the score:** SCA checks carry no severity, so every Wazuh finding gets
+  `Wazuh:FindingSeverity` (default `Low`). CIS benchmarks have a few hundred checks per OS, so Wazuh
+  findings move a tenant's score noticeably; pick the severity to suit how much endpoint hardening
+  should weigh.
+- **A scan fails, keeping the previous findings,** when the API user isn't read-only, the group has
+  no agents, none of them has SCA results, or any agent's results can't be read.
+
+**Read-only API user.** Create a Wazuh API user for SecurePulse with a role that only reads, e.g.
+a policy allowing `agent:read` and `sca:read` (resource `agent:group:<group>` or `agent:id:*`).
+Before every scan the Worker reads the user's effective policies
+(`GET /security/users/me/policies`) and refuses to scan if RBAC is in `black` mode (everything not
+denied is allowed) or if any allowed action isn't a `:read` action.
+
+**Password in Key Vault.** Wazuh's API only takes a username and password, so the password lives in
+Azure Key Vault and the Worker reads it for each scan with its certificate or managed identity
+(the identity needs *Key Vault Secrets User* on the vault). It never goes in config or the database.
+
+**TLS.** The Wazuh API uses a self-signed certificate by default. Pin it with
+`Wazuh:CertificateSha256`, the SHA-256 fingerprint of the API's certificate
+(`openssl x509 -in /var/ossec/api/configuration/ssl/server.crt -noout -fingerprint -sha256` on the
+manager): only that certificate is then accepted. Without a pin the certificate must be trusted normally.
+Redirects aren't followed.
+
+| Setting | Default | |
+|---|---|---|
+| `Wazuh:Url` | | `https://wazuh.example:55000` |
+| `Wazuh:Username` | `securepulse-readonly` | |
+| `Wazuh:CertificateSha256` | | Pin for a self-signed certificate. |
+| `Wazuh:FindingSeverity` | `Low` | Info, Low, Medium, High or Critical. |
+| `Wazuh:Timeout` | 20 minutes | Per tenant. |
+| `Wazuh:MaxConcurrentRequests` | 4 | Wazuh's API allows 300 requests a minute by default; 429s are retried. |
+| `Wazuh:KeyVault:VaultUri` | | `https://<vault>.vault.azure.net/` (also `.us`/`.cn` clouds). |
+| `Wazuh:KeyVault:PasswordSecretName` | `wazuh-api-password` | |
+| `Wazuh:KeyVault:TenantId`, `ClientId`, `CertificateThumbprint` | | Certificate sign-in to your tenant, or `UseManagedIdentity`. |
+
+Then add `Wazuh` to the Worker's and the portal's `Scans:Engines`. The Worker won't start with
+an http URL, a malformed pin, or a Key Vault address that isn't a Key Vault.
+
+### GoPhish
+
+The GoPhish engine imports **phishing simulation results** from your [GoPhish](https://getgophish.com)
+server. It is an import only: **SecurePulse never creates, launches or changes a campaign and never
+sends email.** You run campaigns in GoPhish as before; SecurePulse turns their results into findings.
+
+- **Counts, not people.** The engine reads only `GET /api/campaigns/summary`: per campaign, how many
+  recipients were sent the email, opened it, clicked, entered data on the landing page and reported it.
+  It never reads the per-recipient results, so no names, email addresses or IP addresses of the people
+  tested reach SecurePulse, its database, reports or audit export.
+- **One GoPhish user per tenant.** GoPhish shows each user only their own campaigns, so each tenant's
+  campaigns are run by its own GoPhish user (standard **User** role), and that user's API key decides
+  which campaigns show up for the tenant. The key is stored in Key Vault under a name derived from the
+  tenant ID, `gophish-api-key-<tenant id without dashes>`, so a tenant can't be pointed at another's
+  key. An Owner turns GoPhish on for a tenant on its card (**Turn on GoPhish**, which shows the secret
+  name); each change is in the audit log (*GoPhish results turned on or off*).
+- **Admin keys are refused.** A GoPhish admin can manage every user and read their API keys. Before
+  each import the Worker sends `HEAD /api/users/` (an admin-only endpoint; HEAD returns no body) and
+  stops if the key is an admin's.
+- **Read-only on our side.** GoPhish has no read-only API keys: a standard user's key could also launch
+  campaigns. SecurePulse's GoPhish HTTP client refuses every request that isn't a GET or HEAD before it
+  leaves the process, sends the key in the `Authorization` header (never the URL), follows no
+  redirects, and pins the server's certificate (`GoPhish:CertificateSha256`) or validates it normally.
+- **Findings:** one per campaign launched within `GoPhish:Lookback` (365 days), under *Security
+  awareness*. A campaign **fails** when anyone entered data on its landing page, **passes** when it
+  completed without that, and is *not evaluated* while it's still running (unless someone already
+  entered data). The evidence gives the counts and rates: entered data, clicked, opened, reported.
+  Every campaign finding gets `GoPhish:FindingSeverity` (default `Medium`).
+- **An import fails, keeping the previous findings,** when the key is missing, rejected or an admin's,
+  no campaign was launched within the lookback, or none has finished yet.
+
+| Setting | Default | |
+|---|---|---|
+| `GoPhish:Url` | | The admin server, `https://gophish.example:3333` (the API is under `/api/`). |
+| `GoPhish:CertificateSha256` | | Pin for GoPhish's self-signed certificate (`openssl x509 -in gophish_admin.crt -noout -fingerprint -sha256`). |
+| `GoPhish:Lookback` | 365 days | Campaigns launched earlier are left out (7 days to 3 years). |
+| `GoPhish:FindingSeverity` | `Medium` | Info, Low, Medium, High or Critical. |
+| `GoPhish:Timeout` | 5 minutes | Per tenant. |
+| `GoPhish:KeyVault:VaultUri` | | `https://<vault>.vault.azure.net/` (also `.us`/`.cn` clouds). |
+| `GoPhish:KeyVault:TenantId`, `ClientId`, `CertificateThumbprint` | | Certificate sign-in to your tenant, or `UseManagedIdentity`. |
+
+Then add `GoPhish` to the Worker's and the portal's `Scans:Engines`. The Worker won't start with an
+http URL, a malformed pin, or a Key Vault address that isn't a Key Vault. Tenants without GoPhish turned
+on aren't imported.
+
+## Sign-in and roles
+
+The portal signs people in with Microsoft Entra ID (Microsoft.Identity.Web, multi-tenant).
+**Access is decided by SecurePulse, not by Entra app roles:** a client tenant's admin could
+assign our app's roles in their own tenant, so role claims in tokens are stripped at sign-in and
+never trusted. Roles live in the `portal_users` table:
+
+| Role | Sees | Can |
+|---|---|---|
+| Owner | All tenants | Everything, including inviting and removing anyone |
+| MSP admin | All tenants | Onboard tenants, invite and remove client viewers |
+| Client viewer | Their own tenant only | Read-only; no onboarding, remote actions or people management |
+
+- **Invitations** name a sign-in name and the Entra tenant the person must sign in from (your own
+  tenant for Owners and MSP admins, the client's tenant for viewers). The first matching
+  sign-in binds the invitation to the person's immutable object ID; after that only
+  (tenant, object ID) counts, so a renamed account keeps access and a new account reusing the
+  name doesn't get it.
+- **Scoping** happens in the data services, so a viewer can't reach another tenant's data by
+  URL; other tenants' devices read as "not found".
+- **Every page and endpoint** requires a portal role by default (fallback policy plus a default
+  `[Authorize]` on pages). Public: the consent callback and result page, sign-in, static assets.
+- **Changes reach open sessions** within a minute: Blazor circuits re-check the database.
+- **At least one signed-in Owner** must always remain (enforced in a serializable transaction).
+
+Setup:
+
+1. Register an app for portal sign-in (separate from the assessment app is cleanest):
+   multi-tenant, Web redirect URI `https://<portal>/signin-oidc`, front-channel logout
+   `https://<portal>/signout-callback-oidc`, **ID tokens** enabled. It needs no API permissions
+   and no secret or certificate: the portal only signs people in.
+2. Set `AzureAd:ClientId`, `Auth:OperatorTenantId` (your own Entra tenant ID) and
+   `Auth:BootstrapOwners` (sign-in names in your tenant invited as Owner at startup).
+3. Sign in as a bootstrap Owner and invite everyone else under **People**.
+
+## Audit log
+
+Security events go to an append-only `audit_events` table, shown under **Audit log** to Owners
+and MSP admins (filters by period, area, outcome, tenant and text; **Export CSV** with the same
+filters).
+
+| Area | Events |
+|---|---|
+| Sign-in | Sign-ins (incl. people without access, as *Denied*), invitation accepted, sign-outs |
+| People | Invited, role changed, access removed, including refused attempts (*Denied*) and last-Owner refusals (*Failure*) |
+| Onboarding | Consent link created or cancelled; consent received, declined, from the wrong tenant, or on an expired/used link; tenant connected or verification failed (Worker) |
+| Devices | Remote actions: requested, approved (or an approval that didn't apply), rejected, cancelled, expired, *sending* (written by the Worker before the Graph call) and the result |
+| Scans | Scan requested from the portal (scheduled scans are in `scan_runs`, not the audit log) |
+| Audit log | Each CSV export; retention runs (started, and how many events were removed) |
+| Reports | Each PDF report download |
+
+- **Append-only in the database:** a trigger rejects `UPDATE`, `DELETE` and `TRUNCATE` on
+  `audit_events`, so entries can't be changed through the app or with its credentials. The only
+  exception is retention (below). No foreign keys, so entries outlive the tenants and people
+  they mention.
+- **Not recorded on purpose:** consent callbacks with an unknown `state` (the endpoint is public,
+  so they go to the application log rather than letting anyone fill the table) and the Worker's
+  verification retries (only the final result).
+- **Actors** are stored as shown at the time ("Name <sign-in name>", "SecurePulse Worker",
+  "Client admin (not signed in to SecurePulse)") plus the portal user ID.
+- **IP addresses** are recorded for sign-in, sign-out, export and the consent callback (HTTP
+  requests). Behind a reverse proxy, enable forwarded headers so this is the client's address.
+  Actions inside an open Blazor session don't carry one.
+- If writing an audit entry fails, the action stands and the failure is logged at Critical
+  level. CSV cells that start with `=`, `+`, `-`, `@` or a tab are prefixed with `'` so
+  spreadsheets don't run them as formulas.
+
+### Retention
+
+Audit events are kept forever until you set a retention period: how long to keep them is your
+organisation's decision (check your regulator's and your clients' requirements first). With
+`AuditRetention:RetainFor` set, one Worker deletes events older than that period, once a day by default:
+
+| Setting | Default | |
+|---|---|---|
+| `AuditRetention:RetainFor` | (none) | E.g. `365.00:00:00`. At least 90 days; the Worker won't start with less. |
+| `AuditRetention:Interval` | 1 day | How often it checks. |
+| `AuditRetention:BatchSize` | 5000 | Rows deleted per transaction. |
+| `ConnectionStrings:AuditMaintenance` | | Required with `RetainFor`: a separate login (below). Must not be the application's login. |
+
+How deletion is limited:
+
+- The application's database login still can't delete anything. A NOLOGIN role,
+  `securepulse_audit_purge`, is the only one the trigger lets delete, and only rows older than
+  90 days. A misconfigured cutoff can't remove recent events, and `UPDATE` and `TRUNCATE` stay
+  blocked for every role.
+- The Worker connects with a separate maintenance login that's a member of that role, and switches
+  to it (`SET LOCAL ROLE`) for each batch. The portal never has this login.
+- Before deleting, the Worker records *Audit retention started* with the cutoff and the number
+  of events due. If that entry can't be written, nothing is deleted. Afterwards it records *Old
+  audit events removed* with the count, or a *Failure* with how many were removed before an
+  error. A database advisory lock stops two Workers from purging at once.
+- The Audit log page shows the last run: the period, when it ran and how many events it removed.
+
+Database setup, once per server, by an administrator (the migration creates the role and grant
+itself when its login has `CREATEROLE`; managed databases usually need this done by hand):
+
+```sql
+CREATE ROLE securepulse_audit_purge NOLOGIN;
+GRANT SELECT, DELETE ON audit_events TO securepulse_audit_purge;   -- in the SecurePulse database
+GRANT SELECT ON audit_export_checkpoints TO securepulse_audit_purge;
+CREATE ROLE securepulse_maintenance LOGIN PASSWORD '<from your vault>';
+GRANT securepulse_audit_purge TO securepulse_maintenance;
+```
+
+The application's login must not be a superuser or a member of `securepulse_audit_purge`. Supply
+the maintenance connection string the same way as the main one (user-secrets or the
+`ConnectionStrings__AuditMaintenance` environment variable), and only to the Worker. To keep
+events longer than the period, send them to Microsoft Sentinel (below): retention never deletes an
+event the export hasn't sent yet.
+
+### Export to Microsoft Sentinel
+
+The Worker can send every audit event to a Log Analytics workspace with Microsoft Sentinel, through
+the Azure Monitor [Logs Ingestion API](https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview).
+Your SOC then keeps them as long as the workspace's retention says, alerts on them and correlates
+them with other sources.
+
+How it works:
+
+- Events go in the order PostgreSQL stored them (`RecordedAt`, stamped by the database's clock),
+  in gzip-compressed calls of up to 500 events and under the API's 1 MB limit. Events stored in the
+  last two minutes (`ExportLag`) wait for the next run, so an insert that's still committing can't
+  land behind the checkpoint.
+- A checkpoint in `audit_export_checkpoints` moves only after Sentinel accepted a call (HTTP 2xx).
+  A failure, an outage or a crash means the same events are sent again later: **at least once,
+  never lost**. Rare duplicates are possible; each row carries its `EventId`, so de-duplicate with
+  `summarize arg_max(TimeGenerated, *) by EventId`.
+- **Retention waits for the export.** Once the export has a checkpoint, the purge leaves alone any
+  event Sentinel hasn't received, and the retention entry says how many it kept. To stop exporting
+  for good, turn it off and delete its row:
+  `DELETE FROM audit_export_checkpoints WHERE "Destination" = 'sentinel';`
+- Only one Worker exports at a time (a row lock on the checkpoint). Throttling (429), and 500, 502,
+  503 or 504 responses, are retried, honouring `Retry-After`. Anything else is recorded and shown on
+  the Audit log page, which also shows how many events have been sent and how many are waiting.
+- The export isn't itself recorded in the audit log: every run would add an event that then needs
+  exporting. It logs to the Worker's log instead.
+- The Worker signs in with a **certificate** (an app registration in your own tenant, not a client's)
+  or a **managed identity** when it runs in Azure, never a client secret. The token and the data
+  only go to an Azure Monitor ingestion host (`*.ingest.monitor.azure.com`, `.us` or `.cn`); any
+  other endpoint stops the Worker at startup.
+
+Settings (`AuditExport:Sentinel`, Worker only):
+
+| Setting | Default | |
+|---|---|---|
+| `Enabled` | `false` | |
+| `Endpoint` | | The DCR's logs ingestion endpoint (DCR → JSON view → `logsIngestion`), or a DCE when you use Private Link. |
+| `DcrImmutableId` | | `dcr-` and 32 hex characters (DCR → Overview). |
+| `StreamName` | `Custom-SecurePulseAudit` | The DCR's input stream. |
+| `Audience` | `https://monitor.azure.com` | `https://monitor.azure.us` for Azure Government, `https://monitor.azure.cn` for Azure China. |
+| `TenantId`, `ClientId`, `CertificateThumbprint` | | Certificate sign-in: your tenant, the app registration, and its certificate in `CurrentUser\My` or `LocalMachine\My`. |
+| `UseManagedIdentity` | `false` | Instead of a certificate. `ClientId` then names a user-assigned identity (empty: system-assigned). |
+| `Interval` | 1 minute | |
+| `ExportLag` | 2 minutes | At least 30 seconds. |
+| `MaxEventsPerCall` | 500 | |
+
+Azure setup, in the workspace's subscription:
+
+1. Create a custom table `SecurePulseAudit_CL` with these columns: `TimeGenerated` (datetime),
+   `EventId` (guid), `Action`, `ActionLabel`, `Category`, `Outcome` (string), `ActorUserId` (guid),
+   `ActorName` (string), `SecurePulseTenantId` (guid), `TargetType`, `TargetId`, `Summary` (string),
+   `Details` (dynamic), `IpAddress` (string), `RecordedAt` (datetime), `Source` (string).
+   (`TenantId` is reserved in Log Analytics, so SecurePulse's tenant is `SecurePulseTenantId`.)
+2. Create a data collection rule of kind `Direct` in the workspace's region, with a stream
+   `Custom-SecurePulseAudit` declaring the same columns, a destination for the workspace, and a data
+   flow with `"transformKql": "source"` and `"outputStream": "Custom-SecurePulseAudit_CL"`
+   (see Microsoft's [sample DCR](https://learn.microsoft.com/azure/azure-monitor/logs/logs-ingestion-api-overview#data-collection-rule)).
+3. Give the Worker's identity the **Monitoring Metrics Publisher** role on the DCR. Nothing else:
+   it can't read the workspace.
+4. Set the settings above and restart the Worker. The Audit log page shows the export within a minute.
+
+Example hunting query:
+
+```kusto
+SecurePulseAudit_CL
+| summarize arg_max(TimeGenerated, *) by EventId
+| where Category == "device" and Outcome != "Success"
+| project TimeGenerated, ActionLabel, ActorName, Summary, SecurePulseTenantId
+```
+
+## Client reports (PDF)
+
+**Report** on a tenant card, **Download report** on the Findings page (with a tenant selected) and
+on a client viewer's Overview download a branded PDF for one tenant:
+
+- a cover with the brand, tenant, score ring and grade;
+- a summary (open findings by severity, pass rate, device compliance);
+- the ten things to fix first, linked to their details;
+- results by area, with Intune device compliance, Defender health and the longest-unseen non-compliant devices;
+- every finding to fix, with evidence, remediation and a link to the check's documentation (https only);
+- the checks that pass, and how the score is calculated (weights read from `RiskScoreCalculator`).
+
+The score is `RiskScoreCalculator`'s, the same as in the portal. Client viewers can download
+only their own tenant's report; any other tenant returns 404. A tenant without scan results
+returns 409. Each download is recorded as *Report downloaded* in the audit log. The file is
+generated per request and not stored.
+
+**License (required).** Reports use [QuestPDF](https://www.questpdf.com), which must be told which
+license tier your organisation holds. Reports stay off (buttons disabled, the endpoint returns
+503) until `Reports:QuestPdfLicense` is set:
+
+- `Community`: free only for organisations under USD 1M annual gross revenue, individuals,
+  charities, academic institutions and OSI open-source projects. Public-sector bodies and listed
+  companies never qualify.
+- `Professional` or `Enterprise`: paid; needed before production use otherwise.
+
+See QuestPDF's [license guide](https://www.questpdf.com/license/guide.html). SecurePulse never picks
+a tier for you.
+
+Branding settings:
+
+| Setting | Default | |
+|---|---|---|
+| `Reports:Branding:CompanyName` | `SecurePulse` | Shown on reports for tenants without a partner. A tenant's `PartnerName` (its MSP) is used instead when set. |
+| `Reports:Branding:LogoPath` | (shield) | PNG, JPEG or SVG, at most 1 MB, relative to the portal's content root. |
+| `Reports:Branding:AccentColor` | `#4F46C8` | Headings, rules and the brand bar. |
+| `Reports:Branding:ContactLine` | | E.g. `security@msp.example · +971 4 000 0000`, under the brand on the cover. |
+| `Reports:TimeZone` | `UTC` | For printed dates, e.g. `Asia/Dubai`. |
+
+Invalid settings stop the portal at startup rather than producing broken reports. Text uses
+QuestPDF's bundled Lato with Noto Sans Arabic (SIL OFL 1.1, embedded in `SecurePulse.Reporting`)
+as fallback, so Arabic tenant, device and user names render without fonts on the host. Other
+scripts (e.g. CJK, emoji) print as placeholders rather than failing the report; add a Noto font
+to `src/SecurePulse.Reporting/Fonts` and to `ReportFonts.Families` if you need them.
 
 ## How scoring works
 
@@ -42,15 +786,27 @@ checks are excluded. Any open **Critical** caps the grade at C.
 
 | Area | State |
 |---|---|
-| Core models, scoring, Maester parser | Built and tested against `samples/` |
-| Maester engine runner | Built; needs a real tenant + certificate to exercise |
-| Portal (Overview, Findings, Tenants) | Built on sample data; compile locally (see below) |
-| Worker service, EF Core persistence | Next |
-| Multi-tenant admin-consent onboarding | Next |
-| ScubaGear adapter, PDF report | Next |
-
-The web project was written against MudBlazor 8 but not compiled in the environment it was
-created in (no NuGet access there). Expect possibly a few small API fixes on first build.
+| Core models, scoring, Maester parser | Built; covered by `SecurePulse.Tests` |
+| Maester engine runner | Built; tested with a stand-in `pwsh`; needs a real tenant + certificate to exercise |
+| Portal (Overview, Findings, Tenants) | Built; sample data or PostgreSQL |
+| Endpoints (Intune device inventory, device detail) | Built |
+| Defender health per device (Intune antivirus state, Defender for Endpoint sensor via advanced hunting) | Built; tested with stubbed Graph and against PostgreSQL 16; needs a real tenant with Defender for Endpoint to exercise |
+| Remediation playbooks (device-state triggers proposing Sync / Restart / Defender scan or signature update, four-eyes approval; optional 90-day pre-approval by a second Owner for Sync and Defender actions, with a daily cap) | Built; tested with stubbed Graph and against PostgreSQL 16; needs the remediation app and a real tenant to exercise |
+| Configuration fixes for failed checks (report-only Conditional Access from a reviewed catalog, separate configuration app, another Owner approves each) | Built; tested with stubbed Graph and against PostgreSQL 16; needs the configuration app, a P1 tenant and real scans to exercise |
+| Device remote actions (remediation consent, approval queue, Worker sending via Graph) | Built; tested with stubbed Graph and against PostgreSQL 16; needs the remediation app registration and a real tenant to exercise |
+| PostgreSQL persistence (`SecurePulse.Data`) | Built; tested against PostgreSQL 16 |
+| Shared data-protection key ring (PostgreSQL, certificate-encrypted) | Built; tested against PostgreSQL 16 and with two portal instances |
+| Worker: Intune device sync | Built and tested against stubbed Graph; needs a real tenant + certificate to exercise |
+| Tenant onboarding (admin consent, verification, first sync) | Built; tested with stubbed Entra; needs the app registration to exercise |
+| Worker: scheduled Maester scans (queue, retries, permission check, Run scan / Scan now) | Built; tested against PostgreSQL 16 and end to end with a stand-in `pwsh` |
+| Wazuh engine (SCA / CIS benchmarks from a shared manager, group per tenant, password in Key Vault) | Built; tested against a stand-in Wazuh API over pinned TLS; needs a Wazuh manager and Key Vault to exercise |
+| GoPhish import (aggregate campaign results per tenant, key per tenant in Key Vault, GET/HEAD only) | Built; tested against a stand-in GoPhish API over pinned TLS; needs a GoPhish server and Key Vault to exercise |
+| ScubaGear engine (Entra ID baseline, Windows Worker) | Built; parser tested against ScubaGear 1.8.0's sample report, runner end to end with a stand-in; needs a Windows Worker, a real tenant and certificate to exercise |
+| Portal sign-in with roles (Entra ID, Owner / MSP admin / Client viewer) | Built; tested with development sign-in and the real Entra redirect |
+| Security audit log (append-only, page + CSV export) | Built; tested against PostgreSQL 16 |
+| Audit retention (maintenance role, 90-day floor in the database) | Built; tested against PostgreSQL 16 and end to end with the Worker; off until `AuditRetention:RetainFor` is set |
+| Audit export to Microsoft Sentinel (Logs Ingestion API, at-least-once checkpoint) | Built; tested against PostgreSQL 16 and a stand-in ingestion endpoint; needs a workspace, DCR and identity to exercise |
+| Branded PDF client report (QuestPDF) | Built; content checked by extracting the PDF's text; off until `Reports:QuestPdfLicense` is set |
 
 ## Security notes
 
@@ -58,5 +814,13 @@ created in (no NuGet access there). Expect possibly a few small API fixes on fir
 - `Tenant.CredentialReference` holds only a certificate thumbprint / vault reference.
 - Engines run **out of process** with arguments passed via `ArgumentList`, so tenant data
   can't inject PowerShell and a hung scan can't crash the portal.
-- Request **read-only** Graph permissions for assessment; remediation is a separate consent.
+- Request **read-only** Graph permissions for assessment; remediation is a separate app with one
+  write permission, its own certificate and its own consent, and every action needs a second
+  person's approval.
+- Portal access comes from SecurePulse's own user table, never from token role claims.
+- Security events are kept in an append-only audit table the app can't modify. Only a separate
+  maintenance role can remove events, and only ones past the configured retention period (at least 90 days)
+  that the Sentinel export, if set up, has already sent.
+- Data-protection keys (sign-in cookie, consent-link state) are shared through PostgreSQL only
+  after encryption with a certificate; the portal refuses a shared key store without one.
 - Check each engine's license before redistributing modified versions (Wazuh is GPLv2).

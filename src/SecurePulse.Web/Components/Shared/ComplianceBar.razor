@@ -1,0 +1,20 @@
+@* Segmented bar: compliant, grace period, noncompliant, unknown. Segment widths are device counts. *@
+<div class="sp-bar" role="img"
+     aria-label="@($"{Breakdown.Compliant} compliant, {Breakdown.InGracePeriod} in grace period, {Breakdown.Noncompliant} noncompliant, {Breakdown.Unknown} unknown")">
+    @Segment(Breakdown.Compliant, "success")
+    @Segment(Breakdown.InGracePeriod, "warning")
+    @Segment(Breakdown.Noncompliant, "error")
+    @Segment(Breakdown.Unknown, "unknown")
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ComplianceBreakdown Breakdown { get; set; } = default!;
+
+    private static RenderFragment Segment(int count, string tone) => __builder =>
+    {
+        if (count > 0)
+        {
+            <span class="@($"sp-bar-{tone}")" style="@($"flex-grow:{count}")"></span>
+        }
+    };
+}

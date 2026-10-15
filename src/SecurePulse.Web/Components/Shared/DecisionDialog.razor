@@ -1,0 +1,51 @@
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@(Approve ? Icons.Material.Rounded.TaskAlt : Icons.Material.Rounded.Block)" Color="@(Approve ? Color.Primary : Color.Error)" />
+            <MudText Typo="Typo.h6">@(Approve ? "Approve" : "Reject") @DeviceActions.Label(Request.Action).ToLowerInvariant() of @Request.DeviceName?</MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        <dl class="sp-props mb-4">
+            <dt>Tenant</dt><dd>@TenantName</dd>
+            <dt>Requested by</dt><dd>@Request.RequestedByName</dd>
+            <dt>Reason</dt><dd>@Request.Reason</dd>
+        </dl>
+        <MudText Typo="Typo.body2" Class="mb-4">@DeviceActions.Description(Request.Action)</MudText>
+
+        @if (Approve && DeviceActions.IsDestructive(Request.Action))
+        {
+            <MudAlert Severity="MudBlazor.Severity.Error" Variant="Variant.Text" Dense="true" Class="mb-4">
+                This can't be undone once it reaches the device. Check the request with @Request.RequestedByName if anything is unclear.
+            </MudAlert>
+            <MudTextField T="string" @bind-Value="_confirm" Label="@($"Type {Request.DeviceName} to confirm")" Variant="Variant.Outlined"
+                          Immediate="true" Margin="Margin.Dense" Class="mb-3" />
+        }
+
+        <MudTextField T="string" @bind-Value="_note" Label="@(Approve ? "Note (optional)" : "Why are you rejecting it?")" Variant="Variant.Outlined"
+                      Lines="2" Immediate="true" MaxLength="DeviceActionPolicy.MaxNoteLength" Counter="DeviceActionPolicy.MaxNoteLength"
+                      HelperText="Kept with the request and in the audit log" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="@(Approve ? (DeviceActions.IsDestructive(Request.Action) ? Color.Error : Color.Primary) : Color.Error)"
+                   Disabled="!CanSubmit" OnClick="@(() => MudDialog.Close(DialogResult.Ok(_note?.Trim() ?? "")))">
+            @(Approve ? "Approve" : "Reject")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public DeviceActionRequest Request { get; set; } = default!;
+    [Parameter, EditorRequired] public string TenantName { get; set; } = "";
+    [Parameter] public bool Approve { get; set; }
+
+    private string? _note;
+    private string? _confirm;
+
+    private bool CanSubmit => Approve
+        ? !DeviceActions.IsDestructive(Request.Action) || string.Equals(_confirm?.Trim(), Request.DeviceName, StringComparison.Ordinal)
+        : !string.IsNullOrWhiteSpace(_note);
+}

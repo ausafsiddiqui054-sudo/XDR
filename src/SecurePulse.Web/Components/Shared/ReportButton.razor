@@ -1,0 +1,31 @@
+@inject ReportService Reports
+@inject IUserContextAccessor Current
+
+@* Downloads the tenant's branded PDF report. A plain link with "download", so Blazor's router leaves it alone. *@
+@if (Reports.Enabled)
+{
+    <MudButton Variant="@Variant" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.PictureAsPdf" Class="@Class"
+               Href="@($"reports/{TenantId}/posture.pdf")" UserAttributes="@(new() { ["download"] = "", ["data-testid"] = "report-download" })">
+        @Label
+    </MudButton>
+}
+else if (_isOperator)
+{
+    <MudTooltip Text="PDF reports are off until Reports:QuestPdfLicense is set to your QuestPDF license tier.">
+        <MudButton Variant="@Variant" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.PictureAsPdf" Class="@Class" Disabled="true"
+                   UserAttributes="@(new() { ["data-testid"] = "report-download" })">
+            @Label
+        </MudButton>
+    </MudTooltip>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid TenantId { get; set; }
+    [Parameter] public Variant Variant { get; set; } = Variant.Outlined;
+    [Parameter] public string Label { get; set; } = "Download report";
+    [Parameter] public string? Class { get; set; }
+
+    private bool _isOperator;
+
+    protected override async Task OnInitializedAsync() => _isOperator = (await Current.GetAsync()).IsOperator;
+}

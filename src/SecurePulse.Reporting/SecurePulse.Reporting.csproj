@@ -4,6 +4,15 @@
     <ProjectReference Include="..\SecurePulse.Core\SecurePulse.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="QuestPDF" Version="2026.9.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Noto Sans Arabic (SIL Open Font License 1.1, see Fonts/NotoSansArabic-OFL.txt): fallback for Arabic text. -->
+    <EmbeddedResource Include="Fonts\*.ttf" LogicalName="SecurePulse.Reporting.Fonts.%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

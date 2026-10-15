@@ -1,0 +1,228 @@
+@page "/devices/actions"
+@attribute [Authorize(Policy = Policies.Operator)]
+@implements IAsyncDisposable
+@inject DeviceActionRequestService Actions
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<PageTitle>Device actions · SecurePulse</PageTitle>
+
+<MudText Typo="Typo.h4">Device actions</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    Remote actions need a second admin's approval (an Owner's for retire and wipe) before SecurePulse sends them to Intune.
+    Requests expire after @((int)DeviceActionPolicy.ApprovalWindow.TotalHours) hours.
+</MudText>
+
+@if (_items is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    var pending = _items.Where(v => v.Request.Status == DeviceActionStatus.PendingApproval).ToList();
+    var inFlight = _items.Where(v => v.Request.Status is DeviceActionStatus.Approved or DeviceActionStatus.Sending).ToList();
+    var history = _items.Where(v => !v.Request.IsOpen).ToList();
+
+    <MudText Typo="Typo.h6" Class="mb-3">Waiting for approval (@pending.Count)</MudText>
+    @if (pending.Count == 0)
+    {
+        <MudPaper Class="sp-card pa-6 mb-6" Elevation="0" Outlined="true">
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Nothing is waiting for approval.</MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <MudGrid Spacing="4" Class="mb-6">
+            @foreach (var v in pending)
+            {
+                var a = v.Request;
+                <MudItem xs="12" md="6" xl="4">
+                    <MudPaper Class="sp-card pa-5" Elevation="0" Outlined="true" data-testid="pending-action">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-2">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@DeviceActions.Icon(a.Action)" Color="@(DeviceActions.IsDestructive(a.Action) ? Color.Error : Color.Primary)" />
+                                <MudText Typo="Typo.h6">@DeviceActions.Label(a.Action) @a.DeviceName</MudText>
+                            </MudStack>
+                            @if (DeviceActions.IsDestructive(a.Action))
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error">Owner approval</MudChip>
+                            }
+                            else if (a.PlaybookId is not null)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Href="devices/playbooks"
+                                         Icon="@Icons.Material.Rounded.AccountTree" data-testid="from-playbook">Playbook</MudChip>
+                            }
+                        </MudStack>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            <MudLink Href="@($"endpoints/{a.TenantId}/{Uri.EscapeDataString(a.DeviceId)}")" Typo="Typo.body2">@v.TenantName</MudLink>
+                            · requested by @a.RequestedByName @Dashboard.Ago(a.RequestedAt).ToLowerInvariant()
+                        </MudText>
+                        <MudText Typo="Typo.body2" Class="my-3" Style="overflow-wrap:anywhere">“@a.Reason”</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-3">Expires @Until(a.ExpiresAt)</MudText>
+
+                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                            @if (v.WhyCannotApprove is null)
+                            {
+                                <MudButton Variant="Variant.Filled" Color="@(DeviceActions.IsDestructive(a.Action) ? Color.Error : Color.Primary)"
+                                           OnClick="@(() => DecideAsync(v, approve: true))">Approve</MudButton>
+                            }
+                            else
+                            {
+                                <MudTooltip Text="@v.WhyCannotApprove">
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="true">Approve</MudButton>
+                                </MudTooltip>
+                            }
+                            @if (a.RequestedByUserId != _me)
+                            {
+                                <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="@(() => DecideAsync(v, approve: false))">Reject</MudButton>
+                            }
+                            @if (v.CanCancel)
+                            {
+                                <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="@(() => CancelAsync(a.Id))">Cancel request</MudButton>
+                            }
+                        </MudStack>
+                        @if (v.WhyCannotApprove is { } why)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2" data-testid="cannot-approve">@why</MudText>
+                        }
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+
+    @if (inFlight.Count > 0)
+    {
+        <MudText Typo="Typo.h6" Class="mb-3">Approved, being sent (@inFlight.Count)</MudText>
+        <MudPaper Class="sp-card pa-2 mb-6" Elevation="0" Outlined="true">
+            <MudSimpleTable Dense="true" Elevation="0">
+                <tbody>
+                    @foreach (var v in inFlight)
+                    {
+                        <tr>
+                            <td>@DeviceActions.Label(v.Request.Action) <b>@v.Request.DeviceName</b> · @v.TenantName</td>
+                            <td>approved by @v.Request.DecidedByName</td>
+                            <td><DeviceActionStatusChip Status="v.Request.Status" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+
+    <MudText Typo="Typo.h6" Class="mb-3">History</MudText>
+    <MudPaper Class="sp-card pa-2" Elevation="0" Outlined="true">
+        <MudTable Items="history" T="DeviceActionView" Dense="true" Elevation="0" Breakpoint="Breakpoint.Sm" Hover="true">
+            <HeaderContent>
+                <MudTh>Action</MudTh>
+                <MudTh>Tenant</MudTh>
+                <MudTh>Requested</MudTh>
+                <MudTh>Decided</MudTh>
+                <MudTh>Result</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Action">
+                    <MudText Typo="Typo.body2" Style="font-weight:600">@DeviceActions.Label(context.Request.Action) @context.Request.DeviceName</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Style="overflow-wrap:anywhere">“@context.Request.Reason”</MudText>
+                </MudTd>
+                <MudTd DataLabel="Tenant">@context.TenantName</MudTd>
+                <MudTd DataLabel="Requested">
+                    <MudText Typo="Typo.body2">@context.Request.RequestedByName</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@Dashboard.Ago(context.Request.RequestedAt)</MudText>
+                </MudTd>
+                <MudTd DataLabel="Decided">
+                    <MudText Typo="Typo.body2">@(context.Request.DecidedByName ?? context.Request.CancelledBy ?? "—")</MudText>
+                    @if (context.Request.AutoApproved)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" Icon="@Icons.Material.Rounded.Verified"
+                                 Class="ml-0" data-testid="auto-approved">Pre-approved</MudChip>
+                    }
+                    @if (context.Request.DecisionNote is { } note)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">“@note”</MudText>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Result">
+                    <DeviceActionStatusChip Status="context.Request.Status" />
+                    @if (context.Request.Error is { } err)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block" Style="overflow-wrap:anywhere;max-width:360px">@err</MudText>
+                    }
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Class="pa-6" Color="Color.Secondary">No device actions yet.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    private IReadOnlyList<DeviceActionView>? _items;
+    private Guid? _me;
+    private PeriodicTimer? _timer;
+    private readonly CancellationTokenSource _cts = new();
+
+    [Inject] private IUserContextAccessor Current { get; set; } = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _me = (await Current.GetAsync()).UserId;
+        _items = await Actions.GetQueueAsync();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender) _ = PollAsync();
+    }
+
+    /// <summary>Keeps statuses current while actions are open (approvals by others, Worker results).</summary>
+    private async Task PollAsync()
+    {
+        _timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try
+        {
+            while (await _timer.WaitForNextTickAsync(_cts.Token))
+            {
+                _items = await Actions.GetQueueAsync();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task DecideAsync(DeviceActionView v, bool approve)
+    {
+        var dialog = await Dialogs.ShowAsync<DecisionDialog>(null, new DialogParameters<DecisionDialog>
+        {
+            { x => x.Request, v.Request },
+            { x => x.TenantName, v.TenantName },
+            { x => x.Approve, approve }
+        }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: string note }) return;
+
+        var outcome = approve ? await Actions.ApproveAsync(v.Request.Id, note) : await Actions.RejectAsync(v.Request.Id, note);
+        Snackbar.Add(outcome.Message, outcome.Ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
+        _items = await Actions.GetQueueAsync();
+    }
+
+    private async Task CancelAsync(Guid id)
+    {
+        var outcome = await Actions.CancelAsync(id);
+        Snackbar.Add(outcome.Message, outcome.Ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
+        _items = await Actions.GetQueueAsync();
+    }
+
+    private static string Until(DateTimeOffset at)
+    {
+        var left = at - DateTimeOffset.UtcNow;
+        return left <= TimeSpan.Zero ? "now" : left.TotalHours >= 1 ? $"in {(int)left.TotalHours}h" : $"in {(int)Math.Ceiling(left.TotalMinutes)}m";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _cts.CancelAsync();
+        _timer?.Dispose();
+        _cts.Dispose();
+    }
+}

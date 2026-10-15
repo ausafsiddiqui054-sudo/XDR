@@ -2,16 +2,27 @@
 @inject PostureService Posture
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
+@inject IUserContextAccessor Current
+@inject ScanRequestService Scans
+@inject SecurePulse.Web.Services.Onboarding.PortalMode Mode
 
 <PageTitle>Overview · SecurePulse</PageTitle>
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
     <div>
         <MudText Typo="Typo.h4">Security posture</MudText>
-        <MudText Typo="Typo.body2" Color="Color.Secondary">Across all connected Microsoft 365 tenants</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            @(_isViewer && _portfolio?.Tenants.FirstOrDefault() is { } own ? $"{own.Tenant.DisplayName} · Microsoft 365" : "Across all connected Microsoft 365 tenants")
+        </MudText>
     </div>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Refresh"
-               OnClick="RunScan">Run scan</MudButton>
+    <AuthorizeView Policy="@Policies.Operator">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Refresh"
+                   OnClick="RunScan" Disabled="_queueing">Run scan</MudButton>
+    </AuthorizeView>
+    @if (_isViewer && _portfolio?.Scanned.FirstOrDefault() is { } mine)
+    {
+        <ReportButton TenantId="mine.Tenant.Id" Variant="Variant.Filled" />
+    }
 </MudStack>
 
 @if (_portfolio is null)
@@ -23,10 +34,10 @@ else
     <MudGrid Spacing="4">
         <MudItem xs="12" md="4">
             <MudPaper Class="sp-card pa-6" Elevation="0" Outlined="true">
-                <MudText Typo="Typo.subtitle1" Class="mb-4">Portfolio score</MudText>
+                <MudText Typo="Typo.subtitle1" Class="mb-4">@(_isViewer ? "Security score" : "Portfolio score")</MudText>
                 <ScoreRing Score="_portfolio.AverageScore" Grade="@GradeOf(_portfolio.AverageScore)" />
                 <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Class="mt-4">
-                    Average of @_portfolio.Scanned.Count() scanned tenants
+                    @(_isViewer ? "Updated after each scan" : $"Average of {_portfolio.Scanned.Count()} scanned tenants")
                 </MudText>
             </MudPaper>
         </MudItem>
@@ -115,12 +126,41 @@ else
 @code {
     private PortfolioPosture? _portfolio;
 
-    protected override async Task OnInitializedAsync() => _portfolio = await Posture.GetPortfolioAsync();
+    private bool _isViewer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isViewer = (await Current.GetAsync()).Role == PortalRole.ClientViewer;
+        _portfolio = await Posture.GetPortfolioAsync();
+    }
 
     private void OpenTenant(TenantPosture t) => Nav.NavigateTo($"findings?tenant={t.Tenant.Id}");
 
-    private void RunScan() =>
-        Snackbar.Add("Scanning runs from the Worker service, which arrives in the next build step.", MudBlazor.Severity.Info);
+    private bool _queueing;
+
+    private async Task RunScan()
+    {
+        if (_queueing) return;
+        _queueing = true;
+        try
+        {
+            var ready = _portfolio?.Tenants.Count(t => ScanRequestService.IsOnboarded(t.Tenant)) ?? 0;
+            var queued = await Scans.RequestAllAsync();
+            var (message, severity) = (queued, ready) switch
+            {
+                (_, 0) => ("No tenants are ready to scan yet: each needs consent and a certificate.", MudBlazor.Severity.Warning),
+                (0, _) => ("Scans are already queued or running for every tenant.", MudBlazor.Severity.Info),
+                _ => ($"Queued {queued} scan{(queued == 1 ? "" : "s")}. Results appear as each one finishes.", MudBlazor.Severity.Success)
+            };
+            if (queued > 0 && !Mode.UsesDatabase)
+                message += " (Sample data mode: no Worker runs them.)";
+            Snackbar.Add(message, severity);
+        }
+        finally
+        {
+            _queueing = false;
+        }
+    }
 
     private static string GradeOf(int score) => score switch { >= 90 => "A", >= 80 => "B", >= 70 => "C", >= 60 => "D", _ => "F" };
 
@@ -128,6 +168,9 @@ else
     {
         if (when is null) return "Never";
         var span = DateTimeOffset.UtcNow - when.Value;
-        return span.TotalHours < 24 ? $"{(int)span.TotalHours}h ago" : $"{(int)span.TotalDays}d ago";
+        return span.TotalMinutes < 1 ? "Just now"
+            : span.TotalHours < 1 ? $"{(int)span.TotalMinutes}m ago"
+            : span.TotalHours < 24 ? $"{(int)span.TotalHours}h ago"
+            : $"{(int)span.TotalDays}d ago";
     }
 }

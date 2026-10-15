@@ -12,6 +12,17 @@
     margin: 0 auto;
 }
 
+.sp-score-ring .mud-progress-circular {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.sp-score-ring .sp-score-track {
+    color: var(--mud-palette-lines-default);
+}
+
 .sp-score-ring .sp-score-label {
     position: absolute;
     inset: 0;
@@ -47,6 +58,12 @@
     background: var(--mud-palette-background-gray);
 }
 
+.sp-note {
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: var(--mud-palette-background-gray);
+}
+
 #blazor-error-ui {
     background: #ffe7a6;
     bottom: 0;
@@ -74,4 +91,200 @@
     .sp-card.sp-lift:hover {
         transform: translateY(-2px);
     }
+}
+
+/* Segmented compliance bar (M3 Expressive: rounded segments with gaps). */
+.sp-bar {
+    display: flex;
+    gap: 3px;
+    height: 10px;
+    min-width: 0;
+}
+
+.sp-bar > span {
+    display: block;
+    min-width: 6px;
+    border-radius: 999px;
+}
+
+.sp-bar-success { background: var(--mud-palette-success); }
+.sp-bar-warning { background: var(--mud-palette-warning); }
+.sp-bar-error { background: var(--mud-palette-error); }
+.sp-bar-unknown { background: var(--mud-palette-lines-default); }
+
+.sp-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.sp-legend i {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+}
+
+/* Tonal icon badge used for platform and protection tiles. */
+.sp-icon-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+    background: var(--mud-palette-background-gray);
+    color: var(--mud-palette-primary);
+}
+
+.sp-icon-badge.sp-icon-badge-lg {
+    width: 64px;
+    height: 64px;
+    border-radius: 22px;
+}
+
+.sp-breakdown-row {
+    border-radius: 16px;
+    padding: 10px 12px;
+}
+
+.sp-breakdown-row:hover,
+.sp-breakdown-row.sp-active {
+    background: var(--mud-palette-background-gray);
+}
+
+.sp-props {
+    display: grid;
+    grid-template-columns: minmax(110px, auto) 1fr;
+    gap: 10px 16px;
+    margin: 0;
+}
+
+.sp-props dt {
+    color: var(--mud-palette-text-secondary);
+    font-size: 0.875rem;
+}
+
+.sp-props dd {
+    margin: 0;
+    font-size: 0.875rem;
+    overflow-wrap: anywhere;
+}
+
+.sp-public {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 48px 16px;
+}
+
+/* Onboarding progress steps. */
+.sp-steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.sp-steps li {
+    display: flex;
+    gap: 14px;
+    position: relative;
+    padding-bottom: 20px;
+}
+
+.sp-steps li:not(:last-child)::before {
+    content: "";
+    position: absolute;
+    left: 15px;
+    top: 34px;
+    bottom: 2px;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--mud-palette-lines-default);
+}
+
+.sp-steps li.sp-done:not(:last-child)::before {
+    background: var(--mud-palette-success);
+}
+
+.sp-step-dot {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--mud-palette-background-gray);
+    color: var(--mud-palette-text-secondary);
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.sp-steps li.sp-done .sp-step-dot {
+    background: var(--mud-palette-success);
+    color: var(--mud-palette-success-text);
+}
+
+.sp-steps li.sp-current .sp-step-dot {
+    background: var(--mud-palette-primary);
+    color: var(--mud-palette-primary-text);
+}
+
+.sp-steps li.sp-failed .sp-step-dot {
+    background: var(--mud-palette-error);
+    color: var(--mud-palette-error-text);
+}
+
+.sp-link-box {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.8rem;
+    word-break: break-all;
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: var(--mud-palette-background-gray);
+}
+
+/* Errors can carry long unbroken tokens (thumbprints, IDs); let them wrap on small screens. */
+.mud-alert-message {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* Defender health tiles on the Endpoints page: tonal by state, clickable to filter. */
+.sp-defender-tile {
+    border-radius: 18px;
+    padding: 14px 16px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    background: color-mix(in srgb, var(--sp-tile-color) 10%, transparent);
+    transition: border-color 120ms ease, background-color 120ms ease;
+    height: 100%;
+}
+
+.sp-defender-tile:hover {
+    background: color-mix(in srgb, var(--sp-tile-color) 16%, transparent);
+}
+
+.sp-defender-tile.sp-active {
+    border-color: var(--sp-tile-color);
+}
+
+.sp-defender-tile:focus-visible {
+    outline: 2px solid var(--mud-palette-primary);
+    outline-offset: 2px;
+}
+
+.sp-defender-tile .sp-kpi-value {
+    color: var(--sp-tile-color);
+}
+
+.sp-tile-success { --sp-tile-color: var(--mud-palette-success); }
+.sp-tile-error { --sp-tile-color: var(--mud-palette-error); }
+.sp-tile-warning { --sp-tile-color: var(--mud-palette-warning); }
+.sp-tile-default { --sp-tile-color: var(--mud-palette-text-secondary); }
+
+.sp-muted {
+    color: var(--mud-palette-text-secondary);
 }
