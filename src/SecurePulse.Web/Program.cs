@@ -1,6 +1,8 @@
 using MudBlazor.Services;
 using SecurePulse.Core.Abstractions;
+using SecurePulse.Core.Models;
 using SecurePulse.Data;
+using SecurePulse.Playbooks;
 using SecurePulse.Web.Components;
 using SecurePulse.Web.Services;
 using SecurePulse.Web.Services.Onboarding;
@@ -20,13 +22,15 @@ var useEntra = builder.AddPortalAuthentication();
 // runs on in-memory sample data, so the UI can be designed and demoed with no database.
 var connectionString = builder.Configuration.GetConnectionString("SecurePulse");
 var useDatabase = !string.IsNullOrWhiteSpace(connectionString);
+var demo = builder.Configuration.GetSection("Demo").Get<DemoOptions>() ?? new DemoOptions();
+var simulated = !useDatabase && demo.Simulate;
 if (useDatabase)
 {
     builder.Services.AddSecurePulseData(connectionString!);
 }
 else
 {
-    builder.Services.AddSingleton<SampleDataStore>();
+    builder.Services.AddSingleton(_ => new SampleDataStore(fullDemo: true));
     builder.Services.AddSingleton<ITenantRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IFindingRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IDeviceRepository>(sp => sp.GetRequiredService<SampleDataStore>());
@@ -39,8 +43,17 @@ else
     builder.Services.AddSingleton<IConfigurationChangeRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IFindingPlaybookRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IAuditExportStore>(sp => sp.GetRequiredService<SampleDataStore>());
+
+    // Sample data only: a simulated Worker so a demo runs end to end. It changes the in-memory store and never calls Microsoft.
+    if (simulated)
+    {
+        builder.Services.AddSingleton(demo);
+        builder.Services.AddSingleton<PlaybookRunner>();
+        builder.Services.AddSingleton<FindingPlaybookRunner>();
+        builder.Services.AddHostedService<DemoSimulator>();
+    }
 }
-builder.Services.AddSingleton(new PortalMode(useDatabase));
+builder.Services.AddSingleton(new PortalMode(useDatabase, simulated));
 builder.Services.AddScoped<PostureService>();
 builder.Services.AddScoped<EndpointService>();
 builder.Services.AddScoped<DeviceActionRequestService>();
@@ -48,7 +61,8 @@ builder.Services.AddScoped<PlaybookService>();
 builder.Services.AddScoped<ConfigurationChangeRequestService>();
 builder.Services.AddScoped<PortalUserService>();
 builder.Services.AddScoped<AuditTrail>();
-builder.Services.AddSingleton(ScanEngineSelection.From(builder.Configuration.GetSection("Scans:Engines").Get<string[]>()));
+// The simulated Worker runs every engine; a real portal lists the engines its Workers run.
+builder.Services.AddSingleton(ScanEngineSelection.From(simulated ? [.. ScanEngines.All] : builder.Configuration.GetSection("Scans:Engines").Get<string[]>()));
 builder.Services.AddScoped<ScanRequestService>();
 
 // Branded PDF reports. Off until Reports:QuestPdfLicense names the QuestPDF license tier held.

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using SecurePulse.Core.Abstractions;
 using SecurePulse.Core.Models;
+using SecurePulse.Playbooks;
 
 namespace SecurePulse.Worker;
 

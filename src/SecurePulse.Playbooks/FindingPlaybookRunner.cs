@@ -1,7 +1,8 @@
+using Microsoft.Extensions.Logging;
 using SecurePulse.Core.Abstractions;
 using SecurePulse.Core.Models;
 
-namespace SecurePulse.Worker;
+namespace SecurePulse.Playbooks;
 
 /// <summary>
 /// After a successful scan, proposes catalog fixes for checks that failed in a tenant with configuration access.

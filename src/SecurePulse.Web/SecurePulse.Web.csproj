@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\SecurePulse.Core\SecurePulse.Core.csproj" />
     <ProjectReference Include="..\SecurePulse.Data\SecurePulse.Data.csproj" />
+    <ProjectReference Include="..\SecurePulse.Playbooks\SecurePulse.Playbooks.csproj" />
     <ProjectReference Include="..\SecurePulse.Reporting\SecurePulse.Reporting.csproj" />
   </ItemGroup>
 

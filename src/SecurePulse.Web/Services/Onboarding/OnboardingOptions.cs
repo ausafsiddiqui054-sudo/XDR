@@ -33,5 +33,8 @@ public sealed class OnboardingOptions
     public TimeSpan LinkLifetime { get; set; } = TimeSpan.FromDays(7);
 }
 
-/// <summary>Whether the portal runs on PostgreSQL (with a Worker) or in-memory sample data.</summary>
-public sealed record PortalMode(bool UsesDatabase);
+/// <summary>
+/// Whether the portal runs on PostgreSQL (with a Worker) or in-memory sample data, and whether sample data has the
+/// demo simulator standing in for the Worker.
+/// </summary>
+public sealed record PortalMode(bool UsesDatabase, bool Simulated = false);

@@ -56,6 +56,10 @@ public static class AuthEndpoints
             case "owner":
                 who = (operatorTenant, DevGuid(1), "owner@securepulse.dev", "Dev Owner", PortalRole.Owner, null);
                 break;
+            case "second-owner":
+                // A second Owner, for what needs two: approving another Owner's request, pre-approving a playbook.
+                who = (operatorTenant, DevGuid(4), "owner2@securepulse.dev", "Dev Second Owner", PortalRole.Owner, null);
+                break;
             case "msp-admin":
                 who = (operatorTenant, DevGuid(2), "admin@securepulse.dev", "Dev MSP Admin", PortalRole.MspAdmin, null);
                 break;

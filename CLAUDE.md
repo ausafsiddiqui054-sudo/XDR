@@ -174,6 +174,15 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
   editor, at most once per tenant and fix per `FindingPlaybookRules.Cooldown`; one open change per tenant and fix
   (`IX_configuration_changes_open`). Adding a fix or a permission is an organisational decision.
 
+## Demo invariants
+- `DemoSimulator` stands in for the Worker only with sample data (no connection string), so a demo runs end to end. It changes
+  only the in-memory `SampleDataStore`: never call Graph, an engine or any network from it, and keep its audit entries marked
+  simulated (actor `DemoSimulator.Actor`, summaries "Simulated: ..."). Proposals go through the shared runners in
+  `SecurePulse.Playbooks` (also used by the Worker); don't copy their logic into the portal.
+- `SampleDataStore(fullDemo: true)` is the portal's demo set (Wazuh/GoPhish findings, scan history, sample certificate
+  references, a configuration tenant). Tests use the plain set. `Snapshot()` (the development database seed) strips the
+  sample references so a real Worker never tries to use them.
+
 ## Defender health invariants
 - Defender data comes through Graph with the assessment app's existing read-only permissions:
   `windowsProtectionState` (DeviceManagementManagedDevices.Read.All) and advanced hunting

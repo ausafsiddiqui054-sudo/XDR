@@ -131,6 +131,19 @@ public sealed partial class PortalAuthEndpointTests : IClassFixture<PortalAuthEn
     }
 
     [Fact]
+    public async Task TheSecondOwnerIsAnotherOwner_ForWhatNeedsTwo()
+    {
+        Assert.Contains("value=\"second-owner\"", await Client().GetStringAsync("/dev/sign-in"));
+        await SignInAsync("owner");
+        var client = await SignInAsync("second-owner");
+
+        Assert.Contains("People", await client.GetStringAsync("/settings/users"));
+        var owners = (await _factory.Services.GetRequiredService<IPortalUserRepository>().GetAllAsync()).Where(u => u.Role == PortalRole.Owner).ToList();
+        Assert.Contains(owners, u => u.UserPrincipalName == "owner@securepulse.dev");
+        Assert.Contains(owners, u => u.UserPrincipalName == "owner2@securepulse.dev");
+    }
+
+    [Fact]
     public async Task MspAdminCanOnboardAndManagePeople()
     {
         var client = await SignInAsync("msp-admin");

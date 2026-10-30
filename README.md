@@ -18,6 +18,7 @@ SecurePulse.slnx
     ├── SecurePulse.Data        EF Core + PostgreSQL repositories, migrations, dev seeder
     ├── SecurePulse.Engines     Engine adapters (Maester, ScubaGear): out-of-process runners + JSON parsers
     ├── SecurePulse.Intune      Intune device inventory over Microsoft Graph (certificate auth)
+    ├── SecurePulse.Playbooks   Playbook runners (device and finding playbooks), shared by the Worker and the sample-data demo
     ├── SecurePulse.Reporting   RiskScoreCalculator (0–100 score, grade, top risks) and the branded PDF report (QuestPDF)
     ├── SecurePulse.Web         Blazor Server portal (MudBlazor, M3 Expressive-style theme), consent links
     └── SecurePulse.Worker      Background service: consent verification, Intune device sync, scheduled engine scans
@@ -38,10 +39,40 @@ dotnet test
 Without a connection string the portal runs on **in-memory sample data** (five fictional
 tenants), so you can design and demo the UI with nothing else installed. Without
 `AzureAd:ClientId`, Development offers a **development sign-in** page to pick a persona
-(Owner, MSP admin, a client viewer, or someone without access); outside Development the portal
+(Owner, Second Owner, MSP admin, a client viewer, or someone without access); outside Development the portal
 refuses to start without Entra sign-in. Pages: Overview (`/`),
 Findings (`/findings`), Endpoints (`/endpoints`, device detail at `/endpoints/{tenant}/{device}`),
 Tenants (`/tenants`). Dark mode toggle is in the top bar.
+
+### Live demo (sample data)
+
+Every feature works end to end on sample data, so a demo needs only the .NET SDK:
+
+```bash
+export Onboarding__AppClientId=11111111-1111-1111-1111-111111111111              # placeholders: they only switch on
+export Onboarding__RemediationAppClientId=22222222-2222-2222-2222-222222222222   # the consent-link screens
+export Onboarding__ConfigurationAppClientId=33333333-3333-3333-3333-333333333333
+dotnet run --project src/SecurePulse.Web                                           # http://localhost:5106
+```
+
+(PowerShell: `$env:Onboarding__AppClientId="..."`.) PDF reports also need `Reports__QuestPdfLicense`,
+the QuestPDF tier your organisation holds.
+
+- **Sample data:** Maester, ScubaGear, Wazuh and GoPhish findings with scan history. Al Noor Family Clinic has
+  configuration access (failing MS.AAD.1.1v1 and MS.AAD.3.6v1, so "Propose this fix" shows), and Creek Physio
+  Center has remediation access for device actions.
+- **A simulated Worker** (`DemoSimulator`, sample data only): queued scans run for a few seconds and finish,
+  approved device actions and configuration changes complete, and devices "sync" every 30 seconds so playbooks
+  propose (and pre-approved ones auto-approve, through the Worker's own runners). It only changes the in-memory
+  store and never calls Microsoft Graph or an engine; its audit entries say "Simulated" and come from
+  "SecurePulse demo (simulated Worker)". Turn it off with `Demo__Simulate=false`.
+- **Two people:** use two browser windows (one private) for the four-eyes steps. **Second Owner** approves an
+  Owner's requests and pre-approves playbooks.
+
+A demo order: Owner runs a scan from the Overview; Findings (a Wazuh or GoPhish finding, then "Propose this fix" on
+a failed Al Noor check as MSP admin); Second Owner approves it under Configuration changes; MSP admin requests a
+restart on a Creek device and Owner approves it; Owner creates a playbook and Second Owner pre-approves it; the
+Audit log shows every step. Consent links can't be completed (no real Microsoft tenant), and nothing is sent anywhere.
 
 ### With PostgreSQL and the Worker
 

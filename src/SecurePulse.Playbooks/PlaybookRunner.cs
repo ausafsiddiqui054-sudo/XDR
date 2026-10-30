@@ -1,13 +1,8 @@
+using Microsoft.Extensions.Logging;
 using SecurePulse.Core.Abstractions;
 using SecurePulse.Core.Models;
 
-namespace SecurePulse.Worker;
-
-public sealed class PlaybookOptions
-{
-    /// <summary>Check playbooks after each successful device sync. Off: playbooks propose nothing.</summary>
-    public bool Enabled { get; set; } = true;
-}
+namespace SecurePulse.Playbooks;
 
 /// <summary>
 /// After a tenant's devices are synced, matches them against the enabled playbooks and adds a pending

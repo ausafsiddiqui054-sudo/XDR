@@ -5,6 +5,7 @@
 @using SecurePulse.Core.Abstractions
 @inject SignInMode Mode
 @inject ITenantRepository Tenants
+@inject SecurePulse.Web.Services.Onboarding.PortalMode Portal
 
 <PageTitle>Development sign-in · SecurePulse</PageTitle>
 
@@ -21,7 +22,14 @@
             Development sign-in: AzureAd:ClientId isn't set, so you pick who to be. This page only exists in Development.
         </MudAlert>
         <MudText Typo="Typo.h5" Class="mb-1">Sign in as</MudText>
-        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">Each persona goes through the same invitation and role checks as a real sign-in.</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="@(Portal.Simulated ? "mb-3" : "mb-6")">Each persona goes through the same invitation and role checks as a real sign-in.</MudText>
+        @if (Portal.Simulated)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6" data-testid="demo-simulated">
+                Sample data: a simulated Worker finishes scans, sends approved actions and applies approved fixes in a few seconds.
+                Nothing is sent to Microsoft. Use two browser windows for two people.
+            </MudText>
+        }
 
         <form method="post" action="authentication/dev-login">
             <AntiforgeryToken />
@@ -29,6 +37,8 @@
             <MudStack Spacing="2">
                 <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
                            name="persona" value="owner" StartIcon="@Icons.Material.Rounded.AdminPanelSettings">Owner</MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
+                           name="persona" value="second-owner" StartIcon="@Icons.Material.Rounded.AdminPanelSettings">Second Owner</MudButton>
                 <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
                            name="persona" value="msp-admin" StartIcon="@Icons.Material.Rounded.SupportAgent">MSP admin</MudButton>
                 @foreach (var tenant in _tenants)

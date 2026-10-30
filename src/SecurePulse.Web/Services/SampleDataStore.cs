@@ -26,18 +26,19 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
     private readonly ConcurrentDictionary<Guid, IReadOnlyList<ManagedDevice>> _devices = new();
     private readonly ConcurrentDictionary<Guid, DeviceSyncStatus> _syncStatus = new();
 
+    /// <param name="SourceCheckId">The engine's own check ID, when it differs from <paramref name="Id"/> (CISA's IDs, so configuration fixes match).</param>
     private sealed record Check(
         string Id, string Title, string Category, Severity Severity,
-        string Remediation, string Evidence, string[] Frameworks);
+        string Remediation, string Evidence, string[] Frameworks, string? SourceCheckId = null);
 
     private static readonly Check[] Catalog =
     [
         new("SP-ID-001", "Privileged roles require phishing-resistant MFA", "Identity", Severity.Critical,
             "Create a Conditional Access policy targeting directory roles that requires the 'Phishing-resistant MFA' authentication strength.",
-            "3 of 5 Global Administrators can sign in with SMS or voice MFA.", ["UAE IA", "CIS M365"]),
+            "3 of 5 Global Administrators can sign in with SMS or voice MFA.", ["UAE IA", "CIS M365"], "MS.AAD.3.6v1"),
         new("SP-ID-002", "Legacy authentication is blocked", "Identity", Severity.High,
             "Block 'Exchange ActiveSync clients' and 'Other clients' with a tenant-wide Conditional Access policy.",
-            "No Conditional Access policy blocks legacy authentication protocols.", ["UAE IA", "CIS M365"]),
+            "No Conditional Access policy blocks legacy authentication protocols.", ["UAE IA", "CIS M365"], "MS.AAD.1.1v1"),
         new("SP-ID-003", "All users are registered for MFA", "Identity", Severity.High,
             "Enable the MFA registration campaign and require registration within 14 days.",
             "27 enabled users have no MFA method registered.", ["UAE IA", "DoH ADHICS"]),
@@ -79,21 +80,38 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
             "No recipients configured for risky sign-in alerts.", ["UAE IA"])
     ];
 
-    public SampleDataStore()
+    private readonly bool _fullDemo;
+
+    /// <param name="fullDemo">
+    /// What the portal's sample mode uses: also Wazuh and GoPhish findings, scan history, configuration access for one
+    /// tenant and sample certificate references, so every feature can be shown (see <see cref="DemoSimulator"/>).
+    /// Without it, the plain set that tests build on.
+    /// </param>
+    public SampleDataStore(bool fullDemo = false)
     {
+        _fullDemo = fullDemo;
         _tenants =
         [
-            MakeTenant("Al Noor Family Clinic", "alnoorclinic.example", "Healthcare", null, TenantConsentState.ReadOnlyGranted, 2, passRate: 0.45),
+            MakeTenant("Al Noor Family Clinic", "alnoorclinic.example", "Healthcare", null, TenantConsentState.ReadOnlyGranted, 2, passRate: 0.45,
+                wazuhGroup: "alnoor", goPhish: true, configuration: true),
             MakeTenant("Palm Dental Studio", "palmdental.example", "Healthcare", "Gulf IT Services", TenantConsentState.ReadOnlyGranted, 5, passRate: 0.7),
-            MakeTenant("Creek Physio Center", "creekphysio.example", "Healthcare", "Gulf IT Services", TenantConsentState.RemediationGranted, 1, passRate: 0.88),
+            MakeTenant("Creek Physio Center", "creekphysio.example", "Healthcare", "Gulf IT Services", TenantConsentState.RemediationGranted, 1, passRate: 0.88,
+                wazuhGroup: "creekphysio", goPhish: true),
             MakeTenant("Marina Legal Partners", "marinalegal.example", "Professional services", "Gulf IT Services", TenantConsentState.ReadOnlyGranted, 9, passRate: 0.6),
             MakeTenant("Desert Rose Pharmacy", "desertrose.example", "Healthcare", null, TenantConsentState.Pending, null, passRate: 0)
         ];
     }
 
     private Tenant MakeTenant(string name, string domain, string industry, string? partner,
-        TenantConsentState consent, int? daysSinceScan, double passRate)
+        TenantConsentState consent, int? daysSinceScan, double passRate, string? wazuhGroup = null, bool goPhish = false, bool configuration = false)
     {
+        var scannable = _fullDemo && consent is TenantConsentState.ReadOnlyGranted or TenantConsentState.RemediationGranted;
+        if (!_fullDemo)
+        {
+            wazuhGroup = null;
+            goPhish = false;
+            configuration = false;
+        }
         var tenant = new Tenant
         {
             Id = Guid.NewGuid(),
@@ -103,12 +121,23 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
             Industry = industry,
             PartnerName = partner,
             ConsentState = consent,
-            // A sample thumbprint so the remediation tenant can take device action requests in demos.
+            // Sample thumbprints (references only, no certificates exist) so connected tenants can be scanned, the remediation
+            // tenant can take device actions and the configuration tenant can take configuration fixes in demos.
+            CredentialReference = scannable ? "0123456789ABCDEF0123456789ABCDEF01234567" : null,
             RemediationCredentialReference = consent == TenantConsentState.RemediationGranted ? "FEDCBA9876543210FEDCBA9876543210FEDCBA98" : null,
+            ConfigurationCredentialReference = configuration ? "89ABCDEF0123456789ABCDEF0123456789ABCDEF" : null,
+            WazuhAgentGroup = wazuhGroup,
+            GoPhishEnabled = goPhish,
             LastScanAt = daysSinceScan is null ? null : DateTimeOffset.UtcNow.AddDays(-daysSinceScan.Value).AddHours(-3)
         };
 
-        _findings[tenant.Id] = tenant.LastScanAt is null ? [] : Generate(tenant, passRate);
+        _findings[tenant.Id] = tenant.LastScanAt is null ? [] :
+        [
+            .. Generate(tenant, passRate),
+            .. wazuhGroup is null ? [] : GenerateWazuh(tenant, passRate),
+            .. goPhish ? GenerateGoPhish(tenant, passRate) : []
+        ];
+        if (_fullDemo) SeedScanRuns(tenant);
         if (tenant.LastScanAt is not null)
         {
             _devices[tenant.Id] = GenerateDevices(tenant, passRate);
@@ -143,7 +172,7 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
                 Id = $"sample:{tenant.Id:N}:{check.Id}",
                 TenantId = tenant.Id,
                 Source = check.Category is "Email" or "Collaboration" ? "ScubaGear" : "Maester",
-                SourceCheckId = check.Id,
+                SourceCheckId = check.SourceCheckId ?? check.Id,
                 Title = check.Title,
                 Category = check.Category,
                 Severity = check.Severity,
@@ -154,6 +183,106 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
                 DetectedAt = tenant.LastScanAt ?? DateTimeOffset.UtcNow
             };
         }).ToList();
+    }
+
+    private sealed record SampleCisCheck(int Id, string Title, string Cis, string Remediation);
+
+    /// <summary>CIS Microsoft Windows 11 Enterprise benchmark checks, as the Wazuh engine reports SCA results.</summary>
+    private static readonly SampleCisCheck[] WazuhChecks =
+    [
+        new(26000, "Ensure 'Enforce password history' is set to '24 or more password(s)'", "1.1.1", "Set Enforce password history to 24 or more passwords."),
+        new(26003, "Ensure 'Minimum password length' is set to '14 or more character(s)'", "1.1.4", "Set Minimum password length to 14 or more characters."),
+        new(26006, "Ensure 'Account lockout threshold' is set to '5 or fewer invalid logon attempt(s), but not 0'", "1.2.2",
+            "Set Account lockout threshold to 5 or fewer invalid logon attempts, but not 0."),
+        new(26040, "Ensure 'Interactive logon: Machine inactivity limit' is set to '900 or fewer second(s), but not 0'", "2.3.7.3",
+            "Set Machine inactivity limit to 900 seconds or fewer, but not 0."),
+        new(26120, "Ensure 'Windows Firewall: Domain: Firewall state' is set to 'On (recommended)'", "9.1.1",
+            "Turn on Windows Defender Firewall for the domain profile.")
+    ];
+
+    private static IReadOnlyList<Finding> GenerateWazuh(Tenant tenant, double passRate)
+    {
+        var stable = StableRandom(tenant.DisplayName, salt: 303);
+        var prefix = string.Concat(tenant.DisplayName.Split(' ').Select(w => char.ToUpperInvariant(w[0])));
+        var agents = Enumerable.Range(1, 3 + stable.Next(3)).Select(i => $"{prefix}-PC-{i:D2}").ToList();
+        return WazuhChecks.Select(check =>
+        {
+            // Weaker tenants fail more checks; a failed check fails on some of the agents.
+            var failed = stable.NextDouble() < (1 - passRate) * 0.9;
+            var failedOn = failed ? agents.OrderBy(_ => stable.Next()).Take(1 + stable.Next(agents.Count - 1)).Order().ToList() : [];
+            return new Finding
+            {
+                Id = $"sample:{tenant.Id:N}:wazuh:{check.Id}",
+                TenantId = tenant.Id,
+                Source = ScanEngines.Wazuh,
+                SourceCheckId = $"cis_win11_enterprise:{check.Id}",
+                Title = check.Title,
+                Category = "Endpoint hardening",
+                Severity = Severity.Low,
+                Status = failed ? FindingStatus.Failed : FindingStatus.Passed,
+                Evidence = failed
+                    ? $"Failed on {failedOn.Count} of {agents.Count} agents: {string.Join(", ", failedOn)}."
+                    : $"Passed on all {agents.Count} agents.",
+                Remediation = check.Remediation,
+                HelpUrl = "https://www.cisecurity.org/benchmark/microsoft_windows_desktop",
+                Frameworks = [$"CIS {check.Cis}"],
+                DetectedAt = tenant.LastScanAt ?? DateTimeOffset.UtcNow
+            };
+        }).ToList();
+    }
+
+    private static readonly (int Id, string Name)[] Campaigns =
+        [(14, "Q3 invoice lure (finance)"), (15, "Payroll portal update"), (16, "Shared document (all staff)")];
+
+    /// <summary>Phishing simulation totals, as the GoPhish engine imports them: counts only, never who.</summary>
+    private static IReadOnlyList<Finding> GenerateGoPhish(Tenant tenant, double passRate)
+    {
+        var stable = StableRandom(tenant.DisplayName, salt: 404);
+        return Campaigns.Select((campaign, i) =>
+        {
+            var sent = 20 + stable.Next(30);
+            var running = i == Campaigns.Length - 1;
+            // The finance lure catches someone at all but the strongest tenants; later campaigns less often.
+            var caught = !running && (i == 0 ? passRate < 0.8 : stable.NextDouble() > passRate + 0.3);
+            var entered = caught ? 1 + stable.Next(4) : 0;
+            var clicked = entered + stable.Next(Math.Max(1, sent / 5));
+            var opened = Math.Min(sent, clicked + sent / 2 + stable.Next(sent / 4 + 1));
+            var reported = stable.Next(sent / 3 + 1);
+            string Pct(int n) => $"{(int)Math.Round(100.0 * n / sent)}%";
+            return new Finding
+            {
+                Id = $"sample:{tenant.Id:N}:gophish:{campaign.Id}",
+                TenantId = tenant.Id,
+                Source = ScanEngines.GoPhish,
+                SourceCheckId = $"campaign:{campaign.Id}",
+                Title = $"Phishing simulation: {campaign.Name}",
+                Category = "Security awareness",
+                Severity = Severity.Medium,
+                Status = running ? FindingStatus.NotEvaluated : entered > 0 ? FindingStatus.Failed : FindingStatus.Passed,
+                Evidence = running
+                    ? "The campaign is still running; its totals are imported once it finishes."
+                    : $"{entered} of {sent} recipients entered data on the landing page ({Pct(entered)}). {clicked} clicked the link ({Pct(clicked)}), " +
+                      $"{opened} opened the email ({Pct(opened)}) and {reported} reported it ({Pct(reported)}).",
+                Remediation = "Give the people who entered data short, targeted awareness training, and have them change any password they typed in. " +
+                              "Require phishing-resistant MFA so a captured password isn't enough on its own, and make reporting easy with the Report button in Outlook.",
+                DetectedAt = tenant.LastScanAt ?? DateTimeOffset.UtcNow
+            };
+        }).ToList();
+    }
+
+    /// <summary>A finished run per engine at the tenant's last scan, so the Tenants page shows scan history.</summary>
+    private void SeedScanRuns(Tenant tenant)
+    {
+        if (tenant.LastScanAt is not { } at) return;
+        foreach (var engine in ScanEngines.All.Where(e => ScanEngines.AppliesTo(e, tenant)))
+        {
+            _scanRuns.Add(new ScanRun
+            {
+                Id = Guid.NewGuid(), TenantId = tenant.Id, Engine = engine, Trigger = ScanTrigger.Scheduled, Status = ScanRunStatus.Succeeded,
+                QueuedAt = at.AddMinutes(-6), StartedAt = at.AddMinutes(-5), CompletedAt = at,
+                FindingCount = _findings[tenant.Id].Count(f => f.Source == engine)
+            });
+        }
     }
 
     private sealed record SettingDef(string Setting, string FailDetail, bool IsEncryption = false, bool IsDefender = false);
@@ -799,9 +928,13 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
                 .Select(g => g.OrderByDescending(r => r.QueuedAt).First()).ToList());
     }
 
-    /// <summary>Everything the store holds, for seeding a real database in development.</summary>
+    /// <summary>
+    /// Everything the store holds, for seeding a real database in development. The sample certificate references
+    /// for scanning and configuration fixes are left out: a real Worker would try to use them.
+    /// </summary>
     public (IReadOnlyList<Tenant> Tenants, IReadOnlyList<Finding> Findings, IReadOnlyList<ManagedDevice> Devices) Snapshot() =>
-        (_tenants, _findings.Values.SelectMany(f => f).ToList(), _devices.Values.SelectMany(d => d).ToList());
+        (_tenants.Select(t => t with { CredentialReference = null, ConfigurationCredentialReference = null }).ToList(),
+            _findings.Values.SelectMany(f => f).ToList(), _devices.Values.SelectMany(d => d).ToList());
 
     public Task SaveScanAsync(ScanResult result, CancellationToken ct = default)
     {
@@ -810,6 +943,28 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
             _findings[result.TenantId] = _findings.GetValueOrDefault(result.TenantId, [])
                 .Where(f => f.Source != result.Source).Concat(result.Findings).ToList();
         return Task.CompletedTask;
+    }
+
+    // --- Demo simulator support (sample data only) ---
+
+    /// <summary>A simulated scan: the engine's sample findings are re-dated and the tenant's last scan moves to <paramref name="at"/>.</summary>
+    internal int RecordSimulatedScan(Guid tenantId, string engine, DateTimeOffset at)
+    {
+        lock (_gate)
+        {
+            var current = _findings.GetValueOrDefault(tenantId, []);
+            _findings[tenantId] = current.Select(f => f.Source == engine ? f with { DetectedAt = at } : f).ToList();
+            var index = _tenants.FindIndex(t => t.Id == tenantId);
+            if (index >= 0) _tenants[index] = _tenants[index] with { LastScanAt = at };
+            return current.Count(f => f.Source == engine);
+        }
+    }
+
+    /// <summary>A simulated device sync: the inventory stays as it is, only the sync time moves.</summary>
+    internal void RecordSimulatedSync(Guid tenantId, DateTimeOffset at)
+    {
+        if (_syncStatus.TryGetValue(tenantId, out var status))
+            _syncStatus[tenantId] = status with { LastAttemptAt = at, LastSuccessAt = at, Succeeded = true };
     }
 
     // --- Device actions (same rules as the database: conditional transitions, one open action per device) ---
