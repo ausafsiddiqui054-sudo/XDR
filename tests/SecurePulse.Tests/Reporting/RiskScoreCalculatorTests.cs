@@ -199,6 +199,16 @@ public class RiskScoreCalculatorTests
         Assert.Equal(expected, score.Grade);
     }
 
+    [Theory]
+    [InlineData(95, false, "A")]
+    [InlineData(95, true, "C")]
+    [InlineData(85, true, "C")]
+    [InlineData(75, true, "C")]
+    [InlineData(65, true, "D")]
+    [InlineData(40, true, "F")]
+    public void GradeFor_MatchesCalculateIncludingTheCriticalCap(int score, bool hasOpenCritical, string expected) =>
+        Assert.Equal(expected, RiskScoreCalculator.GradeFor(score, hasOpenCritical));
+
     [Fact]
     public void Score_RoundsHalfAwayFromZero()
     {

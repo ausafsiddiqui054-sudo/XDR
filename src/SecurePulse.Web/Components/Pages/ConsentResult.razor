@@ -11,10 +11,10 @@
     <MudStack AlignItems="AlignItems.Center" Spacing="3">
         <span class="sp-icon-badge sp-icon-badge-lg"><MudIcon Icon="@_icon" Color="@_color" Size="Size.Large" /></span>
         <MudText Typo="Typo.h5" Align="Align.Center">@_title</MudText>
-        <MudText Typo="Typo.body1" Color="Color.Secondary" Align="Align.Center">@_message</MudText>
+        <MudText Typo="Typo.body1" Class="mud-text-secondary" Align="Align.Center">@_message</MudText>
         @if (_outcome == ConsentCallbackOutcome.Received)
         {
-            <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center">
+            <MudText Typo="Typo.caption" Class="mud-text-secondary" Align="Align.Center">
                 SecurePulse has read-only access. It can't change settings, users or devices in your organization.
                 An admin can remove it any time under Enterprise applications in the Microsoft Entra admin center.
             </MudText>

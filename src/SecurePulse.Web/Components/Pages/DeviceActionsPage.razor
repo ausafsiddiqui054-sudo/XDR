@@ -8,7 +8,7 @@
 <PageTitle>Device actions · SecurePulse</PageTitle>
 
 <MudText Typo="Typo.h4">Device actions</MudText>
-<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-6">
     Remote actions need a second admin's approval (an Owner's for retire and wipe) before SecurePulse sends them to Intune.
     Requests expire after @((int)DeviceActionPolicy.ApprovalWindow.TotalHours) hours.
 </MudText>
@@ -27,7 +27,7 @@ else
     @if (pending.Count == 0)
     {
         <MudPaper Class="sp-card pa-6 mb-6" Elevation="0" Outlined="true">
-            <MudText Typo="Typo.body2" Color="Color.Secondary">Nothing is waiting for approval.</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">Nothing is waiting for approval.</MudText>
         </MudPaper>
     }
     else
@@ -53,12 +53,12 @@ else
                                          Icon="@Icons.Material.Rounded.AccountTree" data-testid="from-playbook">Playbook</MudChip>
                             }
                         </MudStack>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
                             <MudLink Href="@($"endpoints/{a.TenantId}/{Uri.EscapeDataString(a.DeviceId)}")" Typo="Typo.body2">@v.TenantName</MudLink>
                             · requested by @a.RequestedByName @Dashboard.Ago(a.RequestedAt).ToLowerInvariant()
                         </MudText>
                         <MudText Typo="Typo.body2" Class="my-3" Style="overflow-wrap:anywhere">“@a.Reason”</MudText>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-3">Expires @Until(a.ExpiresAt)</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-3">Expires @Until(a.ExpiresAt)</MudText>
 
                         <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                             @if (v.WhyCannotApprove is null)
@@ -83,7 +83,7 @@ else
                         </MudStack>
                         @if (v.WhyCannotApprove is { } why)
                         {
-                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2" data-testid="cannot-approve">@why</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2" data-testid="cannot-approve">@why</MudText>
                         }
                     </MudPaper>
                 </MudItem>
@@ -123,12 +123,12 @@ else
             <RowTemplate>
                 <MudTd DataLabel="Action">
                     <MudText Typo="Typo.body2" Style="font-weight:600">@DeviceActions.Label(context.Request.Action) @context.Request.DeviceName</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary" Style="overflow-wrap:anywhere">“@context.Request.Reason”</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="overflow-wrap:anywhere">“@context.Request.Reason”</MudText>
                 </MudTd>
                 <MudTd DataLabel="Tenant">@context.TenantName</MudTd>
                 <MudTd DataLabel="Requested">
                     <MudText Typo="Typo.body2">@context.Request.RequestedByName</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">@Dashboard.Ago(context.Request.RequestedAt)</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@Dashboard.Ago(context.Request.RequestedAt)</MudText>
                 </MudTd>
                 <MudTd DataLabel="Decided">
                     <MudText Typo="Typo.body2">@(context.Request.DecidedByName ?? context.Request.CancelledBy ?? "—")</MudText>
@@ -139,19 +139,19 @@ else
                     }
                     @if (context.Request.DecisionNote is { } note)
                     {
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">“@note”</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">“@note”</MudText>
                     }
                 </MudTd>
                 <MudTd DataLabel="Result">
                     <DeviceActionStatusChip Status="context.Request.Status" />
                     @if (context.Request.Error is { } err)
                     {
-                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block" Style="overflow-wrap:anywhere;max-width:360px">@err</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block" Style="overflow-wrap:anywhere;max-width:360px">@err</MudText>
                     }
                 </MudTd>
             </RowTemplate>
             <NoRecordsContent>
-                <MudText Class="pa-6" Color="Color.Secondary">No device actions yet.</MudText>
+                <MudText Class="mud-text-secondary pa-6">No device actions yet.</MudText>
             </NoRecordsContent>
         </MudTable>
     </MudPaper>

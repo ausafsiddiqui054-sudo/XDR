@@ -10,7 +10,7 @@
 
 <div class="mb-6">
     <MudText Typo="Typo.h4">Connect a tenant</MudText>
-    <MudText Typo="Typo.body2" Color="Color.Secondary">Create a consent link for the client's Microsoft 365 admin</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary">Create a consent link for the client's Microsoft 365 admin</MudText>
 </div>
 
 <MudGrid Spacing="4">
@@ -68,9 +68,9 @@
             <MudPaper Class="sp-card pa-6" Elevation="0" Outlined="true">
                 <MudText Typo="Typo.h6" Class="mb-3">How it works</MudText>
                 <ol class="sp-steps">
-                    <li><span class="sp-step-dot">1</span><div><MudText Typo="Typo.body2" Style="font-weight:600">You create a consent link</MudText><MudText Typo="Typo.caption" Color="Color.Secondary">We check the domain belongs to a Microsoft 365 tenant.</MudText></div></li>
-                    <li><span class="sp-step-dot">2</span><div><MudText Typo="Typo.body2" Style="font-weight:600">The client's admin approves</MudText><MudText Typo="Typo.caption" Color="Color.Secondary">A Global Administrator signs in to Microsoft and grants read-only access.</MudText></div></li>
-                    <li><span class="sp-step-dot">3</span><div><MudText Typo="Typo.body2" Style="font-weight:600">SecurePulse verifies and scans</MudText><MudText Typo="Typo.caption" Color="Color.Secondary">We confirm the access with Microsoft, then read the tenant's devices and run the security checks.</MudText></div></li>
+                    <li><span class="sp-step-dot">1</span><div><MudText Typo="Typo.body2" Style="font-weight:600">You create a consent link</MudText><MudText Typo="Typo.caption" Class="mud-text-secondary">We check the domain belongs to a Microsoft 365 tenant.</MudText></div></li>
+                    <li><span class="sp-step-dot">2</span><div><MudText Typo="Typo.body2" Style="font-weight:600">The client's admin approves</MudText><MudText Typo="Typo.caption" Class="mud-text-secondary">A Global Administrator signs in to Microsoft and grants read-only access.</MudText></div></li>
+                    <li><span class="sp-step-dot">3</span><div><MudText Typo="Typo.body2" Style="font-weight:600">SecurePulse verifies and scans</MudText><MudText Typo="Typo.caption" Class="mud-text-secondary">We confirm the access with Microsoft, then read the tenant's devices and run the security checks.</MudText></div></li>
                 </ol>
             </MudPaper>
 
@@ -79,7 +79,7 @@
                     <MudIcon Icon="@Icons.Material.Rounded.Visibility" Color="Color.Primary" Size="Size.Small" />
                     <MudText Typo="Typo.h6">Read-only access</MudText>
                 </MudStack>
-                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
                     The admin approves these Microsoft Graph permissions. All are read-only: none can change anything in the tenant.
                 </MudText>
                 <MudExpansionPanels Elevation="0" Dense="true" Outlined="false">
@@ -91,7 +91,7 @@
                                 {
                                     <div>
                                         <MudText Typo="Typo.body2" Style="font-weight:600">@p.Purpose</MudText>
-                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Style="font-family:ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere">@p.Name</MudText>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="font-family:ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere">@p.Name</MudText>
                                     </div>
                                 }
                             </MudStack>

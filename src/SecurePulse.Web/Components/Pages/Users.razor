@@ -12,7 +12,7 @@
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
     <div>
         <MudText Typo="Typo.h4">People</MudText>
-        <MudText Typo="Typo.body2" Color="Color.Secondary">Who can sign in to SecurePulse, and what they can see</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Who can sign in to SecurePulse, and what they can see</MudText>
     </div>
     @if (!_inviting)
     {
@@ -57,7 +57,7 @@
                 }
             </MudItem>
         </MudGrid>
-        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-3">
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-3">
             @(_form.Role == PortalRole.ClientViewer
                 ? "They sign in with their own organization's account. Access is read-only and limited to that tenant."
                 : $"They sign in from your organization (tenant {People.OperatorTenantId}).")
@@ -91,10 +91,10 @@ else
                         @(context.DisplayName ?? context.UserPrincipalName)
                         @if (context.Id == _me.UserId)
                         {
-                            <MudText Typo="Typo.caption" Color="Color.Secondary" Inline="true"> (you)</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary" Inline="true"> (you)</MudText>
                         }
                     </MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">@context.UserPrincipalName</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.UserPrincipalName</MudText>
                 </MudTd>
                 <MudTd DataLabel="Role">
                     @if (_me.IsOwner && context.Role != PortalRole.ClientViewer)

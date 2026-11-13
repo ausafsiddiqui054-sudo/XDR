@@ -11,7 +11,7 @@
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
     <div>
         <MudText Typo="Typo.h4">Audit log</MudText>
-        <MudText Typo="Typo.body2" Color="Color.Secondary">Sign-ins, people changes, onboarding and device requests. Entries can't be edited; only the retention job removes old ones.</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Sign-ins, people changes, onboarding and device requests. Entries can't be edited; only the retention job removes old ones.</MudText>
     </div>
     <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Download"
                Href="@($"settings/audit/export.csv{_filter.ToQueryString()}")" UserAttributes="@(new() { ["download"] = "" })">
@@ -128,18 +128,18 @@
             <RowTemplate>
                 <MudTd DataLabel="When" Style="white-space:nowrap">
                     <MudText Typo="Typo.body2">@context.OccurredAt.ToLocalTime().ToString("d MMM, HH:mm:ss")</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">@Dashboard.Ago(context.OccurredAt)</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@Dashboard.Ago(context.OccurredAt)</MudText>
                 </MudTd>
                 <MudTd DataLabel="Event">
                     <MudText Typo="Typo.body2" Style="font-weight:600">@AuditActions.Label(context.Action)</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Summary</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Summary</MudText>
                 </MudTd>
                 <MudTd DataLabel="Who">
                     @{ var (name, signInName) = SplitActor(context.ActorName); }
                     <MudText Typo="Typo.body2">@name</MudText>
                     @if (signInName is not null)
                     {
-                        <MudText Typo="Typo.caption" Color="Color.Secondary" Style="overflow-wrap:anywhere">@signInName</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="overflow-wrap:anywhere">@signInName</MudText>
                     }
                 </MudTd>
                 <MudTd DataLabel="Tenant">@(context.TenantId is { } id ? _tenantNames.GetValueOrDefault(id, "Removed tenant") : "—")</MudTd>
@@ -175,7 +175,7 @@
                 }
             </ChildRowContent>
             <NoRecordsContent>
-                <MudText Class="pa-6" Color="Color.Secondary">No events match these filters.</MudText>
+                <MudText Class="mud-text-secondary pa-6">No events match these filters.</MudText>
             </NoRecordsContent>
         </MudTable>
 

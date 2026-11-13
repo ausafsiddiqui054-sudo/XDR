@@ -7,11 +7,11 @@
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
     <div>
         <MudText Typo="Typo.h4">Endpoints</MudText>
-        <MudText Typo="Typo.body2" Color="Color.Secondary">Intune-managed devices across your tenants</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Intune-managed devices across your tenants</MudText>
     </div>
     @if (_fleet is not null)
     {
-        <MudText Typo="Typo.caption" Color="Color.Secondary">
+        <MudText Typo="Typo.caption" Class="mud-text-secondary">
             @(_fleet.LastSyncedAt is { } synced ? $"Last synced {Dashboard.Ago(synced).ToLowerInvariant()}" : "Not synced yet")
         </MudText>
     }
@@ -48,7 +48,7 @@ else
             <MudStack AlignItems="AlignItems.Center" Spacing="2">
                 <span class="sp-icon-badge sp-icon-badge-lg"><MudIcon Icon="@Icons.Material.Rounded.Devices" Size="Size.Large" /></span>
                 <MudText Typo="Typo.h6">No devices yet</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Style="max-width:520px">
+                <MudText Typo="Typo.body2" Class="mud-text-secondary" Align="Align.Center" Style="max-width:520px">
                     The Worker reads Intune devices for every tenant that has granted consent and has a certificate configured.
                     They appear here after its next sync.
                 </MudText>
@@ -87,7 +87,7 @@ else
                             <div style="flex:1;min-width:0">
                                 <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mb-1">
                                     <MudText Typo="Typo.body2" Style="font-weight:600">@SecurePulseTheme.Label(platform)</MudText>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@b.Compliant of @b.Total compliant</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@b.Compliant of @b.Total compliant</MudText>
                                 </MudStack>
                                 <ComplianceBar Breakdown="b" />
                             </div>
@@ -111,7 +111,7 @@ else
                             <MudText Typo="Typo.body2" Style="font-weight:600">@tenant.DisplayName</MudText>
                             <MudText Typo="Typo.body2" Color="@SecurePulseTheme.ColorOfScore(b.CompliantPercent)">
                                 <b>@b.CompliantPercent%</b>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary" Inline="true"> · @b.Total devices</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary" Inline="true"> · @b.Total devices</MudText>
                             </MudText>
                         </MudStack>
                         <ComplianceBar Breakdown="b" />
@@ -124,7 +124,7 @@ else
                 <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="px-2 pb-3" Wrap="Wrap.Wrap">
                     <div>
                         <MudText Typo="Typo.h6">Microsoft Defender</MudText>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
                             Antivirus state from Intune and EDR sensor health from Defender for Endpoint · @_fleet.DefenderProtectedPercent% protected
                         </MudText>
                     </div>
@@ -151,7 +151,7 @@ else
                         </MudGrid>
                     </MudItem>
                     <MudItem xs="12" md="5">
-                        <MudText Typo="Typo.overline" Color="Color.Secondary" Class="px-2">Most common issues</MudText>
+                        <MudText Typo="Typo.overline" Class="mud-text-secondary px-2">Most common issues</MudText>
                         @if (_fleet.TopDefenderIssues() is { Count: > 0 } issues)
                         {
                             @foreach (var (issue, count) in issues)
@@ -170,7 +170,7 @@ else
                         }
                         else
                         {
-                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="px-2 pt-1">No Defender issues reported.</MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary px-2 pt-1">No Defender issues reported.</MudText>
                         }
                     </MudItem>
                 </MudGrid>
@@ -252,7 +252,7 @@ else
             <RowTemplate>
                 <MudTd DataLabel="Device">
                     <MudText Typo="Typo.body2" Style="font-weight:600">@context.Device.DeviceName</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">@(context.Device.UserDisplayName ?? "No primary user")</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@(context.Device.UserDisplayName ?? "No primary user")</MudText>
                 </MudTd>
                 <MudTd DataLabel="Tenant">@context.Tenant.DisplayName</MudTd>
                 <MudTd DataLabel="Platform">
@@ -260,7 +260,7 @@ else
                         <MudIcon Icon="@SecurePulseTheme.IconOf(context.Device.Platform)" Size="Size.Small" Color="Color.Primary" />
                         <div style="min-width:0">
                             <MudText Typo="Typo.body2">@SecurePulseTheme.Label(context.Device.Platform)</MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Device.OsVersion</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Device.OsVersion</MudText>
                         </div>
                     </MudStack>
                 </MudTd>
@@ -291,7 +291,7 @@ else
                 </MudTd>
             </RowTemplate>
             <NoRecordsContent>
-                <MudText Class="pa-6" Color="Color.Secondary">No devices match these filters.</MudText>
+                <MudText Class="mud-text-secondary pa-6">No devices match these filters.</MudText>
             </NoRecordsContent>
             <PagerContent>
                 <MudTablePager PageSizeOptions="new[] { 15, 30, 60 }" />

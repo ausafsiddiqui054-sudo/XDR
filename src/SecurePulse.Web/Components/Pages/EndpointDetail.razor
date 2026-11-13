@@ -18,7 +18,7 @@ else if (_detail is null)
         <MudStack AlignItems="AlignItems.Center" Spacing="2">
             <span class="sp-icon-badge sp-icon-badge-lg"><MudIcon Icon="@Icons.Material.Rounded.DevicesOther" Size="Size.Large" /></span>
             <MudText Typo="Typo.h6">Device not found</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary">It may have been removed from Intune since the last inventory.</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">It may have been removed from Intune since the last inventory.</MudText>
             <MudButton Variant="Variant.Text" Color="Color.Primary" Href="endpoints" StartIcon="@Icons.Material.Rounded.ArrowBack">Back to endpoints</MudButton>
         </MudStack>
     </MudPaper>
@@ -37,7 +37,7 @@ else
             <span class="sp-icon-badge sp-icon-badge-lg"><MudIcon Icon="@SecurePulseTheme.IconOf(d.Platform)" Size="Size.Large" /></span>
             <div style="min-width:0">
                 <MudText Typo="Typo.h4">@d.DeviceName</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">@d.Manufacturer @d.Model · @tenant.DisplayName</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@d.Manufacturer @d.Model · @tenant.DisplayName</MudText>
                 <MudStack Row="true" Spacing="1" Class="mt-2" Wrap="Wrap.Wrap">
                     <ComplianceChip State="d.ComplianceState" />
                     <DefenderChip State="d.Defender" />
@@ -95,7 +95,7 @@ else
                     </MudStack>
                     @foreach (var policy in d.ComplianceSettings.GroupBy(s => s.Policy))
                     {
-                        <MudText Typo="Typo.overline" Color="Color.Secondary">@policy.Key</MudText>
+                        <MudText Typo="Typo.overline" Class="mud-text-secondary">@policy.Key</MudText>
                         <MudList T="string" Dense="true" ReadOnly="true" Padding="false">
                             @foreach (var s in policy.OrderBy(s => s.Compliant))
                             {
@@ -105,7 +105,7 @@ else
                                     <MudText Typo="Typo.body2" Style="@(s.Compliant ? "" : "font-weight:600")">@s.Setting</MudText>
                                     @if (s.Detail is { } detail)
                                     {
-                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@detail</MudText>
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@detail</MudText>
                                     }
                                 </MudListItem>
                             }
@@ -121,7 +121,7 @@ else
                             </span>
                             <div>
                                 <MudText Typo="Typo.h6">Microsoft Defender</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">@DefenderSummary(d)</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@DefenderSummary(d)</MudText>
                             </div>
                         </MudStack>
                         <MudText Typo="Typo.body2" Style="font-weight:600" Color="@SecurePulseTheme.ColorOf(d.Defender)">@SecurePulseTheme.Label(d.Defender)</MudText>
@@ -129,7 +129,7 @@ else
 
                     @if (d.DefenderDetails is not { } dh)
                     {
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
                             Defender health hasn't been read for this device yet. It appears after the Worker's next device sync.
                         </MudText>
                     }
@@ -150,7 +150,7 @@ else
 
                         <MudGrid Spacing="4">
                             <MudItem xs="12" sm="6">
-                                <MudText Typo="Typo.overline" Color="Color.Secondary">Antivirus</MudText>
+                                <MudText Typo="Typo.overline" Class="mud-text-secondary">Antivirus</MudText>
                                 @if (dh.Antivirus is { } av)
                                 {
                                     <dl class="sp-props mt-1">
@@ -172,7 +172,7 @@ else
                                 }
                                 else
                                 {
-                                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">
                                         @(d.Platform == DevicePlatform.Windows
                                             ? "Intune hasn't reported Defender Antivirus state for this device yet."
                                             : "Intune reports Defender Antivirus state for Windows devices only.")
@@ -180,16 +180,16 @@ else
                                 }
                             </MudItem>
                             <MudItem xs="12" sm="6">
-                                <MudText Typo="Typo.overline" Color="Color.Secondary">Endpoint detection and response</MudText>
+                                <MudText Typo="Typo.overline" Class="mud-text-secondary">Endpoint detection and response</MudText>
                                 @if (!dh.SensorDataAvailable)
                                 {
-                                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">
                                         Not checked: Defender for Endpoint data for @tenant.DisplayName couldn't be read on the last sync.
                                     </MudText>
                                 }
                                 else if (dh.Sensor is not { } sensor)
                                 {
-                                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary mt-1">
                                         Defender for Endpoint has no record of this device in the last 30 days.
                                     </MudText>
                                 }
@@ -223,14 +223,14 @@ else
                     <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-1" Wrap="Wrap.Wrap">
                         <div>
                             <MudText Typo="Typo.h6">Tenant device policies</MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">Open device findings for @tenant.DisplayName</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Open device findings for @tenant.DisplayName</MudText>
                         </div>
                         <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
                                    Href="@($"findings?tenant={tenant.Id}")">View all findings</MudButton>
                     </MudStack>
                     @if (_detail.RelatedFindings.Count == 0)
                     {
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">No open device findings for this tenant.</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">No open device findings for this tenant.</MudText>
                     }
                     else
                     {
@@ -242,7 +242,7 @@ else
                                         <MudText Typo="Typo.body2" Style="font-weight:600">@f.Title</MudText>
                                         @if (f.Evidence is { } ev)
                                         {
-                                            <MudText Typo="Typo.caption" Color="Color.Secondary">@ev</MudText>
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@ev</MudText>
                                         }
                                     </div>
                                     <MudStack Row="true" Spacing="1">
@@ -269,7 +269,7 @@ else
                             </span>
                             <div>
                                 <MudText Typo="Typo.body2" Style="font-weight:600">Disk encryption</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
                                     @(d.IsEncrypted switch { true => "Encrypted", false => "Not encrypted", _ => "Not reported" })
                                 </MudText>
                             </div>
@@ -280,7 +280,7 @@ else
                             </span>
                             <div>
                                 <MudText Typo="Typo.body2" Style="font-weight:600">Microsoft Defender</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
                                     @SecurePulseTheme.Label(d.Defender)@(d.DefenderDetails?.Issues is { Count: > 0 } di ? $" · {di.Count} issue{(di.Count == 1 ? "" : "s")}" : "")
                                 </MudText>
                             </div>
@@ -291,7 +291,7 @@ else
                             </span>
                             <div>
                                 <MudText Typo="Typo.body2" Style="font-weight:600">Last check-in</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
                                     @Dashboard.Ago(d.LastSyncAt)@(stale ? " · compliance may be out of date" : "")
                                 </MudText>
                             </div>
@@ -311,7 +311,7 @@ else
                         </MudStack>
                         @if (_history.Count == 0)
                         {
-                            <MudText Typo="Typo.body2" Color="Color.Secondary">None requested yet.</MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">None requested yet.</MudText>
                         }
                         <MudStack Spacing="3">
                             @foreach (var v in _history)
@@ -326,12 +326,12 @@ else
                                         </MudStack>
                                         <DeviceActionStatusChip Status="a.Status" />
                                     </MudStack>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
                                         Requested by @a.RequestedByName @Dashboard.Ago(a.RequestedAt).ToLowerInvariant(): “@a.Reason”
                                     </MudText>
                                     @if (a.DecidedByName is { } decider)
                                     {
-                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
                                             @(a.Status == DeviceActionStatus.Rejected ? "Rejected" : "Approved") by @decider@(a.DecisionNote is { } n ? $": “{n}”" : "")
                                         </MudText>
                                     }

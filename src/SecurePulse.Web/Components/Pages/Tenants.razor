@@ -14,7 +14,7 @@
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
     <div>
         <MudText Typo="Typo.h4">Tenants</MudText>
-        <MudText Typo="Typo.body2" Color="Color.Secondary">Client Microsoft 365 tenants and their consent status</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Client Microsoft 365 tenants and their consent status</MudText>
     </div>
     <AuthorizeView Policy="@Policies.Operator">
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Add" Href="tenants/connect">
@@ -32,7 +32,7 @@ else
     @if (_pending.Count > 0)
     {
         var now = Time.GetUtcNow();
-        <MudText Typo="Typo.overline" Color="Color.Secondary">Connections in progress</MudText>
+        <MudText Typo="Typo.overline" Class="mud-text-secondary">Connections in progress</MudText>
         <MudGrid Spacing="4" Class="mb-6 mt-0">
             @foreach (var r in _pending)
             {
@@ -42,7 +42,7 @@ else
                         <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start">
                             <div style="min-width:0">
                                 <MudText Typo="Typo.subtitle1" Style="font-weight:600">@r.DisplayName</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">
                                     @r.PrimaryDomain@(r.Kind switch { OnboardingKind.Remediation => " · remediation access", OnboardingKind.Configuration => " · configuration access", _ => "" })
                                 </MudText>
                             </div>
@@ -50,7 +50,7 @@ else
                                 @SecurePulseTheme.Label(r, now)
                             </MudChip>
                         </MudStack>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-3">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary mt-3">
                             @(r.Status switch
                             {
                                 _ when r.IsExpired(now) => "Create a new link to try again.",
@@ -63,7 +63,7 @@ else
                 </MudItem>
             }
         </MudGrid>
-        <MudText Typo="Typo.overline" Color="Color.Secondary">Connected and pending tenants</MudText>
+        <MudText Typo="Typo.overline" Class="mud-text-secondary">Connected and pending tenants</MudText>
     }
 
     <MudGrid Spacing="4" Class="mt-0">
@@ -74,7 +74,7 @@ else
                     <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start">
                         <div style="min-width:0">
                             <MudText Typo="Typo.h6">@t.Tenant.DisplayName</MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">@t.Tenant.PrimaryDomain · @t.Tenant.Industry</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">@t.Tenant.PrimaryDomain · @t.Tenant.Industry</MudText>
                         </div>
                         @if (t.Score is { } s)
                         {
@@ -103,17 +103,17 @@ else
                     }
                     @if (t.Score is { } score)
                     {
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">
                             @score.Failed failing · @score.Investigate to investigate · last results @Dashboard.Ago(t.Tenant.LastScanAt).ToLowerInvariant()
                         </MudText>
                     }
                     else if (connected)
                     {
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">Connected. No scan results yet.</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Connected. No scan results yet.</MudText>
                     }
                     else
                     {
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">Waiting for an admin to grant read-only consent.</MudText>
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary">Waiting for an admin to grant read-only consent.</MudText>
                     }
 
                     @if (connected)
@@ -138,7 +138,7 @@ else
                                             <MudIcon Icon="@Icons.Material.Rounded.ErrorOutline" Size="Size.Small" Color="Color.Error" />
                                             <div style="min-width:0">
                                                 <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block">@(who)Last scan failed @Dashboard.Ago(run.CompletedAt).ToLowerInvariant()</MudText>
-                                                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="overflow-wrap:anywhere">@Clip(run.Error)</MudText>
+                                                <MudText Typo="Typo.caption" Class="mud-text-secondary" Style="overflow-wrap:anywhere">@Clip(run.Error)</MudText>
                                             </div>
                                             break;
                                         case ScanRunStatus.Succeeded:

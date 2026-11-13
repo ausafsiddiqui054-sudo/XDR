@@ -39,7 +39,7 @@ public static class RiskScoreCalculator
 
         // A single open critical caps the grade: a client can't be an "A" with MFA off for admins.
         var hasOpenCritical = list.Any(f => f.Status == FindingStatus.Failed && f.Severity == Severity.Critical);
-        var grade = ToGrade(score, hasOpenCritical);
+        var grade = GradeFor(score, hasOpenCritical);
 
         return new RiskScore
         {
@@ -55,7 +55,11 @@ public static class RiskScoreCalculator
         };
     }
 
-    private static string ToGrade(int score, bool hasOpenCritical)
+    /// <summary>
+    /// The letter grade for a score. An open (failed) critical caps an A or B at C. Also used for
+    /// scores that combine tenants (the portfolio average), so the UI never grades on its own.
+    /// </summary>
+    public static string GradeFor(int score, bool hasOpenCritical)
     {
         var grade = score switch
         {

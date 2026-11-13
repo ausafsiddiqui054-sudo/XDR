@@ -31,7 +31,7 @@
                 <MudSelectItem Value="a">@DeviceActions.Label(a)</MudSelectItem>
             }
         </MudSelect>
-        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-4">@DeviceActions.Description(_action)</MudText>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-4">@DeviceActions.Description(_action)</MudText>
 
         <MudSelect T="Guid" @bind-Value="_tenantId" Label="Tenants" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3">
             <MudSelectItem Value="Guid.Empty">Every tenant with remediation access</MudSelectItem>

@@ -40,7 +40,7 @@ else
     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
         <div>
             <MudText Typo="Typo.h4">@r.DisplayName</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary">@r.PrimaryDomain · @(r.PartnerName ?? "Direct client") · @r.Industry</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@r.PrimaryDomain · @(r.PartnerName ?? "Direct client") · @r.Industry</MudText>
         </div>
         <MudStack Row="true" Spacing="1">
             @if (remediation)
@@ -99,7 +99,7 @@ else
                 @if (r.Status == OnboardingStatus.AwaitingConsent && !expired)
                 {
                     <MudText Typo="Typo.h6">Send this link to the client's admin</MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
                         A Global Administrator of @r.PrimaryDomain signs in and approves @(remediation ? "remediation" : "read-only") access.
                         If that's you, open it yourself. It expires @r.ExpiresAt.ToLocalTime().ToString("d MMM yyyy, HH:mm").
                     </MudText>
@@ -115,7 +115,7 @@ else
                             <MudSpacer />
                             <MudButton Variant="Variant.Text" Color="Color.Default" OnClick="CancelAsync">Cancel connection</MudButton>
                         </MudStack>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-4">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-4">
                             The app registration needs this Web redirect URI: <code>@Onboarding.GetRedirectUri(Nav.BaseUri)</code>
                         </MudText>
                     }
@@ -130,13 +130,13 @@ else
                 else if (expired)
                 {
                     <MudText Typo="Typo.h6" Class="mb-2">The consent link expired</MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">Nobody approved it before @r.ExpiresAt.ToLocalTime().ToString("d MMM yyyy").</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">Nobody approved it before @r.ExpiresAt.ToLocalTime().ToString("d MMM yyyy").</MudText>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Link" OnClick="StartOverAsync">Create a new link</MudButton>
                 }
                 else if (r.Status == OnboardingStatus.Verifying)
                 {
                     <MudText Typo="Typo.h6" Class="mb-2">Confirming access with Microsoft</MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
                         The admin approved access @Dashboard.Ago(r.ConsentReceivedAt).ToLowerInvariant(). SecurePulse is checking the permissions
                         it was actually given. New consent can take a few minutes to reach every Microsoft region.
                     </MudText>
@@ -148,10 +148,10 @@ else
                         <span class="sp-icon-badge"><MudIcon Icon="@Icons.Material.Rounded.CheckCircle" Color="Color.Success" /></span>
                         <div>
                             <MudText Typo="Typo.h6">@(remediation ? "Remediation access granted" : configuration ? "Configuration access granted" : "Connected")</MudText>
-                            <MudText Typo="Typo.body2" Color="Color.Secondary">Verified @Dashboard.Ago(r.CompletedAt).ToLowerInvariant()</MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Verified @Dashboard.Ago(r.CompletedAt).ToLowerInvariant()</MudText>
                         </div>
                     </MudStack>
-                    <MudText Typo="Typo.overline" Color="Color.Secondary">Permissions granted</MudText>
+                    <MudText Typo="Typo.overline" Class="mud-text-secondary">Permissions granted</MudText>
                     <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="mb-4">
                         @foreach (var p in r.GrantedPermissions)
                         {
@@ -167,7 +167,7 @@ else
                 else if (r.Status == OnboardingStatus.Failed)
                 {
                     <MudText Typo="Typo.h6" Class="mb-2">Couldn't verify access</MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
                         Fix the problem below, then create a new link for the admin to approve again.
                     </MudText>
                     <MudStack Row="true" Spacing="2">
@@ -214,7 +214,7 @@ else
                             </span>
                             <div>
                                 <MudText Typo="Typo.body2" Style="font-weight:600">@step.Title</MudText>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">@step.Detail</MudText>
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary">@step.Detail</MudText>
                             </div>
                         </li>
                     }

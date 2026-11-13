@@ -1,6 +1,8 @@
 @inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject ProtectedLocalStorage BrowserStorage
 
-<MudThemeProvider Theme="SecurePulseTheme.Theme" @bind-IsDarkMode="_isDark" />
+<MudThemeProvider @ref="_themeProvider" Theme="SecurePulseTheme.Theme" @bind-IsDarkMode="_isDark" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
@@ -14,7 +16,7 @@
         <MudSpacer />
         <MudIconButton Icon="@(_isDark ? Icons.Material.Rounded.LightMode : Icons.Material.Rounded.DarkMode)"
                        Color="Color.Inherit" aria-label="Toggle dark mode"
-                       OnClick="@(() => _isDark = !_isDark)" />
+                       OnClick="ToggleDarkModeAsync" />
         <AuthorizeView>
             <Authorized>
                 <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="ml-2" aria-label="Account">
@@ -24,7 +26,7 @@
                     <ChildContent>
                         <div class="px-4 pt-3 pb-2" style="min-width:240px">
                             <MudText Typo="Typo.body2" Style="font-weight:600">@(context.User.DisplayName() ?? "Signed in")</MudText>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">@context.User.SignInName()</MudText>
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@context.User.SignInName()</MudText>
                             @if (context.User.PortalRole() is { } role)
                             {
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Class="ml-0 mt-2">@Pages.Users.RoleLabel(role)</MudChip>
@@ -64,5 +66,62 @@
     }
 
     private bool _drawerOpen = true;
+
+    // Dark mode: the viewer's own choice (kept in this browser), otherwise the operating system's setting.
+    private const string DarkModeKey = "securepulse.dark-mode";
+    private MudThemeProvider _themeProvider = default!;
     private bool _isDark;
+    private bool _hasSavedChoice;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (await ReadSavedChoiceAsync() is { } saved)
+        {
+            _hasSavedChoice = true;
+            _isDark = saved;
+        }
+        else
+        {
+            _isDark = await _themeProvider.GetSystemDarkModeAsync();
+            await _themeProvider.WatchSystemDarkModeAsync(OnSystemDarkModeChangedAsync);
+        }
+        StateHasChanged();
+    }
+
+    private Task OnSystemDarkModeChangedAsync(bool dark)
+    {
+        if (_hasSavedChoice) return Task.CompletedTask;
+        _isDark = dark;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ToggleDarkModeAsync()
+    {
+        _isDark = !_isDark;
+        _hasSavedChoice = true;
+        try
+        {
+            await BrowserStorage.SetAsync(DarkModeKey, _isDark);
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or TaskCanceledException or InvalidOperationException)
+        {
+            // Only a display preference: the toggle still works for this visit.
+        }
+    }
+
+    private async Task<bool?> ReadSavedChoiceAsync()
+    {
+        try
+        {
+            var result = await BrowserStorage.GetAsync<bool>(DarkModeKey);
+            return result.Success ? result.Value : null;
+        }
+        catch (Exception ex) when (ex is System.Security.Cryptography.CryptographicException or JSException
+                                       or JSDisconnectedException or TaskCanceledException or InvalidOperationException)
+        {
+            // Storage blocked, or a value protected with keys this portal no longer has: follow the system setting.
+            return null;
+        }
+    }
 }

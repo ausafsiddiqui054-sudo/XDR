@@ -12,14 +12,14 @@
             @* Also the cookie handler's access-denied page: signed in with a role, but not one this page allows. *@
             <span class="sp-icon-badge sp-icon-badge-lg"><MudIcon Icon="@Icons.Material.Rounded.Lock" Color="Color.Primary" Size="Size.Large" /></span>
             <MudText Typo="Typo.h5">You don't have access to that page</MudText>
-            <MudText Typo="Typo.body1" Color="Color.Secondary">Ask an Owner if you need it.</MudText>
+            <MudText Typo="Typo.body1" Class="mud-text-secondary">Ask an Owner if you need it.</MudText>
             <div><MudButton Variant="Variant.Filled" Color="Color.Primary" Href="">Go to overview</MudButton></div>
         }
         else
         {
             <span class="sp-icon-badge sp-icon-badge-lg"><MudIcon Icon="@Icons.Material.Rounded.HourglassTop" Color="Color.Primary" Size="Size.Large" /></span>
             <MudText Typo="Typo.h5">You're signed in, but don't have access yet</MudText>
-            <MudText Typo="Typo.body1" Color="Color.Secondary">
+            <MudText Typo="Typo.body1" Class="mud-text-secondary">
                 Ask a SecurePulse Owner to invite you. They'll need these details exactly as shown:
             </MudText>
             <dl class="sp-props">
@@ -28,7 +28,7 @@
                 <dt>Organization (tenant) ID</dt>
                 <dd style="font-family:ui-monospace,SFMono-Regular,Consolas,monospace">@(_ids?.TenantId.ToString() ?? "Unknown")</dd>
             </dl>
-            <MudText Typo="Typo.caption" Color="Color.Secondary">
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
                 Signed in to the wrong account? Sign out and choose another.
             </MudText>
         }

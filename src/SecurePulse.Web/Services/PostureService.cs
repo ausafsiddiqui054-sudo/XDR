@@ -16,6 +16,13 @@ public sealed record PortfolioPosture(IReadOnlyList<TenantPosture> Tenants)
 
     public int AverageScore => Scanned.Any() ? (int)Math.Round(Scanned.Average(t => t.Score!.Score)) : 0;
 
+    /// <summary>The average score's grade, capped like a tenant's when any scanned tenant has an open critical.</summary>
+    public string AverageGrade => RiskScoreCalculator.GradeFor(AverageScore, OpenOf(Severity.Critical) > 0);
+
+    /// <summary>Tenants that have granted consent (read-only or remediation); pending and revoked ones aren't connected.</summary>
+    public int ConnectedCount => Tenants.Count(t =>
+        t.Tenant.ConsentState is TenantConsentState.ReadOnlyGranted or TenantConsentState.RemediationGranted);
+
     public int OpenOf(Severity severity) =>
         Scanned.Sum(t => t.Findings.Count(f => f.Status == FindingStatus.Failed && f.Severity == severity));
 
