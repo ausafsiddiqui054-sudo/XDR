@@ -5,8 +5,8 @@ using Severity = SecurePulse.Core.Models.Severity;
 namespace SecurePulse.Web.Theme;
 
 /// <summary>
-/// Material 3 Expressive–inspired theme: tonal surfaces, bold primary, large corner radii,
-/// Roboto Flex. Regenerate the colors with Material Theme Builder when the brand is final.
+/// Material 3 Expressive-inspired workspace with Google Sans Flex, generous shapes,
+/// tonal containers, and the Viresta-inspired charcoal and orange palette.
 /// </summary>
 public static class SecurePulseTheme
 {
@@ -14,64 +14,69 @@ public static class SecurePulseTheme
     {
         PaletteLight = new PaletteLight
         {
-            Primary = "#4F46C8",
+            Primary = "#B84216",
             PrimaryContrastText = "#FFFFFF",
-            Secondary = "#00796B",
-            Tertiary = "#B4386A",
+            // Slate and bronze sit beside the charcoal-and-orange brand (the old theme's teal and pink didn't).
+            Secondary = "#3F5463",
+            SecondaryContrastText = "#FFFFFF",
+            Tertiary = "#7A5230",
+            TertiaryContrastText = "#FFFFFF",
             Info = "#2F6FD0",
             Success = "#1E8E5A",
             Warning = "#C77700",
             Error = "#C62828",
-            Background = "#F7F5FC",
-            BackgroundGray = "#EEEBF7",
+            Background = "#F5F7FA",
+            BackgroundGray = "#EDF2F5",
             Surface = "#FFFFFF",
-            AppbarBackground = "#F7F5FC",
-            AppbarText = "#1C1B22",
-            DrawerBackground = "#F1EEF9",
-            DrawerText = "#1C1B22",
-            DrawerIcon = "#4F46C8",
-            TextPrimary = "#1C1B22",
-            TextSecondary = "#5E5A6E",
-            LinesDefault = "#E2DEEE",
-            TableLines = "#ECE9F4"
+            AppbarBackground = "#FFFFFF",
+            AppbarText = "#172B3A",
+            DrawerBackground = "#FFFFFF",
+            DrawerText = "#172B3A",
+            DrawerIcon = "#718291",
+            TextPrimary = "#172B3A",
+            TextSecondary = "#687B8A",
+            LinesDefault = "#E3EAEE",
+            TableLines = "#EDF1F4"
         },
         PaletteDark = new PaletteDark
         {
-            Primary = "#BDB6FF",
-            PrimaryContrastText = "#20155F",
-            Secondary = "#6FD8C6",
-            Tertiary = "#FFB0CB",
+            Primary = "#EA642A",
+            PrimaryContrastText = "#0B0B0B",
+            Secondary = "#B9C6CF",
+            SecondaryContrastText = "#0B0B0B",
+            Tertiary = "#E5BE94",
+            TertiaryContrastText = "#0B0B0B",
             Info = "#9DC2FF",
             Success = "#7CD9A6",
             Warning = "#FFC46B",
             Error = "#FFB4AB",
-            Background = "#131218",
-            BackgroundGray = "#1E1C25",
-            Surface = "#1C1B22",
-            AppbarBackground = "#131218",
-            AppbarText = "#E6E1EE",
-            DrawerBackground = "#18171E",
-            DrawerText = "#E6E1EE",
-            DrawerIcon = "#BDB6FF",
-            TextPrimary = "#E6E1EE",
-            TextSecondary = "#B1ABC2",
-            LinesDefault = "#2E2B38",
-            TableLines = "#2A2733"
+            Background = "#0B0B0B",
+            BackgroundGray = "#232323",
+            Surface = "#151515",
+            AppbarBackground = "#0B0B0B",
+            AppbarText = "#FFFFFF",
+            DrawerBackground = "#111111",
+            DrawerText = "#FFFFFF",
+            DrawerIcon = "#A3A3A3",
+            TextPrimary = "#FFFFFF",
+            TextSecondary = "#B8B8B8",
+            LinesDefault = "#333333",
+            TableLines = "#292929"
         },
         LayoutProperties = new LayoutProperties
         {
-            DefaultBorderRadius = "16px",
-            DrawerWidthLeft = "272px"
+            DefaultBorderRadius = "24px",
+            DrawerWidthLeft = "244px"
         },
         Typography = new Typography
         {
             Default = new DefaultTypography
             {
-                FontFamily = ["Roboto Flex", "Roboto", "Segoe UI", "sans-serif"]
+                FontFamily = ["Google Sans Flex", "Segoe UI", "sans-serif"]
             },
             Button = new ButtonTypography
             {
-                FontFamily = ["Roboto Flex", "Roboto", "Segoe UI", "sans-serif"],
+                FontFamily = ["Google Sans Flex", "Segoe UI", "sans-serif"],
                 TextTransform = "none"
             }
         }

@@ -25,7 +25,7 @@ public sealed class ReportOptions
         /// <summary>PNG, JPEG or SVG file shown on the cover. Empty draws the default shield.</summary>
         public string LogoPath { get; set; } = string.Empty;
 
-        public string AccentColor { get; set; } = "#4F46C8";
+        public string AccentColor { get; set; } = "#B84216";
         public string ContactLine { get; set; } = string.Empty;
     }
 }

@@ -159,7 +159,7 @@ public sealed partial class PortalAuthEndpointTests : IClassFixture<PortalAuthEn
         var client = await SignInAsync("owner");
 
         var home = await client.GetStringAsync("/");
-        Assert.Contains("Security posture", home);
+        Assert.Contains("Security overview", home);
         foreach (var t in await ConnectedTenantsAsync())
             Assert.Contains(t.DisplayName, home);
         Assert.Contains("People", await client.GetStringAsync("/settings/users"));

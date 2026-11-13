@@ -11,7 +11,10 @@ Wazuh, GoPhish, n8n-style remediation (later phases). Read README.md for layout 
 - .NET 10, C#, `SecurePulse.slnx`
 - Blazor Server (interactive server render mode, set globally on `<Routes>` in App.razor)
 - MudBlazor 8 with the theme in `src/SecurePulse.Web/Theme/SecurePulseTheme.cs`
-  (Material 3 Expressive look: tonal surfaces, 16–24px radii, Roboto Flex)
+  (Material 3 Expressive look: charcoal-and-orange palette, tonal surfaces, 12–28px radii and pill buttons,
+  Google Sans Flex served from `wwwroot/fonts`: no font or other third-party requests from pages).
+  Shared styles and tokens (`--sp-shape-*`, `--sp-hero-*`, `--sp-text-min`: no text under 11px) are in `wwwroot/app.css`.
+  Page titles use `Class="sp-page-title"`; loading states use `<ExpressiveLoading />`
 - PowerShell 7 engines launched out of process from .NET
 - PostgreSQL via EF Core (`SecurePulse.Data`); repositories use `IDbContextFactory`
 - `SecurePulse.Worker` (generic host) runs background jobs; the portal never calls Graph

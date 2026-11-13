@@ -8,12 +8,16 @@
 <MudSnackbarProvider />
 
 <MudLayout>
-    <MudAppBar Elevation="0">
+    @* The side panel carries the brand; when it is closed (or an overlay, on small screens) the top bar shows it instead. *@
+    <MudAppBar Elevation="0" Class="@(_drawerOpen ? "sp-appbar" : "sp-appbar sp-appbar-collapsed")">
         <MudIconButton Icon="@Icons.Material.Rounded.Menu" Color="Color.Inherit" Edge="Edge.Start"
                        aria-label="Toggle navigation" OnClick="@(() => _drawerOpen = !_drawerOpen)" />
-        <MudIcon Icon="@Icons.Material.Rounded.Security" Color="Color.Primary" Class="ml-2 mr-2" />
-        <MudText Typo="Typo.h6">SecurePulse</MudText>
+        <a href="/" class="sp-appbar-brand" aria-label="SecurePulse overview">
+            <MudIcon Icon="@Icons.Material.Rounded.Security" Size="Size.Small" /><span>SecurePulse</span>
+        </a>
+        <span class="sp-header-context">Workspace <span>/</span> Microsoft 365 security</span>
         <MudSpacer />
+        <span class="sp-header-label"><span class="sp-status-dot"></span> Security workspace</span>
         <MudIconButton Icon="@(_isDark ? Icons.Material.Rounded.LightMode : Icons.Material.Rounded.DarkMode)"
                        Color="Color.Inherit" aria-label="Toggle dark mode"
                        OnClick="ToggleDarkModeAsync" />
@@ -40,12 +44,12 @@
         </AuthorizeView>
     </MudAppBar>
 
-    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="0" Variant="@DrawerVariant.Responsive">
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="0" Variant="@DrawerVariant.Responsive" Class="sp-sidebar">
         <NavMenu />
     </MudDrawer>
 
     <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-6">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="sp-main-container">
             @Body
         </MudContainer>
     </MudMainContent>

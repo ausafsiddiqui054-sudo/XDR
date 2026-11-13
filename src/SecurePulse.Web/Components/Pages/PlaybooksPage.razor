@@ -11,7 +11,7 @@
 
 <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap" Class="mb-6" Spacing="3">
     <div style="max-width:760px">
-        <MudText Typo="Typo.h4">Remediation playbooks</MudText>
+        <MudText Typo="Typo.h4" Class="sp-page-title">Remediation playbooks</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary">
             After each device sync, SecurePulse checks devices against these playbooks and proposes an action for each match.
             Proposals wait in <MudLink Href="devices/actions" Typo="Typo.body2">Device actions</MudLink> until another admin approves them,
@@ -28,7 +28,7 @@
 
 @if (_items is null)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <ExpressiveLoading />
 }
 else if (_items.Count == 0)
 {

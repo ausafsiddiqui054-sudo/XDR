@@ -7,7 +7,7 @@
 
 <PageTitle>Device actions · SecurePulse</PageTitle>
 
-<MudText Typo="Typo.h4">Device actions</MudText>
+<MudText Typo="Typo.h4" Class="sp-page-title">Device actions</MudText>
 <MudText Typo="Typo.body2" Class="mud-text-secondary mb-6">
     Remote actions need a second admin's approval (an Owner's for retire and wipe) before SecurePulse sends them to Intune.
     Requests expire after @((int)DeviceActionPolicy.ApprovalWindow.TotalHours) hours.
@@ -15,7 +15,7 @@
 
 @if (_items is null)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <ExpressiveLoading />
 }
 else
 {

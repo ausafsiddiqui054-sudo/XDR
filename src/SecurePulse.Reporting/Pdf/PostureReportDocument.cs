@@ -24,7 +24,7 @@ public sealed class PostureReportDocument(PostureReportData data) : IDocument
     private const string Fail = "#C62828";
     private const string Amber = "#C77700";
 
-    private string Accent => IsHexColor(data.Branding.AccentColor) ? data.Branding.AccentColor : "#4F46C8";
+    private string Accent => IsHexColor(data.Branding.AccentColor) ? data.Branding.AccentColor : "#B84216";
     private string From => data.Tenant.PartnerName is { Length: > 0 } partner ? partner : data.Branding.CompanyName;
 
     public DocumentMetadata GetMetadata() => new()

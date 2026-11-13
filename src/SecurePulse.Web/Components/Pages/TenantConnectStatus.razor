@@ -17,7 +17,7 @@
 
 @if (!_loaded)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <ExpressiveLoading />
 }
 else if (_request is null)
 {
@@ -39,7 +39,7 @@ else
 
     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
         <div>
-            <MudText Typo="Typo.h4">@r.DisplayName</MudText>
+            <MudText Typo="Typo.h4" Class="sp-page-title">@r.DisplayName</MudText>
             <MudText Typo="Typo.body2" Class="mud-text-secondary">@r.PrimaryDomain · @(r.PartnerName ?? "Direct client") · @r.Industry</MudText>
         </div>
         <MudStack Row="true" Spacing="1">

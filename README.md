@@ -797,7 +797,7 @@ Branding settings:
 |---|---|---|
 | `Reports:Branding:CompanyName` | `SecurePulse` | Shown on reports for tenants without a partner. A tenant's `PartnerName` (its MSP) is used instead when set. |
 | `Reports:Branding:LogoPath` | (shield) | PNG, JPEG or SVG, at most 1 MB, relative to the portal's content root. |
-| `Reports:Branding:AccentColor` | `#4F46C8` | Headings, rules and the brand bar. |
+| `Reports:Branding:AccentColor` | `#B84216` | Headings, rules and the brand bar. |
 | `Reports:Branding:ContactLine` | | E.g. `security@msp.example · +971 4 000 0000`, under the brand on the cover. |
 | `Reports:TimeZone` | `UTC` | For printed dates, e.g. `Asia/Dubai`. |
 

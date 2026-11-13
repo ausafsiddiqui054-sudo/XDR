@@ -10,7 +10,7 @@
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
     <div>
-        <MudText Typo="Typo.h4">Audit log</MudText>
+        <MudText Typo="Typo.h4" Class="sp-page-title">Audit log</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary">Sign-ins, people changes, onboarding and device requests. Entries can't be edited; only the retention job removes old ones.</MudText>
     </div>
     <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Download"
@@ -112,7 +112,7 @@
 <MudPaper Class="sp-card pa-2" Elevation="0" Outlined="true">
     @if (_events is null)
     {
-        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        <ExpressiveLoading />
     }
     else
     {

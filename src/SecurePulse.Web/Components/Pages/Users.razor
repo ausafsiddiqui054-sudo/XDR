@@ -11,7 +11,7 @@
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
     <div>
-        <MudText Typo="Typo.h4">People</MudText>
+        <MudText Typo="Typo.h4" Class="sp-page-title">People</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary">Who can sign in to SecurePulse, and what they can see</MudText>
     </div>
     @if (!_inviting)
@@ -72,7 +72,7 @@
 
 @if (_users is null)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <ExpressiveLoading />
 }
 else
 {

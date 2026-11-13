@@ -8,7 +8,7 @@
 
 <PageTitle>Configuration changes · SecurePulse</PageTitle>
 
-<MudText Typo="Typo.h4">Configuration changes</MudText>
+<MudText Typo="Typo.h4" Class="sp-page-title">Configuration changes</MudText>
 <MudText Typo="Typo.body2" Class="mud-text-secondary mb-6" Style="max-width:820px">
     Reviewed fixes for failed checks, created as report-only Conditional Access policies through the separate configuration app.
     Each one needs an Owner other than the requester to approve it. Requests expire after @((int)ConfigurationChangePolicy.ApprovalWindow.TotalHours) hours.
@@ -16,7 +16,7 @@
 
 @if (_items is null)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <ExpressiveLoading />
 }
 else
 {

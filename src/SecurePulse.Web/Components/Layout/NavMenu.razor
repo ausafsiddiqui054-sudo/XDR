@@ -1,13 +1,28 @@
-<MudNavMenu Class="pt-4 px-2" Rounded="true" Color="Color.Primary">
+<a href="/" class="sp-brand" aria-label="SecurePulse overview">
+    <span class="sp-brand-mark"><MudIcon Icon="@Icons.Material.Rounded.Security" /></span>
+    <span>SecurePulse<small>SECURITY OPERATIONS</small></span>
+</a>
+<div class="sp-workspace-card">
+    <span class="sp-workspace-icon"><MudIcon Icon="@Icons.Material.Rounded.Apartment" Size="Size.Small" /></span>
+    <div>Microsoft 365<small>Security workspace</small></div>
+</div>
+<MudNavMenu Class="sp-navigation px-3" Rounded="true" Color="Color.Primary">
+    <div class="sp-nav-section">WORKSPACE</div>
     <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Rounded.Dashboard">Overview</MudNavLink>
     <MudNavLink Href="findings" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Rounded.ReportProblem">Findings</MudNavLink>
     <MudNavLink Href="endpoints" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Rounded.Devices">Endpoints</MudNavLink>
     <MudNavLink Href="tenants" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Rounded.Apartment">Tenants</MudNavLink>
     <AuthorizeView Policy="@Policies.Operator">
+        <div class="sp-nav-section">RESPONSE &amp; AUTOMATION</div>
         <DeviceActionsNavLink />
         <MudNavLink Href="devices/playbooks" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Rounded.AccountTree">Playbooks</MudNavLink>
         <ConfigurationChangesNavLink />
+        <div class="sp-nav-section">ADMINISTRATION</div>
         <MudNavLink Href="settings/users" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Rounded.Group">People</MudNavLink>
         <MudNavLink Href="settings/audit" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Rounded.ManageSearch">Audit log</MudNavLink>
     </AuthorizeView>
 </MudNavMenu>
+<div class="sp-sidebar-footer">
+    <MudIcon Icon="@Icons.Material.Rounded.VerifiedUser" Size="Size.Small" />
+    <span>Visibility. Clarity. Control.<small>Your security, in one place.</small></span>
+</div>

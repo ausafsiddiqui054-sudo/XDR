@@ -6,7 +6,7 @@
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
     <div>
-        <MudText Typo="Typo.h4">Endpoints</MudText>
+        <MudText Typo="Typo.h4" Class="sp-page-title">Endpoints</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary">Intune-managed devices across your tenants</MudText>
     </div>
     @if (_fleet is not null)
@@ -19,7 +19,7 @@
 
 @if (_fleet is null)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <ExpressiveLoading />
 }
 else
 {

@@ -11,7 +11,7 @@ public sealed record ReportBranding
     public byte[]? Logo { get; init; }
 
     /// <summary>Accent colour for headings, rules and the score ring (#RRGGBB).</summary>
-    public string AccentColor { get; init; } = "#4F46C8";
+    public string AccentColor { get; init; } = "#B84216";
 
     /// <summary>A line for the cover and footer, e.g. "security@msp.example · +971 4 000 0000".</summary>
     public string? ContactLine { get; init; }

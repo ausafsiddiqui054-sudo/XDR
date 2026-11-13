@@ -8,7 +8,7 @@
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
     <div>
-        <MudText Typo="Typo.h4">Findings</MudText>
+        <MudText Typo="Typo.h4" Class="sp-page-title">Findings</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary">Every check from every engine, normalized into one list</MudText>
     </div>
     @if (TenantId is { } reportTenant && _portfolio?.Scanned.Any(t => t.Tenant.Id == reportTenant) == true)
@@ -19,7 +19,7 @@
 
 @if (_portfolio is null)
 {
-    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    <ExpressiveLoading />
 }
 else
 {
