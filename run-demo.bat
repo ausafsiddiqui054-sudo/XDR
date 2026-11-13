@@ -56,4 +56,5 @@ if "%OPEN_BROWSER%"=="1" (
 echo.
 echo Starting SecurePulse at %URL%  (Ctrl+C to stop)
 echo.
-dotnet run --project src\SecurePulse.Web --no-build --no-launch-profile
+rem The empty connection string keeps this on sample data even when setup-database.bat has saved a real one.
+dotnet run --project src\SecurePulse.Web --no-build --no-launch-profile -- --ConnectionStrings:SecurePulse=
