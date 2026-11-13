@@ -7,13 +7,13 @@
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
 
-<PageTitle>Playbooks · SecurePulse</PageTitle>
+<PageTitle>Playbooks · Hasinix</PageTitle>
 
 <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap" Class="mb-6" Spacing="3">
     <div style="max-width:760px">
         <MudText Typo="Typo.h4" Class="sp-page-title">Remediation playbooks</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary">
-            After each device sync, SecurePulse checks devices against these playbooks and proposes an action for each match.
+            After each device sync, Hasinix checks devices against these playbooks and proposes an action for each match.
             Proposals wait in <MudLink Href="devices/actions" Typo="Typo.body2">Device actions</MudLink> until another admin approves them,
             unless a second Owner pre-approved the playbook (sync and Defender actions only, for @((int)PlaybookPreApproval.Validity.TotalDays) days,
             within a daily limit). Retire and wipe are never automated.
@@ -309,7 +309,7 @@ else
     private async Task PreApproveAsync(RemediationPlaybook p)
     {
         var confirmed = await Dialogs.ShowMessageBox($"Pre-approve \"{p.Name}\"?",
-            (MarkupString)($"When a device is <b>{System.Net.WebUtility.HtmlEncode(PlaybookService.TriggerLabel(p.Trigger, p.Days))}</b>, SecurePulse sends " +
+            (MarkupString)($"When a device is <b>{System.Net.WebUtility.HtmlEncode(PlaybookService.TriggerLabel(p.Trigger, p.Days))}</b>, Hasinix sends " +
             $"<b>{System.Net.WebUtility.HtmlEncode(DeviceActions.Label(p.Action))}</b> without anyone approving each one: up to {p.DailyAutoLimit} per tenant a day, " +
             $"for {(int)PlaybookPreApproval.Validity.TotalDays} days. Last saved by {System.Net.WebUtility.HtmlEncode(p.UpdatedByName)}.<br/><br/>" +
             "Any change to the playbook withdraws this, and any Owner or MSP admin can withdraw it at any time. It's recorded in the audit log in your name."),

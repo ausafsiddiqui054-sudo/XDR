@@ -9,7 +9,7 @@
 @inject IDialogService Dialogs
 @implements IAsyncDisposable
 
-<PageTitle>Tenants · SecurePulse</PageTitle>
+<PageTitle>Tenants · Hasinix</PageTitle>
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
     <div>
@@ -271,7 +271,7 @@ else
     private async Task DisableConfigurationAsync(Tenant tenant)
     {
         var confirmed = await Dialogs.ShowMessageBox($"Turn off configuration fixes for {tenant.DisplayName}?",
-            "SecurePulse stops creating Conditional Access policies in this tenant, and open requests are cancelled. Policies it already created " +
+            "Hasinix stops creating Conditional Access policies in this tenant, and open requests are cancelled. Policies it already created " +
             "stay in Entra. Ask the tenant's admin to also remove the configuration app in Microsoft Entra (Enterprise applications).",
             yesText: "Turn off", cancelText: "Keep it on");
         if (confirmed != true) return;
@@ -306,7 +306,7 @@ else
         if (enabled)
         {
             var confirmed = await Dialogs.ShowMessageBox($"Import GoPhish results for {tenant.DisplayName}?",
-                (MarkupString)($"SecurePulse reads only the totals of each campaign (sent, opened, clicked, entered data, reported), never who did what, " +
+                (MarkupString)($"Hasinix reads only the totals of each campaign (sent, opened, clicked, entered data, reported), never who did what, " +
                 $"and never launches campaigns or sends email.<br/><br/>Create a GoPhish user with the standard <b>User</b> role for this tenant, " +
                 $"run the tenant's campaigns as that user, and store that user's API key in Key Vault as " +
                 $"<b>{GoPhishSecrets.ApiKeySecretName(tenant.Id)}</b>. Keys of GoPhish admins are refused."),
@@ -321,7 +321,7 @@ else
     private async Task DisableRemediationAsync(Tenant tenant)
     {
         var confirmed = await Dialogs.ShowMessageBox($"Turn off remediation for {tenant.DisplayName}?",
-            "SecurePulse stops sending device actions to this tenant, and open requests are cancelled. Ask the tenant's admin to also " +
+            "Hasinix stops sending device actions to this tenant, and open requests are cancelled. Ask the tenant's admin to also " +
             "remove the remediation app in Microsoft Entra (Enterprise applications).",
             yesText: "Turn off", cancelText: "Keep it on");
         if (confirmed != true) return;

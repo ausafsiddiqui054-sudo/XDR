@@ -7,12 +7,12 @@
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
 
-<PageTitle>People · SecurePulse</PageTitle>
+<PageTitle>People · Hasinix</PageTitle>
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-6" Wrap="Wrap.Wrap">
     <div>
         <MudText Typo="Typo.h4" Class="sp-page-title">People</MudText>
-        <MudText Typo="Typo.body2" Class="mud-text-secondary">Who can sign in to SecurePulse, and what they can see</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Who can sign in to Hasinix, and what they can see</MudText>
     </div>
     @if (!_inviting)
     {
@@ -198,7 +198,7 @@ else
     private async Task RemoveAsync(PortalUser user)
     {
         var confirmed = await Dialogs.ShowMessageBox("Remove access?",
-            $"{user.UserPrincipalName} won't be able to sign in to SecurePulse. Open sessions end within a minute.",
+            $"{user.UserPrincipalName} won't be able to sign in to Hasinix. Open sessions end within a minute.",
             yesText: "Remove", cancelText: "Cancel");
         if (confirmed != true) return;
 

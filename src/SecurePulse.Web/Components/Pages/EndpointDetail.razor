@@ -6,7 +6,7 @@
 @inject IUserContextAccessor Current
 @inject DeviceActionRequestService Actions
 
-<PageTitle>@(_detail?.Device.DeviceName ?? "Device") · SecurePulse</PageTitle>
+<PageTitle>@(_detail?.Device.DeviceName ?? "Device") · Hasinix</PageTitle>
 
 @if (!_loaded)
 {
@@ -71,7 +71,7 @@ else
     {
         <MudAlert Severity="MudBlazor.Severity.Info" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px"
                   Icon="@Icons.Material.Rounded.Lock">
-            SecurePulse has read-only access to @tenant.DisplayName. Remote actions need remediation consent from the
+            Hasinix has read-only access to @tenant.DisplayName. Remote actions need remediation consent from the
             tenant's admin, and each one then goes through approval.
         </MudAlert>
     }

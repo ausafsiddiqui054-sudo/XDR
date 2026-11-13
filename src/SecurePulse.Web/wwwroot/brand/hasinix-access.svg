@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" fill="none">
+  <defs>
+    <linearGradient id="tile" x1="4" y1="2" x2="36" y2="39" gradientUnits="userSpaceOnUse"><stop stop-color="#FFCCB8" stop-opacity=".35"/><stop offset="1" stop-color="#FFA37F" stop-opacity=".07"/></linearGradient>
+    <linearGradient id="shield" x1="12" y1="9" x2="29" y2="31" gradientUnits="userSpaceOnUse"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#FFB89B"/></linearGradient>
+    <linearGradient id="key" x1="17" y1="16" x2="25" y2="27" gradientUnits="userSpaceOnUse"><stop stop-color="#E5FFF4"/><stop offset="1" stop-color="#65E3BC"/></linearGradient>
+  </defs>
+  <rect x="1" y="1" width="38" height="38" rx="13" fill="url(#tile)" stroke="#FFCCB8" stroke-opacity=".4"/>
+  <path d="m20 8 10 4.5V20c0 6.1-4.7 10.5-10 12.5C14.7 30.5 10 26.1 10 20v-7.5L20 8Z" fill="url(#shield)" fill-opacity=".13" stroke="url(#shield)" stroke-width="1.5" stroke-linejoin="round"/>
+  <circle cx="20" cy="18" r="3" stroke="url(#key)" stroke-width="1.8"/>
+  <path d="M20 21v6m0-2h3" stroke="url(#key)" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M30 6v5m-2.5-2.5h5" stroke="#E5FFF4" stroke-width="1.4" stroke-linecap="round"/>
+</svg>

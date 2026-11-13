@@ -5,7 +5,7 @@
 @using SecurePulse.Web.Services.Onboarding
 
 @* Shown to the client's admin after the Entra consent prompt. Keep it free of any tenant data. *@
-<PageTitle>@_title · SecurePulse</PageTitle>
+<PageTitle>@_title · Hasinix</PageTitle>
 
 <MudPaper Class="sp-card pa-8" Elevation="0" Outlined="true">
     <MudStack AlignItems="AlignItems.Center" Spacing="3">
@@ -15,7 +15,7 @@
         @if (_outcome == ConsentCallbackOutcome.Received)
         {
             <MudText Typo="Typo.caption" Class="mud-text-secondary" Align="Align.Center">
-                SecurePulse has read-only access. It can't change settings, users or devices in your organization.
+                Hasinix has read-only access. It can't change settings, users or devices in your organization.
                 An admin can remove it any time under Enterprise applications in the Microsoft Entra admin center.
             </MudText>
         }
@@ -36,7 +36,7 @@
         (_title, _message, _icon, _color) = _outcome switch
         {
             ConsentCallbackOutcome.Received => ("Access granted, thank you",
-                "SecurePulse is confirming the connection now. Your IT provider will see it shortly. You can close this window.",
+                "Hasinix is confirming the connection now. Your IT provider will see it shortly. You can close this window.",
                 Icons.Material.Rounded.CheckCircle, Color.Success),
             ConsentCallbackOutcome.Declined => ("Access wasn't granted",
                 "Nothing was changed. If that was a mistake, open the same link again, or ask your IT provider for help.",

@@ -1,26 +1,33 @@
 @page "/dev/sign-in"
+@page "/sign-in"
 @attribute [AllowAnonymous]
 @attribute [ExcludeFromInteractiveRouting]
-@layout PublicLayout
+@layout SignInLayout
 @using SecurePulse.Core.Abstractions
 @inject SignInMode Mode
 @inject ITenantRepository Tenants
 @inject SecurePulse.Web.Services.Onboarding.PortalMode Portal
 
-<PageTitle>Development sign-in · SecurePulse</PageTitle>
+<PageTitle>Sign in · Hasinix</PageTitle>
 
-<MudPaper Class="sp-card pa-8" Elevation="0" Outlined="true">
+<section class="sp-auth-panel" aria-labelledby="sign-in-heading">
+    <span class="sp-auth-panel-icon"><MudIcon Icon="@Icons.Material.Rounded.Login" /></span>
+    <div class="sp-auth-panel-eyebrow">WELCOME TO HASINIX</div>
+    <h2 id="sign-in-heading">Your workspace awaits.</h2>
+    <p class="sp-auth-description">A clearer view of your security starts here.</p>
     @if (Mode.UsesEntra)
     {
-        <MudText Typo="Typo.h6">Development sign-in is off</MudText>
-        <MudText Typo="Typo.body2" Class="mud-text-secondary">This portal signs in with Microsoft Entra ID.</MudText>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" Href="authentication/login">Sign in</MudButton>
+        <p class="sp-auth-signin-copy">Use your organization's Microsoft account to access your workspace.</p>
+        <a class="sp-auth-primary" href="@($"authentication/login?returnUrl={Uri.EscapeDataString(AuthEndpoints.LocalOrRoot(ReturnUrl))}")">
+            <span class="sp-microsoft-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Continue with Microsoft<MudIcon Icon="@Icons.Material.Rounded.ArrowForward" Size="Size.Small" />
+        </a>
+        <div class="sp-auth-trust"><MudIcon Icon="@Icons.Material.Rounded.Lock" Size="Size.Small" /><span>Sign-in is handled by Microsoft Entra ID.</span></div>
+        <p class="sp-auth-help">Need access? Ask your workspace administrator for an invitation.</p>
     }
     else
     {
-        <MudAlert Severity="MudBlazor.Severity.Warning" Variant="Variant.Outlined" Class="mb-6" Style="border-radius:16px">
-            Development sign-in: AzureAd:ClientId isn't set, so you pick who to be. This page only exists in Development.
-        </MudAlert>
+        <div class="sp-auth-demo-label"><span></span>DEMO WORKSPACE</div>
+        <p class="sp-auth-signin-copy">Explore Hasinix with sample data. Choose a role to see the workspace from their perspective.</p>
         @if (Stale)
         {
             <MudAlert Severity="MudBlazor.Severity.Info" Variant="Variant.Outlined" Class="mb-6" Style="border-radius:16px" data-testid="stale-sign-in">
@@ -28,22 +35,14 @@
                 Nobody was signed in. Pick who to be again.
             </MudAlert>
         }
-        <MudText Typo="Typo.h5" Class="mb-1">Sign in as</MudText>
-        <MudText Typo="Typo.body2" Class="@(Portal.Simulated ? "mud-text-secondary mb-3" : "mud-text-secondary mb-6")">Each persona goes through the same invitation and role checks as a real sign-in.</MudText>
-        @if (Portal.Simulated)
-        {
-            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-6" data-testid="demo-simulated">
-                Sample data: a simulated Worker finishes scans, sends approved actions and applies approved fixes in a few seconds.
-                Nothing is sent to Microsoft. For two people, use a normal and a private window: windows of the same browser share one sign-in.
-            </MudText>
-        }
-
         <form method="post" action="authentication/dev-login">
             <AntiforgeryToken />
             <input type="hidden" name="returnUrl" value="@ReturnUrl" />
-            <MudStack Spacing="2">
-                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
-                           name="persona" value="owner" StartIcon="@Icons.Material.Rounded.AdminPanelSettings">Owner</MudButton>
+            <button type="submit" name="persona" value="owner" class="sp-auth-primary"><img class="sp-button-art" src="brand/hasinix-access.svg" width="36" height="36" alt="" aria-hidden="true" /><span>Continue as Owner</span><MudIcon Icon="@Icons.Material.Rounded.ArrowForward" Size="Size.Small" /></button>
+            <div class="sp-auth-owner-note">Full workspace access · Manage tenants and review actions</div>
+            <details class="sp-auth-roles">
+                <summary>Try another role<MudIcon Icon="@Icons.Material.Rounded.ExpandMore" Size="Size.Small" /></summary>
+                <MudStack Spacing="2" Class="pt-3">
                 <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
                            name="persona" value="second-owner" StartIcon="@Icons.Material.Rounded.AdminPanelSettings">Second Owner</MudButton>
                 <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
@@ -57,10 +56,19 @@
                 }
                 <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Text" FullWidth="true"
                            name="persona" value="unassigned" StartIcon="@Icons.Material.Rounded.PersonOff">Someone without access</MudButton>
-            </MudStack>
+                </MudStack>
+            </details>
         </form>
+        <div class="sp-auth-trust"><MudIcon Icon="@Icons.Material.Rounded.Science" Size="Size.Small" /><span>Sample environment. No live Microsoft actions.</span></div>
+        <details class="sp-auth-demo-details"><summary>About this demo</summary>
+            <p>Development sign-in is enabled because Microsoft Entra ID isn't configured. Each role follows the same access checks as a real sign-in.</p>
+            @if (Portal.Simulated)
+            {
+                <p data-testid="demo-simulated">A simulated Worker finishes scans and approved actions. Nothing is sent to Microsoft. Use a private window to try a second person; browser windows share one sign-in.</p>
+            }
+        </details>
     }
-</MudPaper>
+</section>
 
 @code {
     [SupplyParameterFromQuery(Name = "returnUrl")]
@@ -72,8 +80,11 @@
 
     private IReadOnlyList<Tenant> _tenants = [];
 
-    protected override async Task OnInitializedAsync() =>
+    protected override async Task OnInitializedAsync()
+    {
+        if (Mode.UsesEntra) return;
         _tenants = (await Tenants.GetAllAsync())
             .Where(t => t.ConsentState is TenantConsentState.ReadOnlyGranted or TenantConsentState.RemediationGranted)
             .OrderBy(t => t.DisplayName).ToList();
+    }
 }

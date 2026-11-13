@@ -4,7 +4,7 @@
 @inject OnboardingService Onboarding
 @inject NavigationManager Nav
 
-<PageTitle>Connect tenant · SecurePulse</PageTitle>
+<PageTitle>Connect tenant · Hasinix</PageTitle>
 
 <MudBreadcrumbs Items="_breadcrumbs" Class="px-0 pt-0" />
 
@@ -19,7 +19,7 @@
             @if (!Onboarding.IsConfigured)
             {
                 <MudAlert Severity="MudBlazor.Severity.Warning" Variant="Variant.Outlined" Class="mb-4" Style="border-radius:16px">
-                    Set <code>Onboarding:AppClientId</code> to the SecurePulse app registration's client ID to create consent links.
+                    Set <code>Onboarding:AppClientId</code> to the Hasinix app registration's client ID to create consent links.
                 </MudAlert>
             }
             @if (_error is not null)
@@ -31,7 +31,7 @@
                 <MudStack Spacing="4">
                     <MudTextField T="string" @bind-Value="_input.DisplayName" Label="Client name" Variant="Variant.Outlined"
                                   Required="true" RequiredError="Enter the client's name" MaxLength="256"
-                                  HelperText="How the tenant appears in SecurePulse" />
+                                  HelperText="How the tenant appears in Hasinix" />
                     <MudTextField T="string" @bind-Value="_input.PrimaryDomain" Label="Microsoft 365 domain" Variant="Variant.Outlined"
                                   Required="true" RequiredError="Enter the client's domain" Validation="@(new Func<string?, string?>(ValidateDomain))"
                                   Placeholder="contoso.com" HelperText="Any verified domain, or the tenant's .onmicrosoft.com domain"
@@ -70,7 +70,7 @@
                 <ol class="sp-steps">
                     <li><span class="sp-step-dot">1</span><div><MudText Typo="Typo.body2" Style="font-weight:600">You create a consent link</MudText><MudText Typo="Typo.caption" Class="mud-text-secondary">We check the domain belongs to a Microsoft 365 tenant.</MudText></div></li>
                     <li><span class="sp-step-dot">2</span><div><MudText Typo="Typo.body2" Style="font-weight:600">The client's admin approves</MudText><MudText Typo="Typo.caption" Class="mud-text-secondary">A Global Administrator signs in to Microsoft and grants read-only access.</MudText></div></li>
-                    <li><span class="sp-step-dot">3</span><div><MudText Typo="Typo.body2" Style="font-weight:600">SecurePulse verifies and scans</MudText><MudText Typo="Typo.caption" Class="mud-text-secondary">We confirm the access with Microsoft, then read the tenant's devices and run the security checks.</MudText></div></li>
+                    <li><span class="sp-step-dot">3</span><div><MudText Typo="Typo.body2" Style="font-weight:600">Hasinix verifies and scans</MudText><MudText Typo="Typo.caption" Class="mud-text-secondary">We confirm the access with Microsoft, then read the tenant's devices and run the security checks.</MudText></div></li>
                 </ol>
             </MudPaper>
 

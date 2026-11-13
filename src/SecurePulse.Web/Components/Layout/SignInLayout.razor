@@ -1,0 +1,27 @@
+@inherits LayoutComponentBase
+
+<MudThemeProvider Theme="SecurePulseTheme.Theme" IsDarkMode="false" />
+<div class="sp-auth-shell">
+    <aside class="sp-auth-story" aria-label="About Hasinix">
+        <a href="/sign-in" class="sp-auth-brand" aria-label="Hasinix sign in"><BrandLogo ShowTagline="false" /></a>
+        <div class="sp-auth-story-copy">
+            <span class="sp-auth-kicker"><span></span> YOUR SECURITY. CONNECTED.</span>
+            <h1>Less noise.<br />More <em>confidence.</em></h1>
+            <p>Bring your tenants, endpoints, and security priorities into one clear view.</p>
+        </div>
+        <div class="sp-auth-orbit" aria-hidden="true">
+            <div class="sp-auth-orbit-ring"></div><div class="sp-auth-orbit-ring sp-auth-orbit-ring-inner"></div>
+            <div class="sp-auth-core"><img src="brand/hasinix-mark.svg" alt="" width="64" height="64" /></div>
+            <span class="sp-auth-node sp-auth-node-identity"><MudIcon Icon="@Icons.Material.Rounded.Fingerprint" />Identity</span>
+            <span class="sp-auth-node sp-auth-node-devices"><MudIcon Icon="@Icons.Material.Rounded.Devices" />Endpoints</span>
+            <span class="sp-auth-node sp-auth-node-posture"><MudIcon Icon="@Icons.Material.Rounded.VerifiedUser" />Posture</span>
+            <span class="sp-auth-orbit-dot"></span>
+        </div>
+        <div class="sp-auth-story-footer"><span>Built for clarity. Designed for action.</span><span>HASINIX / 01</span></div>
+    </aside>
+    <main class="sp-auth-main" id="main-content">
+        <div class="sp-auth-mobile-brand"><a href="/sign-in" aria-label="Hasinix sign in"><BrandLogo ShowTagline="false" /></a></div>
+        @Body
+        <footer class="sp-auth-footer">Hasinix <span>·</span> Confidence, connected.</footer>
+    </main>
+</div>

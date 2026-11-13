@@ -6,7 +6,7 @@ namespace SecurePulse.Web.Theme;
 
 /// <summary>
 /// Material 3 Expressive-inspired workspace with Google Sans Flex, generous shapes,
-/// tonal containers, and the Viresta-inspired charcoal and orange palette.
+/// tonal containers, and the Hasinix falcon's palette: navy, orange and a teal accent.
 /// </summary>
 public static class SecurePulseTheme
 {
@@ -14,54 +14,54 @@ public static class SecurePulseTheme
     {
         PaletteLight = new PaletteLight
         {
-            Primary = "#B84216",
+            Primary = "#C2410C",
             PrimaryContrastText = "#FFFFFF",
-            // Slate and bronze sit beside the charcoal-and-orange brand (the old theme's teal and pink didn't).
-            Secondary = "#3F5463",
+            // Mint is an accent; darker teal keeps secondary text readable on light surfaces.
+            Secondary = "#087E68",
             SecondaryContrastText = "#FFFFFF",
-            Tertiary = "#7A5230",
+            Tertiary = "#3F5F7F",
             TertiaryContrastText = "#FFFFFF",
             Info = "#2F6FD0",
             Success = "#1E8E5A",
             Warning = "#C77700",
             Error = "#C62828",
-            Background = "#F5F7FA",
-            BackgroundGray = "#EDF2F5",
+            Background = "#F6F8FB",
+            BackgroundGray = "#E9EEF4",
             Surface = "#FFFFFF",
             AppbarBackground = "#FFFFFF",
-            AppbarText = "#172B3A",
+            AppbarText = "#0F2233",
             DrawerBackground = "#FFFFFF",
-            DrawerText = "#172B3A",
-            DrawerIcon = "#718291",
-            TextPrimary = "#172B3A",
-            TextSecondary = "#687B8A",
-            LinesDefault = "#E3EAEE",
-            TableLines = "#EDF1F4"
+            DrawerText = "#0F2233",
+            DrawerIcon = "#7C8A99",
+            TextPrimary = "#0F2233",
+            TextSecondary = "#5B6B7B",
+            LinesDefault = "#DEE5EC",
+            TableLines = "#EEF2F6"
         },
         PaletteDark = new PaletteDark
         {
-            Primary = "#EA642A",
-            PrimaryContrastText = "#0B0B0B",
-            Secondary = "#B9C6CF",
-            SecondaryContrastText = "#0B0B0B",
-            Tertiary = "#E5BE94",
-            TertiaryContrastText = "#0B0B0B",
+            Primary = "#FF8A4C",
+            PrimaryContrastText = "#2A0F02",
+            Secondary = "#45D6B0",
+            SecondaryContrastText = "#052C24",
+            Tertiary = "#A9C4E0",
+            TertiaryContrastText = "#0F2233",
             Info = "#9DC2FF",
             Success = "#7CD9A6",
             Warning = "#FFC46B",
             Error = "#FFB4AB",
-            Background = "#0B0B0B",
-            BackgroundGray = "#232323",
-            Surface = "#151515",
-            AppbarBackground = "#0B0B0B",
-            AppbarText = "#FFFFFF",
-            DrawerBackground = "#111111",
-            DrawerText = "#FFFFFF",
-            DrawerIcon = "#A3A3A3",
-            TextPrimary = "#FFFFFF",
-            TextSecondary = "#B8B8B8",
-            LinesDefault = "#333333",
-            TableLines = "#292929"
+            Background = "#07121D",
+            BackgroundGray = "#1A2B3D",
+            Surface = "#0E1D2C",
+            AppbarBackground = "#0B1826",
+            AppbarText = "#F4F8FC",
+            DrawerBackground = "#0B1826",
+            DrawerText = "#F4F8FC",
+            DrawerIcon = "#93A6B8",
+            TextPrimary = "#F4F8FC",
+            TextSecondary = "#B4C3D2",
+            LinesDefault = "#22374B",
+            TableLines = "#1A2C3E"
         },
         LayoutProperties = new LayoutProperties
         {

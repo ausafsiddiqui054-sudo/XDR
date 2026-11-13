@@ -6,8 +6,9 @@
 @inject ScanRequestService Scans
 @inject SecurePulse.Web.Services.Onboarding.PortalMode Mode
 
-<PageTitle>Overview · SecurePulse</PageTitle>
+<PageTitle>Overview · Hasinix</PageTitle>
 
+<div class="sp-dashboard">
 <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="sp-overview-header mb-6" Wrap="Wrap.Wrap">
     <div>
         <div class="sp-eyebrow">YOUR SECURITY, AT A GLANCE</div>
@@ -17,8 +18,8 @@
         </MudText>
     </div>
     <AuthorizeView Policy="@Policies.Operator">
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Rounded.Refresh"
-                   OnClick="RunScan" Disabled="_queueing">@(_queueing ? "Queueing scans…" : "Run security scan")</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="sp-graphic-button"
+                   OnClick="RunScan" Disabled="_queueing"><img class="sp-button-art" src="brand/hasinix-scan.svg" width="36" height="36" alt="" aria-hidden="true" /><span>@(_queueing ? "Queueing scans…" : "Run security scan")</span></MudButton>
     </AuthorizeView>
     @if (_isViewer && _portfolio?.Scanned.FirstOrDefault() is { } mine)
     {
@@ -159,6 +160,8 @@ else
         </MudItem>
     </MudGrid>
 }
+
+</div>
 
 @code {
     private PortfolioPosture? _portfolio;

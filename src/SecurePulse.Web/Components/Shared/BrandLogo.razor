@@ -1,0 +1,11 @@
+<span class="sp-brand-lockup">
+    <span class="sp-brand-art" aria-hidden="true"><img src="brand/hasinix-mark.svg" width="36" height="36" alt="" /><span class="sp-brand-name">hasinix<span class="sp-brand-period">.</span></span></span>
+    @if (ShowTagline)
+    {
+        <span class="sp-brand-tagline">CONFIDENCE, CONNECTED</span>
+    }
+</span>
+
+@code {
+    [Parameter] public bool ShowTagline { get; set; } = true;
+}

@@ -7,13 +7,13 @@
 <MudDialogProvider />
 <MudSnackbarProvider />
 
-<MudLayout>
+<MudLayout Class="sp-workspace">
     @* The side panel carries the brand; when it is closed (or an overlay, on small screens) the top bar shows it instead. *@
     <MudAppBar Elevation="0" Class="@(_drawerOpen ? "sp-appbar" : "sp-appbar sp-appbar-collapsed")">
         <MudIconButton Icon="@Icons.Material.Rounded.Menu" Color="Color.Inherit" Edge="Edge.Start"
                        aria-label="Toggle navigation" OnClick="@(() => _drawerOpen = !_drawerOpen)" />
-        <a href="/" class="sp-appbar-brand" aria-label="SecurePulse overview">
-            <MudIcon Icon="@Icons.Material.Rounded.Security" Size="Size.Small" /><span>SecurePulse</span>
+        <a href="/" class="sp-appbar-brand" aria-label="Hasinix overview">
+            <BrandLogo ShowTagline="false" />
         </a>
         <span class="sp-header-context">Workspace <span>/</span> Microsoft 365 security</span>
         <MudSpacer />
