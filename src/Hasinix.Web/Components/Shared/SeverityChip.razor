@@ -1,0 +1,5 @@
+<MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@HasinixTheme.ColorOf(Severity)">@Severity</MudChip>
+
+@code {
+    [Parameter, EditorRequired] public Severity Severity { get; set; }
+}

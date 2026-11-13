@@ -1,7 +1,7 @@
 @echo off
 setlocal
 rem ---------------------------------------------------------------------------
-rem  SecurePulse - start the portal on in-memory sample data.
+rem  Hasinix - start the portal on in-memory sample data.
 rem  No database, no Worker: a simulated Worker finishes scans and approved
 rem  actions, and nothing is sent to Microsoft or any engine.
 rem
@@ -26,7 +26,7 @@ if errorlevel 1 (
 rem Already running? Then just open it.
 netstat -ano -p tcp | findstr /r /c:":%PORT% .*LISTENING" >nul
 if not errorlevel 1 (
-    echo Port %PORT% is already in use - SecurePulse is probably running already: %URL%
+    echo Port %PORT% is already in use - Hasinix is probably running already: %URL%
     if "%OPEN_BROWSER%"=="1" start "" "%URL%"
     exit /b 0
 )
@@ -39,8 +39,8 @@ set "Onboarding__RemediationAppClientId=22222222-2222-2222-2222-222222222222"
 set "Onboarding__ConfigurationAppClientId=33333333-3333-3333-3333-333333333333"
 rem PDF reports also need Reports__QuestPdfLicense (your organisation's QuestPDF tier); not set here.
 
-echo Building SecurePulse...
-dotnet build src\SecurePulse.Web --nologo -v q
+echo Building Hasinix...
+dotnet build src\Hasinix.Web --nologo -v q
 if errorlevel 1 (
     echo.
     echo Build failed - see the errors above.
@@ -54,7 +54,7 @@ if "%OPEN_BROWSER%"=="1" (
 )
 
 echo.
-echo Starting SecurePulse at %URL%  (Ctrl+C to stop)
+echo Starting Hasinix at %URL%  (Ctrl+C to stop)
 echo.
 rem The empty connection string keeps this on sample data even when setup-database.bat has saved a real one.
-dotnet run --project src\SecurePulse.Web --no-build --no-launch-profile -- --ConnectionStrings:SecurePulse=
+dotnet run --project src\Hasinix.Web --no-build --no-launch-profile -- --ConnectionStrings:Hasinix=

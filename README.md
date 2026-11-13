@@ -1,4 +1,4 @@
-# SecurePulse
+# Hasinix
 
 Multi-tenant Microsoft 365 security posture platform. It runs open-source engines
 (Maester, ScubaGear, later Wazuh and GoPhish) against client tenants, normalizes every
@@ -10,20 +10,20 @@ and a client-ready report.
 ## Solution layout
 
 ```
-SecurePulse.slnx
+Hasinix.slnx
 ├── samples/maester-results.sample.json   Example Maester output used for testing the parser
 ├── samples/scubagear-results.sample.json ScubaGear 1.8.0's own sample report (CC0; raw tenant export removed)
 └── src/
-    ├── SecurePulse.Core        Domain models (Finding, Tenant, ManagedDevice, RiskScore) + interfaces
-    ├── SecurePulse.Data        EF Core + PostgreSQL repositories, migrations, dev seeder
-    ├── SecurePulse.Engines     Engine adapters (Maester, ScubaGear): out-of-process runners + JSON parsers
-    ├── SecurePulse.Intune      Intune device inventory over Microsoft Graph (certificate auth)
-    ├── SecurePulse.Playbooks   Playbook runners (device and finding playbooks), shared by the Worker and the sample-data demo
-    ├── SecurePulse.Reporting   RiskScoreCalculator (0–100 score, grade, top risks) and the branded PDF report (QuestPDF)
-    ├── SecurePulse.Web         Blazor Server portal (MudBlazor, M3 Expressive-style theme), consent links
-    └── SecurePulse.Worker      Background service: consent verification, Intune device sync, scheduled engine scans
+    ├── Hasinix.Core        Domain models (Finding, Tenant, ManagedDevice, RiskScore) + interfaces
+    ├── Hasinix.Data        EF Core + PostgreSQL repositories, migrations, dev seeder
+    ├── Hasinix.Engines     Engine adapters (Maester, ScubaGear): out-of-process runners + JSON parsers
+    ├── Hasinix.Intune      Intune device inventory over Microsoft Graph (certificate auth)
+    ├── Hasinix.Playbooks   Playbook runners (device and finding playbooks), shared by the Worker and the sample-data demo
+    ├── Hasinix.Reporting   RiskScoreCalculator (0–100 score, grade, top risks) and the branded PDF report (QuestPDF)
+    ├── Hasinix.Web         Blazor Server portal (MudBlazor, M3 Expressive-style theme), consent links
+    └── Hasinix.Worker      Background service: consent verification, Intune device sync, scheduled engine scans
 tests/
-    └── SecurePulse.Tests       xUnit: parser, scoring, Graph client, onboarding, sync, scans, PostgreSQL repositories
+    └── Hasinix.Tests       xUnit: parser, scoring, Graph client, onboarding, sync, scans, PostgreSQL repositories
 ```
 
 ## Run it
@@ -32,7 +32,7 @@ Requirements: .NET 10 SDK. PostgreSQL 14+ for the database mode.
 
 ```bash
 dotnet restore
-dotnet run --project src/SecurePulse.Web
+dotnet run --project src/Hasinix.Web
 dotnet test
 ```
 
@@ -52,7 +52,7 @@ Every feature works end to end on sample data, so a demo needs only the .NET SDK
 export Onboarding__AppClientId=11111111-1111-1111-1111-111111111111              # placeholders: they only switch on
 export Onboarding__RemediationAppClientId=22222222-2222-2222-2222-222222222222   # the consent-link screens
 export Onboarding__ConfigurationAppClientId=33333333-3333-3333-3333-333333333333
-dotnet run --project src/SecurePulse.Web                                           # http://localhost:5106
+dotnet run --project src/Hasinix.Web                                           # http://localhost:5106
 ```
 
 (PowerShell: `$env:Onboarding__AppClientId="..."`.) PDF reports also need `Reports__QuestPdfLicense`,
@@ -65,7 +65,7 @@ the QuestPDF tier your organisation holds.
   approved device actions and configuration changes complete, and devices "sync" every 30 seconds so playbooks
   propose (and pre-approved ones auto-approve, through the Worker's own runners). It only changes the in-memory
   store and never calls Microsoft Graph or an engine; its audit entries say "Simulated" and come from
-  "SecurePulse demo (simulated Worker)". Turn it off with `Demo__Simulate=false`.
+  "Hasinix demo (simulated Worker)". Turn it off with `Demo__Simulate=false`.
 - **Two people:** use two browser windows (one private) for the four-eyes steps. **Second Owner** approves an
   Owner's requests and pre-approves playbooks.
 
@@ -77,23 +77,23 @@ Audit log shows every step. Consent links can't be completed (no real Microsoft 
 ### With PostgreSQL and the Worker
 
 Connection strings carry a password, so keep them out of `appsettings.json`: use user-secrets
-in development or the `ConnectionStrings__SecurePulse` environment variable elsewhere.
+in development or the `ConnectionStrings__Hasinix` environment variable elsewhere.
 
 ```bash
 CS="Host=localhost;Database=securepulse;Username=securepulse;Password=..."
-dotnet user-secrets set ConnectionStrings:SecurePulse "$CS" --project src/SecurePulse.Web
-dotnet user-secrets set ConnectionStrings:SecurePulse "$CS" --project src/SecurePulse.Worker
-dotnet user-secrets set Intune:AppClientId "<multi-tenant app client ID>" --project src/SecurePulse.Worker
+dotnet user-secrets set ConnectionStrings:Hasinix "$CS" --project src/Hasinix.Web
+dotnet user-secrets set ConnectionStrings:Hasinix "$CS" --project src/Hasinix.Worker
+dotnet user-secrets set Intune:AppClientId "<multi-tenant app client ID>" --project src/Hasinix.Worker
 
-dotnet run --project src/SecurePulse.Web      # Development: migrates, seeds demo data if empty
-dotnet run --project src/SecurePulse.Worker   # migrates, syncs Intune devices every 4 hours, scans daily
+dotnet run --project src/Hasinix.Web      # Development: migrates, seeds demo data if empty
+dotnet run --project src/Hasinix.Worker   # migrates, syncs Intune devices every 4 hours, scans daily
 ```
 
 The Worker syncs tenants that have granted consent **and** have a certificate thumbprint in
 `CredentialReference`. The certificate (with private key) must be in the Worker's
 `CurrentUser\My` or `LocalMachine\My` store. Settings live under `DeviceSync` (interval,
 parallel tenants) and `Intune` (Graph and authority URLs for national clouds, retries,
-timeout) in `src/SecurePulse.Worker/appsettings.json`.
+timeout) in `src/Hasinix.Worker/appsettings.json`.
 
 Graph application permissions (read-only, admin consent in each client tenant):
 
@@ -328,7 +328,7 @@ without a person approving each one. Four eyes move to the playbook itself:
 
 Some failed checks have a reviewed fix: a **Conditional Access policy created in report-only mode**. A
 report-only policy changes no sign-in; Entra logs what it would have done, so the tenant's admin can
-check the impact, exclude break-glass accounts and switch it on in Entra. **SecurePulse never switches a
+check the impact, exclude break-glass accounts and switch it on in Entra. **Hasinix never switches a
 policy on**, and the policy body is a constant in the catalog: nothing from a finding or a tenant goes
 into it.
 
@@ -446,7 +446,7 @@ skipped, and skipped checks don't count toward the score.
 
 ScubaGear assesses the tenant's **Entra ID** configuration against CISA's SCuBA baseline
 (`-ProductNames aad`). Its other products aren't run, because unattended runs need permissions
-SecurePulse's read-only consent doesn't grant: Exchange Online and Defender need
+Hasinix's read-only consent doesn't grant: Exchange Online and Defender need
 `Exchange.ManageAsApp` plus the Global Reader role, Teams needs Global Reader, SharePoint needs
 `Sites.FullControl.All`, and Power Platform needs an interactive registration. A token with
 `Exchange.ManageAsApp` or `Sites.FullControl.All` would also stop every scan at the read-only
@@ -505,7 +505,7 @@ the 4.14 API). It doesn't run a process: it makes read-only HTTP calls from the 
 - **A scan fails, keeping the previous findings,** when the API user isn't read-only, the group has
   no agents, none of them has SCA results, or any agent's results can't be read.
 
-**Read-only API user.** Create a Wazuh API user for SecurePulse with a role that only reads, e.g.
+**Read-only API user.** Create a Wazuh API user for Hasinix with a role that only reads, e.g.
 a policy allowing `agent:read` and `sca:read` (resource `agent:group:<group>` or `agent:id:*`).
 Before every scan the Worker reads the user's effective policies
 (`GET /security/users/me/policies`) and refuses to scan if RBAC is in `black` mode (everything not
@@ -539,13 +539,13 @@ an http URL, a malformed pin, or a Key Vault address that isn't a Key Vault.
 ### GoPhish
 
 The GoPhish engine imports **phishing simulation results** from your [GoPhish](https://getgophish.com)
-server. It is an import only: **SecurePulse never creates, launches or changes a campaign and never
-sends email.** You run campaigns in GoPhish as before; SecurePulse turns their results into findings.
+server. It is an import only: **Hasinix never creates, launches or changes a campaign and never
+sends email.** You run campaigns in GoPhish as before; Hasinix turns their results into findings.
 
 - **Counts, not people.** The engine reads only `GET /api/campaigns/summary`: per campaign, how many
   recipients were sent the email, opened it, clicked, entered data on the landing page and reported it.
   It never reads the per-recipient results, so no names, email addresses or IP addresses of the people
-  tested reach SecurePulse, its database, reports or audit export.
+  tested reach Hasinix, its database, reports or audit export.
 - **One GoPhish user per tenant.** GoPhish shows each user only their own campaigns, so each tenant's
   campaigns are run by its own GoPhish user (standard **User** role), and that user's API key decides
   which campaigns show up for the tenant. The key is stored in Key Vault under a name derived from the
@@ -556,7 +556,7 @@ sends email.** You run campaigns in GoPhish as before; SecurePulse turns their r
   each import the Worker sends `HEAD /api/users/` (an admin-only endpoint; HEAD returns no body) and
   stops if the key is an admin's.
 - **Read-only on our side.** GoPhish has no read-only API keys: a standard user's key could also launch
-  campaigns. SecurePulse's GoPhish HTTP client refuses every request that isn't a GET or HEAD before it
+  campaigns. Hasinix's GoPhish HTTP client refuses every request that isn't a GET or HEAD before it
   leaves the process, sends the key in the `Authorization` header (never the URL), follows no
   redirects, and pins the server's certificate (`GoPhish:CertificateSha256`) or validates it normally.
 - **Findings:** one per campaign launched within `GoPhish:Lookback` (365 days), under *Security
@@ -584,7 +584,7 @@ on aren't imported.
 ## Sign-in and roles
 
 The portal signs people in with Microsoft Entra ID (Microsoft.Identity.Web, multi-tenant).
-**Access is decided by SecurePulse, not by Entra app roles:** a client tenant's admin could
+**Access is decided by Hasinix, not by Entra app roles:** a client tenant's admin could
 assign our app's roles in their own tenant, so role claims in tokens are stripped at sign-in and
 never trusted. Roles live in the `portal_users` table:
 
@@ -639,8 +639,8 @@ filters).
 - **Not recorded on purpose:** consent callbacks with an unknown `state` (the endpoint is public,
   so they go to the application log rather than letting anyone fill the table) and the Worker's
   verification retries (only the final result).
-- **Actors** are stored as shown at the time ("Name <sign-in name>", "SecurePulse Worker",
-  "Client admin (not signed in to SecurePulse)") plus the portal user ID.
+- **Actors** are stored as shown at the time ("Name <sign-in name>", "Hasinix Worker",
+  "Client admin (not signed in to Hasinix)") plus the portal user ID.
 - **IP addresses** are recorded for sign-in, sign-out, export and the consent callback (HTTP
   requests). Behind a reverse proxy, enable forwarded headers so this is the client's address.
   Actions inside an open Blazor session don't carry one.
@@ -680,7 +680,7 @@ itself when its login has `CREATEROLE`; managed databases usually need this done
 
 ```sql
 CREATE ROLE securepulse_audit_purge NOLOGIN;
-GRANT SELECT, DELETE ON audit_events TO securepulse_audit_purge;   -- in the SecurePulse database
+GRANT SELECT, DELETE ON audit_events TO securepulse_audit_purge;   -- in the Hasinix database
 GRANT SELECT ON audit_export_checkpoints TO securepulse_audit_purge;
 CREATE ROLE securepulse_maintenance LOGIN PASSWORD '<from your vault>';
 GRANT securepulse_audit_purge TO securepulse_maintenance;
@@ -744,7 +744,7 @@ Azure setup, in the workspace's subscription:
    `EventId` (guid), `Action`, `ActionLabel`, `Category`, `Outcome` (string), `ActorUserId` (guid),
    `ActorName` (string), `SecurePulseTenantId` (guid), `TargetType`, `TargetId`, `Summary` (string),
    `Details` (dynamic), `IpAddress` (string), `RecordedAt` (datetime), `Source` (string).
-   (`TenantId` is reserved in Log Analytics, so SecurePulse's tenant is `SecurePulseTenantId`.)
+   (`TenantId` is reserved in Log Analytics, so Hasinix's tenant is `SecurePulseTenantId`.)
 2. Create a data collection rule of kind `Direct` in the workspace's region, with a stream
    `Custom-SecurePulseAudit` declaring the same columns, a destination for the workspace, and a data
    flow with `"transformKql": "source"` and `"outputStream": "Custom-SecurePulseAudit_CL"`
@@ -788,24 +788,24 @@ license tier your organisation holds. Reports stay off (buttons disabled, the en
   companies never qualify.
 - `Professional` or `Enterprise`: paid; needed before production use otherwise.
 
-See QuestPDF's [license guide](https://www.questpdf.com/license/guide.html). SecurePulse never picks
+See QuestPDF's [license guide](https://www.questpdf.com/license/guide.html). Hasinix never picks
 a tier for you.
 
 Branding settings:
 
 | Setting | Default | |
 |---|---|---|
-| `Reports:Branding:CompanyName` | `SecurePulse` | Shown on reports for tenants without a partner. A tenant's `PartnerName` (its MSP) is used instead when set. |
+| `Reports:Branding:CompanyName` | `Hasinix` | Shown on reports for tenants without a partner. A tenant's `PartnerName` (its MSP) is used instead when set. |
 | `Reports:Branding:LogoPath` | (shield) | PNG, JPEG or SVG, at most 1 MB, relative to the portal's content root. |
 | `Reports:Branding:AccentColor` | `#B84216` | Headings, rules and the brand bar. |
 | `Reports:Branding:ContactLine` | | E.g. `security@msp.example · +971 4 000 0000`, under the brand on the cover. |
 | `Reports:TimeZone` | `UTC` | For printed dates, e.g. `Asia/Dubai`. |
 
 Invalid settings stop the portal at startup rather than producing broken reports. Text uses
-QuestPDF's bundled Lato with Noto Sans Arabic (SIL OFL 1.1, embedded in `SecurePulse.Reporting`)
+QuestPDF's bundled Lato with Noto Sans Arabic (SIL OFL 1.1, embedded in `Hasinix.Reporting`)
 as fallback, so Arabic tenant, device and user names render without fonts on the host. Other
 scripts (e.g. CJK, emoji) print as placeholders rather than failing the report; add a Noto font
-to `src/SecurePulse.Reporting/Fonts` and to `ReportFonts.Families` if you need them.
+to `src/Hasinix.Reporting/Fonts` and to `ReportFonts.Families` if you need them.
 
 ## How scoring works
 
@@ -817,7 +817,7 @@ checks are excluded. Any open **Critical** caps the grade at C.
 
 | Area | State |
 |---|---|
-| Core models, scoring, Maester parser | Built; covered by `SecurePulse.Tests` |
+| Core models, scoring, Maester parser | Built; covered by `Hasinix.Tests` |
 | Maester engine runner | Built; tested with a stand-in `pwsh`; needs a real tenant + certificate to exercise |
 | Portal (Overview, Findings, Tenants) | Built; sample data or PostgreSQL |
 | Endpoints (Intune device inventory, device detail) | Built |
@@ -825,7 +825,7 @@ checks are excluded. Any open **Critical** caps the grade at C.
 | Remediation playbooks (device-state triggers proposing Sync / Restart / Defender scan or signature update, four-eyes approval; optional 90-day pre-approval by a second Owner for Sync and Defender actions, with a daily cap) | Built; tested with stubbed Graph and against PostgreSQL 16; needs the remediation app and a real tenant to exercise |
 | Configuration fixes for failed checks (report-only Conditional Access from a reviewed catalog, separate configuration app, another Owner approves each) | Built; tested with stubbed Graph and against PostgreSQL 16; needs the configuration app, a P1 tenant and real scans to exercise |
 | Device remote actions (remediation consent, approval queue, Worker sending via Graph) | Built; tested with stubbed Graph and against PostgreSQL 16; needs the remediation app registration and a real tenant to exercise |
-| PostgreSQL persistence (`SecurePulse.Data`) | Built; tested against PostgreSQL 16 |
+| PostgreSQL persistence (`Hasinix.Data`) | Built; tested against PostgreSQL 16 |
 | Shared data-protection key ring (PostgreSQL, certificate-encrypted) | Built; tested against PostgreSQL 16 and with two portal instances |
 | Worker: Intune device sync | Built and tested against stubbed Graph; needs a real tenant + certificate to exercise |
 | Tenant onboarding (admin consent, verification, first sync) | Built; tested with stubbed Entra; needs the app registration to exercise |
@@ -848,7 +848,7 @@ checks are excluded. Any open **Critical** caps the grade at C.
 - Request **read-only** Graph permissions for assessment; remediation is a separate app with one
   write permission, its own certificate and its own consent, and every action needs a second
   person's approval.
-- Portal access comes from SecurePulse's own user table, never from token role claims.
+- Portal access comes from Hasinix's own user table, never from token role claims.
 - Security events are kept in an append-only audit table the app can't modify. Only a separate
   maintenance role can remove events, and only ones past the configured retention period (at least 90 days)
   that the Sentinel export, if set up, has already sent.

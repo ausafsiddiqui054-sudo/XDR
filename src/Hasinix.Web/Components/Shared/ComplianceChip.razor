@@ -1,0 +1,5 @@
+<MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@HasinixTheme.ColorOf(State)">@HasinixTheme.Label(State)</MudChip>
+
+@code {
+    [Parameter, EditorRequired] public DeviceComplianceState State { get; set; }
+}

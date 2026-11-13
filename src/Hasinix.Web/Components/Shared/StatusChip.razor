@@ -1,0 +1,5 @@
+<MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@HasinixTheme.ColorOf(Status)">@HasinixTheme.Label(Status)</MudChip>
+
+@code {
+    [Parameter, EditorRequired] public FindingStatus Status { get; set; }
+}

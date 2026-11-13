@@ -1,4 +1,4 @@
-# CLAUDE.md — SecurePulse
+# CLAUDE.md — Hasinix
 
 Context for Claude Code working in this repository.
 
@@ -8,21 +8,21 @@ GCC healthcare (UAE IA, DoH ADHICS mappings). Engines: Maester, ScubaGear (Phase
 Wazuh, GoPhish, n8n-style remediation (later phases). Read README.md for layout and status.
 
 ## Stack
-- .NET 10, C#, `SecurePulse.slnx`
+- .NET 10, C#, `Hasinix.slnx`
 - Blazor Server (interactive server render mode, set globally on `<Routes>` in App.razor)
-- MudBlazor 8 with the theme in `src/SecurePulse.Web/Theme/SecurePulseTheme.cs`
+- MudBlazor 8 with the theme in `src/Hasinix.Web/Theme/HasinixTheme.cs`
   (Material 3 Expressive look: navy-and-orange palette taken from the falcon logo, tonal surfaces, 12–28px radii and pill buttons,
   Google Sans Flex served from `wwwroot/fonts`: no font or other third-party requests from pages).
   Shared styles and tokens (`--sp-shape-*`, `--sp-hero-*`, `--sp-text-min`: no text under 11px) are in `wwwroot/app.css`.
   Page titles use `Class="sp-page-title"`; loading states use `<ExpressiveLoading />`
 - PowerShell 7 engines launched out of process from .NET
-- PostgreSQL via EF Core (`SecurePulse.Data`); repositories use `IDbContextFactory`
-- `SecurePulse.Worker` (generic host) runs background jobs; the portal never calls Graph
+- PostgreSQL via EF Core (`Hasinix.Data`); repositories use `IDbContextFactory`
+- `Hasinix.Worker` (generic host) runs background jobs; the portal never calls Graph
 
 ## Architecture rules
 1. Every engine implements `IScanEngine` and returns normalized `Finding`s. Never let
-   engine-specific shapes leak past `SecurePulse.Engines`. Likewise Graph shapes stay inside
-   `SecurePulse.Intune`, which returns normalized `ManagedDevice`s via `IDeviceInventorySource`.
+   engine-specific shapes leak past `Hasinix.Engines`. Likewise Graph shapes stay inside
+   `Hasinix.Intune`, which returns normalized `ManagedDevice`s via `IDeviceInventorySource`.
 2. PowerShell engines run out of process. Pass arguments with `ProcessStartInfo.ArgumentList`,
    never string concatenation. API engines (Wazuh, GoPhish) make bounded, read-only HTTP calls from the Worker.
    Validate tenant inputs (GUIDs, thumbprints, group names) before use.
@@ -31,20 +31,34 @@ Wazuh, GoPhish, n8n-style remediation (later phases). Read README.md for layout 
 4. Scoring lives only in `RiskScoreCalculator`. UI never re-implements scoring.
 5. Assessment uses read-only Graph permissions; any write/remediation action needs
    separate consent, an explicit approval step and an audit log entry.
-6. `SecurePulse.Core` has no external package dependencies.
+6. `Hasinix.Core` has no external package dependencies.
 
 ## Naming collision
 MudBlazor has its own `Severity` (snackbars). In Razor, `_Imports.razor` aliases
-`Severity` to `SecurePulse.Core.Models.Severity`; use `MudBlazor.Severity` explicitly for
+`Severity` to `Hasinix.Core.Models.Severity`; use `MudBlazor.Severity` explicitly for
 snackbars. Do the same alias in any .cs file that imports both namespaces.
+
+## Names kept from before the rename
+The product was renamed from SecurePulse to Hasinix (solution, projects, namespaces, config keys).
+These identifiers keep the old name on purpose, because they are tied to stored or external state.
+Don't rename them without that decision:
+- `KeyRing.ApplicationName` and the `SecurePulse.Auth` cookie: changing either signs everyone out and
+  invalidates stored consent state. Likewise the `SecurePulse.Onboarding.ConsentState.v1` protector purpose.
+- `PortalClaims.Issuer` / `AuthenticationType` ("SecurePulse").
+- Sentinel export: stream `Custom-SecurePulseAudit`, column `SecurePulseTenantId`, `Source` value. A client's
+  data collection rule and table are built to these names.
+- `ConfigurationFixes` policy prefix `SecurePulse - `: policies are found again by name, so a new prefix
+  would create duplicates in tenants that already have them.
+- Lowercase and uppercase forms: PostgreSQL roles (`securepulse_audit_purge`, `securepulse_maintenance`),
+  the `SECUREPULSE_TEST_*` environment variables, `UserSecretsId`s and the `@securepulse.dev` dev personas.
 
 ## Commands
 ```bash
-dotnet build SecurePulse.slnx
-dotnet run --project src/SecurePulse.Web
-dotnet run --project src/SecurePulse.Worker   # needs ConnectionStrings:SecurePulse
-dotnet test SecurePulse.slnx                  # set SECUREPULSE_TEST_POSTGRES for DB tests
-dotnet tool restore && dotnet ef migrations add <Name> --project src/SecurePulse.Data
+dotnet build Hasinix.slnx
+dotnet run --project src/Hasinix.Web
+dotnet run --project src/Hasinix.Worker   # needs ConnectionStrings:Hasinix
+dotnet test Hasinix.slnx                  # set SECUREPULSE_TEST_POSTGRES for DB tests
+dotnet tool restore && dotnet ef migrations add <Name> --project src/Hasinix.Data
 ```
 
 Never edit an applied migration; add a new one. Enums are stored as strings.
@@ -57,7 +71,7 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
   of `state` is stored for lookup. The portal holds no Graph certificate and never calls Graph.
 
 ## Sign-in invariants
-- Authorization reads only claims SecurePulse issues (`PortalClaims`, issuer "SecurePulse"),
+- Authorization reads only claims Hasinix issues (`PortalClaims`, issuer "SecurePulse"),
   added per request from `portal_users`. Never use `IsInRole` or token `roles` claims.
 - Tenant scoping lives in the services (`IUserContextAccessor` + `UserContext.CanSee`); a new
   page or service that reads tenant data must filter through it. Return not-found, not forbidden.
@@ -115,10 +129,10 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
   A scan with no agents, no SCA results or any unreadable agent fails (stored findings stay).
 
 ## GoPhish invariants
-- Import only: SecurePulse never creates, launches or changes campaigns and never sends email. Its GoPhish
+- Import only: Hasinix never creates, launches or changes campaigns and never sends email. Its GoPhish
   client goes through `ReadOnlyHttpHandler` (GET/HEAD only); keep it there, since GoPhish keys can write.
 - Aggregates only: read `/api/campaigns/summary`, never `/api/campaigns/{id}/results` or anything that names
-  recipients. People's names, addresses and IPs never enter SecurePulse.
+  recipients. People's names, addresses and IPs never enter Hasinix.
 - A tenant's campaigns come from its own GoPhish user. The key's secret name is derived
   (`GoPhishSecrets.ApiKeySecretName`); don't make it configurable per tenant. The tenant opt-in
   (`Tenant.GoPhishEnabled`) is Owner-only and audited `onboarding.gophish-changed`.
@@ -181,7 +195,7 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
 - `DemoSimulator` stands in for the Worker only with sample data (no connection string), so a demo runs end to end. It changes
   only the in-memory `SampleDataStore`: never call Graph, an engine or any network from it, and keep its audit entries marked
   simulated (actor `DemoSimulator.Actor`, summaries "Simulated: ..."). Proposals go through the shared runners in
-  `SecurePulse.Playbooks` (also used by the Worker); don't copy their logic into the portal.
+  `Hasinix.Playbooks` (also used by the Worker); don't copy their logic into the portal.
 - `SampleDataStore(fullDemo: true)` is the portal's demo set (Wazuh/GoPhish findings, scan history, sample certificate
   references, a configuration tenant). Tests use the plain set. `Snapshot()` (the development database seed) strips the
   sample references so a real Worker never tries to use them.
@@ -210,6 +224,6 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
 
 ## Next steps (in order)
 1. Every engine from "What this is" is built. Open decisions: more catalog fixes (each a reviewed policy, and anything beyond
-   Conditional Access needs new configuration-app permissions and re-consent) and whether SecurePulse may ever enforce a policy.
-2. Launching GoPhish campaigns from SecurePulse is deliberately not built: it sends email to people, so it
+   Conditional Access needs new configuration-app permissions and re-consent) and whether Hasinix may ever enforce a policy.
+2. Launching GoPhish campaigns from Hasinix is deliberately not built: it sends email to people, so it
    needs its own approval and consent decision first. The GoPhish engine only imports results.

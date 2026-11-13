@@ -1,0 +1,9 @@
+@inherits LayoutComponentBase
+@* For pages client admins reach from outside the portal (e.g. after consent): no navigation. *@
+
+<MudThemeProvider Theme="HasinixTheme.Theme" />
+
+<div class="sp-public">
+    <a href="/" class="sp-public-brand mb-8" aria-label="Hasinix overview"><BrandLogo /></a>
+    @Body
+</div>

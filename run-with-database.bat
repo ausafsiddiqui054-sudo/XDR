@@ -1,12 +1,12 @@
 @echo off
 setlocal
 rem ---------------------------------------------------------------------------
-rem  SecurePulse - start the portal on its PostgreSQL database.
+rem  Hasinix - start the portal on its PostgreSQL database.
 rem  Run setup-database.bat once first. The first start creates the tables and
 rem  loads the sample tenants (Development only). Data is kept between starts.
 rem
 rem  There is no simulated Worker in this mode: queued scans and approved actions
-rem  wait for a real Worker (dotnet run --project src\SecurePulse.Worker).
+rem  wait for a real Worker (dotnet run --project src\Hasinix.Worker).
 rem  For the self-contained demo use run-demo.bat.
 rem
 rem  Usage:  run-with-database.bat              build, start, open the browser
@@ -27,7 +27,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-dotnet user-secrets list --project src\SecurePulse.Web 2>nul | findstr /b /c:"ConnectionStrings:SecurePulse" >nul
+dotnet user-secrets list --project src\Hasinix.Web 2>nul | findstr /b /c:"ConnectionStrings:Hasinix" >nul
 if errorlevel 1 (
     echo No database is set up yet. Run setup-database.bat first.
     pause
@@ -44,8 +44,8 @@ if not errorlevel 1 (
 set "ASPNETCORE_ENVIRONMENT=Development"
 set "ASPNETCORE_URLS=%URL%"
 
-echo Building SecurePulse...
-dotnet build src\SecurePulse.Web --nologo -v q
+echo Building Hasinix...
+dotnet build src\Hasinix.Web --nologo -v q
 if errorlevel 1 (
     echo.
     echo Build failed - see the errors above.
@@ -59,6 +59,6 @@ if "%OPEN_BROWSER%"=="1" (
 )
 
 echo.
-echo Starting SecurePulse on PostgreSQL at %URL%  (Ctrl+C to stop)
+echo Starting Hasinix on PostgreSQL at %URL%  (Ctrl+C to stop)
 echo.
-dotnet run --project src\SecurePulse.Web --no-build --no-launch-profile
+dotnet run --project src\Hasinix.Web --no-build --no-launch-profile

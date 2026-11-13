@@ -1,0 +1,222 @@
+@page "/"
+@inject PostureService Posture
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IUserContextAccessor Current
+@inject ScanRequestService Scans
+@inject Hasinix.Web.Services.Onboarding.PortalMode Mode
+
+<PageTitle>Overview · Hasinix</PageTitle>
+
+<div class="sp-dashboard">
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="sp-overview-header mb-6" Wrap="Wrap.Wrap">
+    <div>
+        <div class="sp-eyebrow">YOUR SECURITY, AT A GLANCE</div>
+        <MudText Typo="Typo.h4" Class="sp-page-title">Security overview</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            @(_isViewer && _portfolio?.Tenants.FirstOrDefault() is { } own ? $"{own.Tenant.DisplayName} · Microsoft 365" : "Across all connected Microsoft 365 tenants")
+        </MudText>
+    </div>
+    <AuthorizeView Policy="@Policies.Operator">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="sp-graphic-button"
+                   OnClick="RunScan" Disabled="_queueing"><img class="sp-button-art" src="brand/hasinix-scan.svg" width="36" height="36" alt="" aria-hidden="true" /><span>@(_queueing ? "Queueing scans…" : "Run security scan")</span></MudButton>
+    </AuthorizeView>
+    @if (_isViewer && _portfolio?.Scanned.FirstOrDefault() is { } mine)
+    {
+        <ReportButton TenantId="mine.Tenant.Id" Variant="Variant.Filled" />
+    }
+</MudStack>
+
+@if (_portfolio is null)
+{
+    <ExpressiveLoading Label="Loading security posture…" />
+}
+else
+{
+    @if (!Mode.UsesDatabase)
+    {
+        <div class="sp-demo-notice"><MudIcon Icon="@Icons.Material.Rounded.Info" Size="Size.Small" /><span>Demo workspace <span class="sp-muted">· Sample data@((Mode.Simulated) ? " with simulated scan results" : "")</span></span></div>
+    }
+    <div class="sp-section-heading"><h2>Posture snapshot</h2><span>@_portfolio.Scanned.Count() of @_portfolio.Tenants.Count tenants assessed</span></div>
+    <MudGrid Spacing="4">
+        <MudItem xs="12" md="4">
+            <MudPaper Class="sp-card sp-posture-card pa-6" Elevation="0" Outlined="true">
+                <div class="sp-card-heading"><MudText Typo="Typo.subtitle1">@(_isViewer ? "Security score" : "Portfolio score")</MudText><MudIcon Icon="@Icons.Material.Rounded.Shield" Color="Color.Primary" Size="Size.Small" /></div>
+                @if (_portfolio.Scanned.Any())
+                {
+                    <ScoreRing Score="_portfolio.AverageScore" Grade="@_portfolio.AverageGrade" />
+                }
+                else
+                {
+                    <div class="sp-no-score">—<small>No assessments yet</small></div>
+                }
+                <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary mt-4">
+                    @(_isViewer ? "Updated after each scan" : $"Average of {_portfolio.Scanned.Count()} scanned tenants")
+                </MudText>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="8">
+            <MudGrid Spacing="4">
+                <MudItem xs="6" sm="6">
+                    <Kpi Label="Critical findings" Value="@_portfolio.OpenOf(Severity.Critical)" Icon="@Icons.Material.Rounded.ErrorOutline" Color="Color.Error" Detail="Prioritize these findings" />
+                </MudItem>
+                <MudItem xs="6" sm="6">
+                    <Kpi Label="High-risk findings" Value="@_portfolio.OpenOf(Severity.High)" Icon="@Icons.Material.Rounded.WarningAmber" Color="Color.Warning" Detail="Review and plan remediation" />
+                </MudItem>
+                <MudItem xs="6" sm="6">
+                    <Kpi Label="Checks passing" Value="@_portfolio.PassRatePercent" Suffix="%" Icon="@Icons.Material.Rounded.CheckCircleOutline" Color="Color.Success" Detail="Across evaluated checks" />
+                </MudItem>
+                <MudItem xs="6" sm="6">
+                    @{ var notConnected = _portfolio.Tenants.Count - _portfolio.ConnectedCount; }
+                    <Kpi Label="Tenants connected" Value="@_portfolio.ConnectedCount" Icon="@Icons.Material.Rounded.Apartment" Color="Color.Primary"
+                         Detail="@(notConnected > 0 ? $"{notConnected} of {_portfolio.Tenants.Count} not connected" : "All tenants connected")" />
+                </MudItem>
+            </MudGrid>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudPaper Class="sp-card sp-exposure-card pa-5" Elevation="0" Outlined="true">
+                <div class="sp-exposure-heading"><div><h2>Open findings by severity</h2><p>Failed checks across assessed tenants</p></div><MudButton Href="findings" Color="Color.Primary" EndIcon="@Icons.Material.Rounded.ArrowForward" Size="Size.Small">Explore findings</MudButton></div>
+                <div class="sp-severity-grid">
+                    @foreach (var severity in new[] { Severity.Critical, Severity.High, Severity.Medium, Severity.Low })
+                    {
+                        var count = _portfolio.OpenOf(severity);
+                        <div class="sp-severity-metric">
+                            <div><span><i class="sp-severity-dot sp-severity-@severity.ToString().ToLowerInvariant()"></i>@severity</span><strong>@count</strong></div>
+                            <MudProgressLinear Value="@(OpenTotal == 0 ? 0 : 100.0 * count / OpenTotal)" Color="@HasinixTheme.ColorOf(severity)" Rounded="true" Size="Size.Small" aria-label="@($"{severity}: {count} open findings")" />
+                        </div>
+                    }
+                </div>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" lg="7">
+            <MudPaper Class="sp-card pa-4" Elevation="0" Outlined="true">
+                <div class="sp-panel-heading"><div><h2>Tenant overview</h2><p>Security posture across your workspace</p></div><MudButton Href="tenants" Color="Color.Primary" Size="Size.Small" EndIcon="@Icons.Material.Rounded.ArrowForward">View all</MudButton></div>
+                <MudTextField T="string" @bind-Value="_tenantSearch" Immediate="true" Placeholder="Search tenants…" aria-label="Search tenants" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Variant="Variant.Outlined" Margin="Margin.Dense" Class="sp-tenant-search mx-2 mb-3" Clearable="true" />
+                <MudTable Items="VisibleTenants" T="TenantPosture" Hover="true" Elevation="0" Breakpoint="Breakpoint.Sm"
+                          RowClass="sp-clickable-row" OnRowClick="@(e => OpenTenant(e.Item!))">
+                    <HeaderContent>
+                        <MudTh>Tenant</MudTh>
+                        <MudTh>Score</MudTh>
+                        <MudTh>Critical</MudTh>
+                        <MudTh>Last scan</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Tenant">
+                            <div class="sp-tenant-identity"><span class="sp-tenant-avatar">@Initial(context.Tenant.DisplayName)</span><div><MudLink Href="@($"findings?tenant={context.Tenant.Id}")" Class="sp-tenant-name">@context.Tenant.DisplayName</MudLink><MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@(context.Tenant.PartnerName ?? "Direct client")</MudText></div></div>
+                        </MudTd>
+                        <MudTd DataLabel="Score">
+                            @if (context.Score is { } s)
+                            {
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudProgressLinear Value="@s.Score" Color="@HasinixTheme.ColorOfScore(s.Score)" Rounded="true" Size="Size.Small" Style="width:64px" />
+                                    <MudText Typo="Typo.body2"><b>@s.Score</b> · @s.Grade</MudText>
+                                </MudStack>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Awaiting consent</MudChip>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Critical">
+                            @{ var crit = context.Score?.FailedBySeverity[Severity.Critical] ?? 0; }
+                            <MudText Typo="Typo.body2" Color="@(crit > 0 ? Color.Error : Color.Default)">@crit</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Last scan">
+                            <MudText Typo="Typo.body2">@Ago(context.Tenant.LastScanAt)</MudText>
+                        </MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent><MudText Typo="Typo.body2" Class="pa-6 mud-text-secondary">@(string.IsNullOrWhiteSpace(_tenantSearch) ? "No tenants yet. Connect a tenant to see its security posture." : "No tenants match your search.")</MudText></NoRecordsContent>
+                </MudTable>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" lg="5">
+            <MudPaper Class="sp-card pa-4" Elevation="0" Outlined="true">
+                @{ var topRisks = _portfolio.TopRisks(5); }
+                <div class="sp-panel-heading"><div><h2>Priority actions</h2><p>Your highest-priority checks to review</p></div><span class="sp-priority-badge">@topRisks.Count to review</span></div>
+                <MudStack Spacing="1">
+                    @foreach (var (tenant, finding) in topRisks)
+                    {
+                        <a class="sp-risk-link" href="@($"findings?tenant={tenant.Tenant.Id}")">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                <div style="min-width:0">
+                                    <MudText Typo="Typo.body2" Style="font-weight:600">@finding.Title</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@tenant.Tenant.DisplayName · @finding.Category</MudText>
+                                </div>
+                                <SeverityChip Severity="finding.Severity" />
+                            </MudStack>
+                        </a>
+                    }
+                    @if (topRisks.Count == 0)
+                    {
+                        <div class="sp-empty-state"><MudIcon Icon="@Icons.Material.Rounded.CheckCircleOutline" Color="Color.Success" /><p>@(_portfolio.Scanned.Any() ? "No priority findings to review." : "Run your first assessment to see priority findings.")</p></div>
+                    }
+                </MudStack>
+                <MudButton Href="findings" FullWidth="true" Color="Color.Primary" Class="mt-3" EndIcon="@Icons.Material.Rounded.ArrowForward">View all findings</MudButton>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+</div>
+
+@code {
+    private PortfolioPosture? _portfolio;
+    private string? _tenantSearch;
+    private IEnumerable<TenantPosture> VisibleTenants => _portfolio?.Tenants.Where(t =>
+        string.IsNullOrWhiteSpace(_tenantSearch) || t.Tenant.DisplayName.Contains(_tenantSearch, StringComparison.OrdinalIgnoreCase)
+        || (t.Tenant.PartnerName?.Contains(_tenantSearch, StringComparison.OrdinalIgnoreCase) ?? false)) ?? Enumerable.Empty<TenantPosture>();
+    private int OpenTotal => new[] { Severity.Critical, Severity.High, Severity.Medium, Severity.Low }.Sum(s => _portfolio?.OpenOf(s) ?? 0);
+
+    /// <summary>First letter for the tenant avatar; a blank name must not break the page.</summary>
+    private static string Initial(string? name) => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[..1].ToUpperInvariant();
+
+    private bool _isViewer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isViewer = (await Current.GetAsync()).Role == PortalRole.ClientViewer;
+        _portfolio = await Posture.GetPortfolioAsync();
+    }
+
+    private void OpenTenant(TenantPosture t) => Nav.NavigateTo($"findings?tenant={t.Tenant.Id}");
+
+    private bool _queueing;
+
+    private async Task RunScan()
+    {
+        if (_queueing) return;
+        _queueing = true;
+        try
+        {
+            var ready = _portfolio?.Tenants.Count(t => ScanRequestService.IsOnboarded(t.Tenant)) ?? 0;
+            var queued = await Scans.RequestAllAsync();
+            var (message, severity) = (queued, ready) switch
+            {
+                (_, 0) => ("No tenants are ready to scan yet: each needs consent and a certificate.", MudBlazor.Severity.Warning),
+                (0, _) => ("Scans are already queued or running for every tenant.", MudBlazor.Severity.Info),
+                _ => ($"Queued {queued} scan{(queued == 1 ? "" : "s")}. Results appear as each one finishes.", MudBlazor.Severity.Success)
+            };
+            if (queued > 0 && !Mode.UsesDatabase)
+                message += Mode.Simulated ? " (Sample data: simulated, so they finish in a few seconds.)" : " (Sample data mode: no Worker runs them.)";
+            Snackbar.Add(message, severity);
+        }
+        finally
+        {
+            _queueing = false;
+        }
+    }
+
+    internal static string Ago(DateTimeOffset? when)
+    {
+        if (when is null) return "Never";
+        var span = DateTimeOffset.UtcNow - when.Value;
+        return span.TotalMinutes < 1 ? "Just now"
+            : span.TotalHours < 1 ? $"{(int)span.TotalMinutes}m ago"
+            : span.TotalHours < 24 ? $"{(int)span.TotalHours}h ago"
+            : $"{(int)span.TotalDays}d ago";
+    }
+}

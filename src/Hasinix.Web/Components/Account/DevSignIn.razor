@@ -1,0 +1,90 @@
+@page "/dev/sign-in"
+@page "/sign-in"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@layout SignInLayout
+@using Hasinix.Core.Abstractions
+@inject SignInMode Mode
+@inject ITenantRepository Tenants
+@inject Hasinix.Web.Services.Onboarding.PortalMode Portal
+
+<PageTitle>Sign in · Hasinix</PageTitle>
+
+<section class="sp-auth-panel" aria-labelledby="sign-in-heading">
+    <span class="sp-auth-panel-icon"><MudIcon Icon="@Icons.Material.Rounded.Login" /></span>
+    <div class="sp-auth-panel-eyebrow">WELCOME TO HASINIX</div>
+    <h2 id="sign-in-heading">Your workspace awaits.</h2>
+    <p class="sp-auth-description">A clearer view of your security starts here.</p>
+    @if (Mode.UsesEntra)
+    {
+        <p class="sp-auth-signin-copy">Use your organization's Microsoft account to access your workspace.</p>
+        <a class="sp-auth-primary" href="@($"authentication/login?returnUrl={Uri.EscapeDataString(AuthEndpoints.LocalOrRoot(ReturnUrl))}")">
+            <span class="sp-microsoft-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Continue with Microsoft<MudIcon Icon="@Icons.Material.Rounded.ArrowForward" Size="Size.Small" />
+        </a>
+        <div class="sp-auth-trust"><MudIcon Icon="@Icons.Material.Rounded.Lock" Size="Size.Small" /><span>Sign-in is handled by Microsoft Entra ID.</span></div>
+        <p class="sp-auth-help">Need access? Ask your workspace administrator for an invitation.</p>
+    }
+    else
+    {
+        <div class="sp-auth-demo-label"><span></span>DEMO WORKSPACE</div>
+        <p class="sp-auth-signin-copy">Explore Hasinix with sample data. Choose a role to see the workspace from their perspective.</p>
+        @if (Stale)
+        {
+            <MudAlert Severity="MudBlazor.Severity.Info" Variant="Variant.Outlined" Class="mb-6" Style="border-radius:16px" data-testid="stale-sign-in">
+                That sign-in page was out of date: this browser signed in or out in another tab or window after it opened.
+                Nobody was signed in. Pick who to be again.
+            </MudAlert>
+        }
+        <form method="post" action="authentication/dev-login">
+            <AntiforgeryToken />
+            <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+            <button type="submit" name="persona" value="owner" class="sp-auth-primary"><img class="sp-button-art" src="brand/hasinix-access.svg" width="36" height="36" alt="" aria-hidden="true" /><span>Continue as Owner</span><MudIcon Icon="@Icons.Material.Rounded.ArrowForward" Size="Size.Small" /></button>
+            <div class="sp-auth-owner-note">Full workspace access · Manage tenants and review actions</div>
+            <details class="sp-auth-roles">
+                <summary>Try another role<MudIcon Icon="@Icons.Material.Rounded.ExpandMore" Size="Size.Small" /></summary>
+                <MudStack Spacing="2" Class="pt-3">
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
+                           name="persona" value="second-owner" StartIcon="@Icons.Material.Rounded.AdminPanelSettings">Second Owner</MudButton>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
+                           name="persona" value="msp-admin" StartIcon="@Icons.Material.Rounded.SupportAgent">MSP admin</MudButton>
+                @foreach (var tenant in _tenants)
+                {
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Outlined" Color="Color.Secondary" FullWidth="true"
+                               name="persona" value="@($"viewer:{tenant.Id}")" StartIcon="@Icons.Material.Rounded.Visibility">
+                        Client viewer · @tenant.DisplayName
+                    </MudButton>
+                }
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Text" FullWidth="true"
+                           name="persona" value="unassigned" StartIcon="@Icons.Material.Rounded.PersonOff">Someone without access</MudButton>
+                </MudStack>
+            </details>
+        </form>
+        <div class="sp-auth-trust"><MudIcon Icon="@Icons.Material.Rounded.Science" Size="Size.Small" /><span>Sample environment. No live Microsoft actions.</span></div>
+        <details class="sp-auth-demo-details"><summary>About this demo</summary>
+            <p>Development sign-in is enabled because Microsoft Entra ID isn't configured. Each role follows the same access checks as a real sign-in.</p>
+            @if (Portal.Simulated)
+            {
+                <p data-testid="demo-simulated">A simulated Worker finishes scans and approved actions. Nothing is sent to Microsoft. Use a private window to try a second person; browser windows share one sign-in.</p>
+            }
+        </details>
+    }
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    /// <summary>Set by the sign-in endpoint when a submitted page's antiforgery token was no longer valid.</summary>
+    [SupplyParameterFromQuery(Name = "stale")]
+    public bool Stale { get; set; }
+
+    private IReadOnlyList<Tenant> _tenants = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Mode.UsesEntra) return;
+        _tenants = (await Tenants.GetAllAsync())
+            .Where(t => t.ConsentState is TenantConsentState.ReadOnlyGranted or TenantConsentState.RemediationGranted)
+            .OrderBy(t => t.DisplayName).ToList();
+    }
+}

@@ -82,11 +82,11 @@ finally {
 
 $connection = "Host=$Server;Port=$Port;Database=$Database;Username=$AppRole;Password=$appPassword"
 # Secrets are piped in as JSON, so the password never appears on a command line.
-$webSecrets = @{ 'ConnectionStrings:SecurePulse' = $connection; 'Auth:BootstrapOwners:0' = $DefaultAdmin } | ConvertTo-Json -Compress
-$workerSecrets = @{ 'ConnectionStrings:SecurePulse' = $connection } | ConvertTo-Json -Compress
-$webSecrets | & dotnet user-secrets set --project (Join-Path $repo 'src\SecurePulse.Web') | Out-Null
+$webSecrets = @{ 'ConnectionStrings:Hasinix' = $connection; 'Auth:BootstrapOwners:0' = $DefaultAdmin } | ConvertTo-Json -Compress
+$workerSecrets = @{ 'ConnectionStrings:Hasinix' = $connection } | ConvertTo-Json -Compress
+$webSecrets | & dotnet user-secrets set --project (Join-Path $repo 'src\Hasinix.Web') | Out-Null
 if ($LASTEXITCODE -ne 0) { Fail 'Could not save the portal''s user-secrets.' }
-$workerSecrets | & dotnet user-secrets set --project (Join-Path $repo 'src\SecurePulse.Worker') | Out-Null
+$workerSecrets | & dotnet user-secrets set --project (Join-Path $repo 'src\Hasinix.Worker') | Out-Null
 if ($LASTEXITCODE -ne 0) { Fail 'Could not save the Worker''s user-secrets.' }
 
 Write-Host ''

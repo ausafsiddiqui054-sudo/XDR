@@ -1,0 +1,6 @@
+<MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@HasinixTheme.ColorOf(State)"
+         Icon="@HasinixTheme.IconOf(State)">Defender: @HasinixTheme.Label(State)</MudChip>
+
+@code {
+    [Parameter, EditorRequired] public DefenderState State { get; set; }
+}

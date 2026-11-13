@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Hasinix.Core/Hasinix.Core.csproj" />
+    <Project Path="src/Hasinix.Data/Hasinix.Data.csproj" />
+    <Project Path="src/Hasinix.Engines/Hasinix.Engines.csproj" />
+    <Project Path="src/Hasinix.Intune/Hasinix.Intune.csproj" />
+    <Project Path="src/Hasinix.Playbooks/Hasinix.Playbooks.csproj" />
+    <Project Path="src/Hasinix.Reporting/Hasinix.Reporting.csproj" />
+    <Project Path="src/Hasinix.Web/Hasinix.Web.csproj" />
+    <Project Path="src/Hasinix.Worker/Hasinix.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Hasinix.Tests/Hasinix.Tests.csproj" />
+  </Folder>
+</Solution>
