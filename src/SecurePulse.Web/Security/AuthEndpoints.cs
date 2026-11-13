@@ -20,10 +20,13 @@ public static class AuthEndpoints
                 : Results.LocalRedirect($"~/dev/sign-in?returnUrl={Uri.EscapeDataString(LocalOrRoot(returnUrl))}"))
             .AllowAnonymous();
 
-        // POST with an antiforgery token, so another site can't sign people out.
+        // POST with an antiforgery token, so another site can't sign people out. Without a valid token nobody is
+        // signed out. The usual cause is a stale page (this browser signed in as someone else in another tab), so go
+        // home, where the sign-out button has a current token; a bare 400 would be re-executed into the Blazor
+        // not-found page and show as "A valid antiforgery token was not provided".
         auth.MapPost("/logout", async (HttpContext http, IAntiforgery antiforgery) =>
         {
-            if (!await antiforgery.IsRequestValidAsync(http)) return Results.BadRequest();
+            if (!await antiforgery.IsRequestValidAsync(http)) return Results.LocalRedirect("~/");
             var actor = UserContext.From(http.User);
             await http.RequestServices.GetRequiredService<Services.AuditTrail>().RecordAsync(AuditActions.SignOut, AuditOutcome.Success,
                 $"{actor.Name} signed out", actor.ClientTenantId, actor: actor, ipAddress: http.Connection.RemoteIpAddress?.ToString());
@@ -44,7 +47,14 @@ public static class AuthEndpoints
     private static async Task<IResult> DevSignInAsync(HttpContext http, IAntiforgery antiforgery, IPortalUserRepository users,
         ITenantRepository tenants, AuthOptions options)
     {
-        if (!await antiforgery.IsRequestValidAsync(http)) return Results.BadRequest();
+        if (!await antiforgery.IsRequestValidAsync(http))
+        {
+            // Nobody is signed in. Usually a stale sign-in page: this browser signed in or out in another tab or
+            // window since it loaded, so its token belongs to someone else. Show a fresh page that says so (a bare
+            // 400 would be re-executed into the Blazor not-found page as a confusing antiforgery error).
+            var stale = http.Request.HasFormContentType ? (await http.Request.ReadFormAsync())["returnUrl"].ToString() : null;
+            return Results.LocalRedirect($"~/dev/sign-in?stale=true&returnUrl={Uri.EscapeDataString(LocalOrRoot(stale))}");
+        }
         var form = await http.Request.ReadFormAsync();
         var persona = form["persona"].ToString();
         var returnUrl = LocalOrRoot(form["returnUrl"]);

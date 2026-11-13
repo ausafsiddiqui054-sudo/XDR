@@ -29,6 +29,8 @@ public sealed partial class PortalAuthEndpointTests : IClassFixture<PortalAuthEn
 
     public PortalAuthEndpointTests(PortalFactory factory) => _factory = factory;
 
+    private const string AuthCookie = "SecurePulse.Auth=";
+
     private HttpClient Client() => _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
 
     private async Task<IReadOnlyList<Tenant>> ConnectedTenantsAsync() =>
@@ -100,10 +102,41 @@ public sealed partial class PortalAuthEndpointTests : IClassFixture<PortalAuthEn
     [Fact]
     public async Task SignInNeedsAnAntiforgeryToken()
     {
-        var response = await Client().PostAsync("/authentication/dev-login",
-            new FormUrlEncodedContent(new Dictionary<string, string> { ["persona"] = "owner" }));
+        var client = Client();
+        var response = await client.PostAsync("/authentication/dev-login",
+            new FormUrlEncodedContent(new Dictionary<string, string> { ["persona"] = "owner", ["returnUrl"] = "/findings" }));
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        // Nobody is signed in: back to a fresh sign-in page that says why.
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/dev/sign-in?stale=true&returnUrl=%2Ffindings", response.Headers.Location!.ToString());
+        Assert.Contains("/dev/sign-in", (await client.GetAsync("/")).Headers.Location!.ToString());
+        Assert.Contains("stale-sign-in", await client.GetStringAsync(response.Headers.Location));
+    }
+
+    [Fact]
+    public async Task AStaleSignInPageSignsNobodyIn()
+    {
+        // The sign-in page loads, then this browser signs in from another tab: the first page's token
+        // belongs to the signed-out visitor, so submitting it must not switch who is signed in.
+        var client = Client();
+        var staleToken = await TokenAsync(client);
+        var signIn = await client.PostAsync("/authentication/dev-login", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["persona"] = "owner", ["returnUrl"] = "/", ["__RequestVerificationToken"] = await TokenAsync(client)
+        }));
+        Assert.Equal(HttpStatusCode.Redirect, signIn.StatusCode);
+        Assert.Contains(signIn.Headers.GetValues("Set-Cookie"), c => c.StartsWith(AuthCookie, StringComparison.Ordinal));
+
+        var stale = await client.PostAsync("/authentication/dev-login", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["persona"] = "msp-admin", ["returnUrl"] = "/", ["__RequestVerificationToken"] = staleToken
+        }));
+
+        Assert.Equal(HttpStatusCode.Redirect, stale.StatusCode);
+        Assert.StartsWith("/dev/sign-in?stale=true", stale.Headers.Location!.ToString());
+        Assert.False(stale.Headers.TryGetValues("Set-Cookie", out var set) && set.Any(c => c.StartsWith(AuthCookie, StringComparison.Ordinal)),
+            "A stale page must not issue a new sign-in cookie");
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/")).StatusCode); // still signed in as the Owner
     }
 
     [Fact]
@@ -111,9 +144,12 @@ public sealed partial class PortalAuthEndpointTests : IClassFixture<PortalAuthEn
     {
         var client = await SignInAsync("owner");
 
-        // Neither a GET (e.g. an <img> on another site) nor a token-less POST signs anyone out.
+        // Neither a GET (e.g. an <img> on another site) nor a token-less POST signs anyone out;
+        // the POST just goes home, where the sign-out button has a current token.
         Assert.False((await client.GetAsync("/authentication/logout")).IsSuccessStatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/authentication/logout", null)).StatusCode);
+        var tokenless = await client.PostAsync("/authentication/logout", null);
+        Assert.Equal(HttpStatusCode.Redirect, tokenless.StatusCode);
+        Assert.Equal("/", tokenless.Headers.Location!.ToString());
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/")).StatusCode);
     }
 

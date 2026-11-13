@@ -21,13 +21,20 @@
         <MudAlert Severity="MudBlazor.Severity.Warning" Variant="Variant.Outlined" Class="mb-6" Style="border-radius:16px">
             Development sign-in: AzureAd:ClientId isn't set, so you pick who to be. This page only exists in Development.
         </MudAlert>
+        @if (Stale)
+        {
+            <MudAlert Severity="MudBlazor.Severity.Info" Variant="Variant.Outlined" Class="mb-6" Style="border-radius:16px" data-testid="stale-sign-in">
+                That sign-in page was out of date: this browser signed in or out in another tab or window after it opened.
+                Nobody was signed in. Pick who to be again.
+            </MudAlert>
+        }
         <MudText Typo="Typo.h5" Class="mb-1">Sign in as</MudText>
         <MudText Typo="Typo.body2" Class="@(Portal.Simulated ? "mud-text-secondary mb-3" : "mud-text-secondary mb-6")">Each persona goes through the same invitation and role checks as a real sign-in.</MudText>
         @if (Portal.Simulated)
         {
             <MudText Typo="Typo.body2" Class="mud-text-secondary mb-6" data-testid="demo-simulated">
                 Sample data: a simulated Worker finishes scans, sends approved actions and applies approved fixes in a few seconds.
-                Nothing is sent to Microsoft. Use two browser windows for two people.
+                Nothing is sent to Microsoft. For two people, use a normal and a private window: windows of the same browser share one sign-in.
             </MudText>
         }
 
@@ -58,6 +65,10 @@
 @code {
     [SupplyParameterFromQuery(Name = "returnUrl")]
     public string? ReturnUrl { get; set; }
+
+    /// <summary>Set by the sign-in endpoint when a submitted page's antiforgery token was no longer valid.</summary>
+    [SupplyParameterFromQuery(Name = "stale")]
+    public bool Stale { get; set; }
 
     private IReadOnlyList<Tenant> _tenants = [];
 
