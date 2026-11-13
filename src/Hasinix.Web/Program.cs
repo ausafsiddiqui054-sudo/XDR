@@ -106,7 +106,7 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-// Development usually runs on http only (run-demo.bat, the http launch profile), where there is no https
+// Development usually runs on http only (hasinix.bat, the http launch profile), where there is no https
 // port to redirect to and the middleware just logs a warning. Everywhere else the redirect stays on.
 if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
