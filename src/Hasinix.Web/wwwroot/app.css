@@ -508,6 +508,7 @@
 .sp-trend-x span:first-child { transform: none; }
 .sp-trend-x span:last-child { transform: translateX(-100%); }
 @media (max-width: 600px) { .sp-trend-x .sp-trend-x-minor { display: none; } }
+.sp-overdue { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; font-weight: 600; white-space: nowrap; }
 .sp-trend-change { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sp-trend-table { max-height: 260px; margin-top: 8px; overflow: auto; border: 1px solid var(--mud-palette-lines-default); border-radius: var(--sp-shape-small); }
 .sp-tenant-search { max-width: 320px; }

@@ -237,6 +237,27 @@ public sealed class ScoreSnapshotEntity
     public int FailedInfo { get; set; }
 }
 
+/// <summary>Owner, due date and risk acceptance for one finding. No link to the findings table: scans replace those rows.</summary>
+public sealed class FindingTrackingEntity
+{
+    public Guid TenantId { get; set; }
+    public string FindingId { get; set; } = "";
+    public string FindingTitle { get; set; } = "";
+    public string? Owner { get; set; }
+    public DateOnly? DueDate { get; set; }
+    public RiskAcceptanceStatus Acceptance { get; set; }
+    public string? AcceptanceReason { get; set; }
+    public DateTimeOffset? AcceptanceExpiresAt { get; set; }
+    public Guid? RequestedByUserId { get; set; }
+    public string? RequestedByName { get; set; }
+    public DateTimeOffset? RequestedAt { get; set; }
+    public Guid? DecidedByUserId { get; set; }
+    public string? DecidedByName { get; set; }
+    public DateTimeOffset? DecidedAt { get; set; }
+    public string? DecisionNote { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
 public sealed class DeviceActionEntity
 {
     public Guid Id { get; set; }

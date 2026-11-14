@@ -105,6 +105,56 @@ public class PostureReportTests
     }
 
     [Fact]
+    public void AcceptedRisksGetTheirOwnSection_AndOpenFindingsShowOwnerAndDueDate()
+    {
+        var findings = new[]
+        {
+            F("A", "MFA for admins", FindingStatus.Failed, Severity.Critical),
+            F("B", "Legacy authentication is blocked", FindingStatus.Failed),
+            F("C", "Guest access is reviewed", FindingStatus.Failed, Severity.Medium),
+            F("D", "Audit logging is on", FindingStatus.Passed)
+        };
+        FindingTracking Track(string id) => new() { TenantId = Tenant.Id, FindingId = $"test:{id}", FindingTitle = id, UpdatedAt = At };
+        var data = Data(findings) with
+        {
+            Tracking =
+            [
+                Track("A") with { Owner = "Fatima Al Mansoori", DueDate = new DateOnly(2026, 10, 1) },
+                Track("B") with
+                {
+                    Owner = "Omar Haddad", DueDate = new DateOnly(2026, 12, 1), Acceptance = RiskAcceptanceStatus.Accepted,
+                    AcceptanceReason = "The lab system needs it until January.", AcceptanceExpiresAt = new DateTimeOffset(2027, 1, 31, 20, 0, 0, TimeSpan.Zero),
+                    DecidedByName = "Olivia Owner <olivia@msp.example>"
+                },
+                // Accepted once, but the end date passed before the report date: not an accepted risk any more.
+                Track("C") with
+                {
+                    Acceptance = RiskAcceptanceStatus.Accepted, AcceptanceReason = "Old exception.", AcceptanceExpiresAt = At.AddDays(-1),
+                    DecidedByName = "Olivia Owner"
+                }
+            ]
+        };
+
+        var text = ReportPdf.Text(Render(data));
+
+        Assert.Contains("Accepted risks (1)", text);
+        Assert.Contains("They still count against the score", text);
+        Assert.Contains("The lab system needs it until January.", text);
+        Assert.Contains("31 Jan 2027", text); // the last day it covers, in the report time zone (Dubai)
+        Assert.Contains("Olivia Owner", text);
+        Assert.DoesNotContain("olivia@msp.example", text);
+        Assert.DoesNotContain("Old exception.", text);
+        Assert.Contains("Owner: Fatima Al Mansoori · due 1 Oct 2026 (overdue)", text);
+        Assert.Contains("Owner: Omar Haddad · due 1 Dec 2026 · Accepted risk until 31 Jan 2027", text);
+        Assert.Contains($"Score {RiskScoreCalculator.Calculate(findings).Score} of 100", text); // unchanged by the acceptance
+        Assert.Contains("Findings to fix (3)", text);
+    }
+
+    [Fact]
+    public void WithoutAcceptedRisksThereIsNoSuchSection() =>
+        Assert.DoesNotContain("Accepted risks", ReportPdf.Text(Render(Data())));
+
+    [Fact]
     public void WithoutAPartnerTheDeploymentBrandIsUsed()
     {
         var text = ReportPdf.Text(Render(Data() with

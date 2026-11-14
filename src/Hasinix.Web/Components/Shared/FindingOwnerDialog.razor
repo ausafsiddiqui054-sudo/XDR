@@ -1,0 +1,44 @@
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Rounded.AssignmentInd" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Owner and due date</MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        <dl class="sp-props mb-4">
+            <dt>Tenant</dt><dd>@TenantName</dd>
+            <dt>Finding</dt><dd>@FindingTitle</dd>
+        </dl>
+        <MudTextField T="string" @bind-Value="_owner" Label="Who is fixing it?" Variant="Variant.Outlined" Immediate="true" Class="mb-3"
+                      MaxLength="FindingTrackingPolicy.MaxOwnerLength" HelperText="A name or email, at the client or on your team"
+                      UserAttributes="@(new() { ["data-testid"] = "finding-owner" })" />
+        <MudDatePicker @bind-Date="_due" Label="Due date" Variant="Variant.Outlined" Clearable="true" DateFormat="d MMM yyyy"
+                       Editable="false" PickerVariant="PickerVariant.Dialog" UserAttributes="@(new() { ["data-testid"] = "finding-due" })" />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2">The client sees both on their findings. Leave both empty to clear them.</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" data-testid="finding-owner-save"
+                   OnClick="@(() => MudDialog.Close(DialogResult.Ok(new FindingOwnerChoice(_owner?.Trim(), _due is { } d ? DateOnly.FromDateTime(d) : null))))">
+            Save
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter, EditorRequired] public string TenantName { get; set; } = "";
+    [Parameter, EditorRequired] public string FindingTitle { get; set; } = "";
+    [Parameter] public string? Owner { get; set; }
+    [Parameter] public DateOnly? DueDate { get; set; }
+
+    private string? _owner;
+    private DateTime? _due;
+
+    protected override void OnInitialized()
+    {
+        _owner = Owner;
+        _due = DueDate?.ToDateTime(TimeOnly.MinValue);
+    }
+}

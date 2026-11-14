@@ -1,0 +1,90 @@
+<MudDialog>
+    <TitleContent>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@(Mode == RiskAcceptanceDialogMode.Reject ? Icons.Material.Rounded.Block : Icons.Material.Rounded.Rule)"
+                     Color="@(Mode == RiskAcceptanceDialogMode.Reject ? Color.Error : Color.Primary)" />
+            <MudText Typo="Typo.h6">
+                @(Mode switch
+                {
+                    RiskAcceptanceDialogMode.Request => "Ask to accept this risk",
+                    RiskAcceptanceDialogMode.Approve => "Accept this risk?",
+                    _ => "Reject this request?"
+                })
+            </MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        <dl class="sp-props mb-4">
+            <dt>Tenant</dt><dd>@TenantName</dd>
+            <dt>Finding</dt><dd>@FindingTitle</dd>
+            @if (Request is { } r)
+            {
+                <dt>Requested by</dt><dd>@FindingTrackingService.Person(r.RequestedByName)</dd>
+                <dt>Reason</dt><dd>@r.AcceptanceReason</dd>
+                <dt>Until</dt><dd>@Until</dd>
+            }
+        </dl>
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Start" Class="sp-note mb-4">
+            <MudIcon Icon="@Icons.Material.Rounded.Info" Size="Size.Small" Color="Color.Primary" />
+            <MudText Typo="Typo.caption">
+                Accepting a risk fixes nothing. The check stays failed and keeps counting against the score; the finding is
+                labelled "Accepted risk" until the end date, and the client sees the reason.
+            </MudText>
+        </MudStack>
+        <MudTextField T="string" @bind-Value="_text" Variant="Variant.Outlined" Lines="3" Immediate="true"
+                      Label="@(Mode switch { RiskAcceptanceDialogMode.Request => "Why can't it be fixed now?", RiskAcceptanceDialogMode.Approve => "Note (optional)", _ => "Why are you rejecting it?" })"
+                      MaxLength="FindingTrackingPolicy.MaxReasonLength" Counter="FindingTrackingPolicy.MaxReasonLength"
+                      HelperText="@(Mode == RiskAcceptanceDialogMode.Request ? "Say who at the client agreed. The approving Owner and the client see this" : "Kept with the finding and in the audit log")"
+                      UserAttributes="@(new() { ["data-testid"] = "risk-text" })" />
+        @if (Mode == RiskAcceptanceDialogMode.Request)
+        {
+            <MudDatePicker @bind-Date="_until" Label="Accept until" Variant="Variant.Outlined" Class="mt-3" DateFormat="d MMM yyyy" Editable="false"
+                           MinDate="@Today.AddDays(1).ToDateTime(TimeOnly.MinValue)" PickerVariant="PickerVariant.Dialog"
+                           MaxDate="@Today.AddDays(FindingTrackingPolicy.MaxAcceptanceDays).ToDateTime(TimeOnly.MinValue)"
+                           HelperText="@($"At most {FindingTrackingPolicy.MaxAcceptanceDays} days. After this date it shows as expired")" />
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-2">An Owner other than you has to approve it.</MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => MudDialog.Cancel())">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="@(Mode == RiskAcceptanceDialogMode.Reject ? Color.Error : Color.Primary)" Disabled="!CanSubmit"
+                   OnClick="Submit" data-testid="risk-submit">
+            @(Mode switch { RiskAcceptanceDialogMode.Request => "Request approval", RiskAcceptanceDialogMode.Approve => "Accept risk", _ => "Reject" })
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter, EditorRequired] public string TenantName { get; set; } = "";
+    [Parameter, EditorRequired] public string FindingTitle { get; set; } = "";
+    [Parameter] public RiskAcceptanceDialogMode Mode { get; set; }
+
+    /// <summary>The waiting request, when approving or rejecting.</summary>
+    [Parameter] public FindingTracking? Request { get; set; }
+
+    /// <summary>The request's end date as text, when approving or rejecting.</summary>
+    [Parameter] public string? Until { get; set; }
+
+    /// <summary>Today in the report time zone, for the date limits.</summary>
+    [Parameter] public DateOnly Today { get; set; }
+
+    private string? _text;
+    private DateTime? _until;
+
+    protected override void OnInitialized()
+    {
+        if (Mode == RiskAcceptanceDialogMode.Request)
+            _until = Today.AddDays(FindingTrackingPolicy.DefaultAcceptanceDays).ToDateTime(TimeOnly.MinValue);
+    }
+
+    private bool CanSubmit => Mode switch
+    {
+        RiskAcceptanceDialogMode.Request => !string.IsNullOrWhiteSpace(_text) && _until is not null,
+        RiskAcceptanceDialogMode.Approve => true,
+        _ => !string.IsNullOrWhiteSpace(_text)
+    };
+
+    private void Submit() => MudDialog.Close(DialogResult.Ok(
+        new RiskAcceptanceChoice(_text?.Trim() ?? "", _until is { } d ? DateOnly.FromDateTime(d) : null)));
+}

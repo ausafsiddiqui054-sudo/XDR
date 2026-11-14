@@ -37,6 +37,36 @@ public interface IScoreHistory
 }
 
 /// <summary>
+/// Owners, due dates and risk acceptances for findings. Acceptance changes are conditional on the current
+/// state, so two people acting at once can't both succeed; the loser gets null back.
+/// </summary>
+public interface IFindingTrackingRepository
+{
+    /// <summary>Every tracked finding, or one tenant's when <paramref name="tenantId"/> is given.</summary>
+    Task<IReadOnlyList<FindingTracking>> GetAllAsync(Guid? tenantId = null, CancellationToken ct = default);
+
+    Task<FindingTracking?> GetAsync(Guid tenantId, string findingId, CancellationToken ct = default);
+
+    /// <summary>Sets (or clears, with nulls) the owner and due date, creating the row if needed.</summary>
+    Task<FindingTracking> SetOwnerAsync(Guid tenantId, string findingId, string findingTitle, string? owner, DateOnly? dueDate,
+        DateTimeOffset at, CancellationToken ct = default);
+
+    /// <summary>
+    /// Records a request to accept the risk until <paramref name="expiresAt"/>. Null if a request is already
+    /// waiting or an acceptance is still running.
+    /// </summary>
+    Task<FindingTracking?> RequestAcceptanceAsync(Guid tenantId, string findingId, string findingTitle, string reason, DateTimeOffset expiresAt,
+        Guid requestedByUserId, string requestedByName, DateTimeOffset at, CancellationToken ct = default);
+
+    /// <summary>Approves or rejects a waiting request. Null if it was no longer waiting. Policy checks happen before this call.</summary>
+    Task<FindingTracking?> DecideAcceptanceAsync(Guid tenantId, string findingId, bool approve, Guid deciderId, string deciderName, string? note,
+        DateTimeOffset at, CancellationToken ct = default);
+
+    /// <summary>Withdraws a waiting request or ends an acceptance early. Null if there was neither.</summary>
+    Task<FindingTracking?> EndAcceptanceAsync(Guid tenantId, string findingId, DateTimeOffset at, CancellationToken ct = default);
+}
+
+/// <summary>
 /// Reads a tenant's managed device inventory (e.g. Intune through Microsoft Graph).
 /// Implementations use read-only permissions and return normalized <see cref="ManagedDevice"/>s.
 /// </summary>

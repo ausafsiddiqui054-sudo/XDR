@@ -17,6 +17,7 @@ public sealed class HasinixDbContext(DbContextOptions<HasinixDbContext> options)
     public DbSet<AuditEventEntity> AuditEvents => Set<AuditEventEntity>();
     public DbSet<ScanRunEntity> ScanRuns => Set<ScanRunEntity>();
     public DbSet<ScoreSnapshotEntity> ScoreSnapshots => Set<ScoreSnapshotEntity>();
+    public DbSet<FindingTrackingEntity> FindingTracking => Set<FindingTrackingEntity>();
     public DbSet<DeviceActionEntity> DeviceActions => Set<DeviceActionEntity>();
     public DbSet<PlaybookEntity> Playbooks => Set<PlaybookEntity>();
     public DbSet<ConfigurationChangeEntity> ConfigurationChanges => Set<ConfigurationChangeEntity>();
@@ -242,6 +243,22 @@ public sealed class HasinixDbContext(DbContextOptions<HasinixDbContext> options)
                 .HasDatabaseName("IX_scan_runs_active");
             e.HasIndex(x => new { x.Status, x.QueuedAt });
             e.HasIndex(x => new { x.TenantId, x.Engine, x.QueuedAt });
+            e.HasOne<TenantEntity>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<FindingTrackingEntity>(e =>
+        {
+            e.ToTable("finding_tracking");
+            // One row per tenant and finding. The finding ID is the engine's stable ID, not a foreign key:
+            // a scan deletes and re-adds findings, and the tracking has to survive that.
+            e.HasKey(x => new { x.TenantId, x.FindingId });
+            e.Property(x => x.FindingId).HasMaxLength(256);
+            e.Property(x => x.FindingTitle).HasMaxLength(512);
+            e.Property(x => x.Owner).HasMaxLength(FindingTrackingPolicy.MaxOwnerLength);
+            e.Property(x => x.AcceptanceReason).HasMaxLength(FindingTrackingPolicy.MaxReasonLength);
+            e.Property(x => x.RequestedByName).HasMaxLength(512);
+            e.Property(x => x.DecidedByName).HasMaxLength(512);
+            e.Property(x => x.DecisionNote).HasMaxLength(FindingTrackingPolicy.MaxNoteLength);
             e.HasOne<TenantEntity>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
         });
 

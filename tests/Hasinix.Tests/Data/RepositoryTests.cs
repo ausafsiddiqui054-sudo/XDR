@@ -309,6 +309,82 @@ public class ScoreHistoryTests(PostgresDatabase db) : IClassFixture<PostgresData
     }
 }
 
+public class FindingTrackingRepositoryTests(PostgresDatabase db) : IClassFixture<PostgresDatabase>
+{
+    private static readonly DateTimeOffset T0 = new(2026, 11, 1, 6, 0, 0, TimeSpan.Zero);
+    private static readonly Guid Admin = Guid.NewGuid();
+    private static readonly Guid Owner = Guid.NewGuid();
+
+    private IFindingTrackingRepository Tracking => db.Services.GetRequiredService<IFindingTrackingRepository>();
+
+    private async Task<Guid> NewTenantAsync()
+    {
+        var id = Guid.NewGuid();
+        var factory = db.Services.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<HasinixDbContext>>();
+        await using var ctx = await factory.CreateDbContextAsync();
+        ctx.Tenants.Add(new Hasinix.Data.Entities.TenantEntity
+        {
+            Id = id, EntraTenantId = Guid.NewGuid(), DisplayName = "Tracking Clinic", PrimaryDomain = "tracking.example",
+            ConsentState = TenantConsentState.ReadOnlyGranted
+        });
+        await ctx.SaveChangesAsync();
+        return id;
+    }
+
+    [PostgresFact]
+    public async Task OwnerAndDueDateAreCreatedThenUpdated()
+    {
+        var tenant = await NewTenantAsync();
+
+        var created = await Tracking.SetOwnerAsync(tenant, "maester:1", "MFA for admins", "Fatima", new DateOnly(2026, 11, 20), T0);
+        var updated = await Tracking.SetOwnerAsync(tenant, "maester:1", "MFA for all admins", null, null, T0.AddHours(1));
+
+        Assert.Equal(("Fatima", new DateOnly(2026, 11, 20), RiskAcceptanceStatus.None), (created.Owner, created.DueDate, created.Acceptance));
+        Assert.Equal((null, null, "MFA for all admins", T0.AddHours(1)), (updated.Owner, updated.DueDate, updated.FindingTitle, updated.UpdatedAt));
+        Assert.Single(await Tracking.GetAllAsync(tenant));
+        Assert.Null(await Tracking.GetAsync(tenant, "maester:2"));
+    }
+
+    [PostgresFact]
+    public async Task AnAcceptanceIsRequestedDecidedAndEnded_OneStepAtATime()
+    {
+        var tenant = await NewTenantAsync();
+        await Tracking.SetOwnerAsync(tenant, "maester:1", "MFA for admins", "Fatima", null, T0);
+
+        var requested = await Tracking.RequestAcceptanceAsync(tenant, "maester:1", "MFA for admins", "Lab system", T0.AddDays(30), Admin, "Adam Admin", T0);
+        Assert.Equal((RiskAcceptanceStatus.Requested, "Lab system", T0.AddDays(30), Admin, "Fatima"),
+            (requested!.Acceptance, requested.AcceptanceReason, requested.AcceptanceExpiresAt, requested.RequestedByUserId, requested.Owner));
+        Assert.Null(await Tracking.RequestAcceptanceAsync(tenant, "maester:1", "MFA for admins", "Again", T0.AddDays(30), Admin, "Adam Admin", T0)); // one waiting
+
+        var accepted = await Tracking.DecideAcceptanceAsync(tenant, "maester:1", approve: true, Owner, "Olivia Owner", "Until January", T0.AddHours(1));
+        Assert.Equal((RiskAcceptanceStatus.Accepted, Owner, "Olivia Owner", "Until January"),
+            (accepted!.Acceptance, accepted.DecidedByUserId, accepted.DecidedByName, accepted.DecisionNote));
+        Assert.Null(await Tracking.DecideAcceptanceAsync(tenant, "maester:1", approve: false, Owner, "Olivia Owner", "late", T0.AddHours(2))); // already decided
+        Assert.Null(await Tracking.RequestAcceptanceAsync(tenant, "maester:1", "MFA for admins", "Again", T0.AddDays(60), Admin, "Adam Admin", T0.AddDays(1))); // still running
+
+        // After the end date a new request replaces the expired acceptance and clears the old decision.
+        var renewed = await Tracking.RequestAcceptanceAsync(tenant, "maester:1", "MFA for admins", "Still needed", T0.AddDays(90), Admin, "Adam Admin", T0.AddDays(31));
+        Assert.Equal((RiskAcceptanceStatus.Requested, "Still needed", null, null), (renewed!.Acceptance, renewed.AcceptanceReason, renewed.DecidedByName, renewed.DecisionNote));
+
+        var ended = await Tracking.EndAcceptanceAsync(tenant, "maester:1", T0.AddDays(32));
+        Assert.Equal((RiskAcceptanceStatus.None, null, null, "Fatima"), (ended!.Acceptance, ended.AcceptanceReason, ended.RequestedByName, ended.Owner));
+        Assert.Null(await Tracking.EndAcceptanceAsync(tenant, "maester:1", T0.AddDays(33)));
+    }
+
+    [PostgresFact]
+    public async Task ARequestCreatesTheRow_AndAPastEndDateCanOnlyBeRejected()
+    {
+        var tenant = await NewTenantAsync();
+
+        var requested = await Tracking.RequestAcceptanceAsync(tenant, "wazuh:9", "SSH root login", "Vendor appliance", T0.AddDays(2), Admin, "Adam Admin", T0);
+        Assert.Equal((RiskAcceptanceStatus.Requested, null), (requested!.Acceptance, requested.Owner));
+
+        Assert.Null(await Tracking.DecideAcceptanceAsync(tenant, "wazuh:9", approve: true, Owner, "Olivia Owner", null, T0.AddDays(3)));
+        var rejected = await Tracking.DecideAcceptanceAsync(tenant, "wazuh:9", approve: false, Owner, "Olivia Owner", "Too late", T0.AddDays(3));
+        Assert.Equal(RiskAcceptanceStatus.Rejected, rejected!.Acceptance);
+    }
+}
+
 public class SeederTests(PostgresDatabase db) : IClassFixture<PostgresDatabase>
 {
     [PostgresFact]

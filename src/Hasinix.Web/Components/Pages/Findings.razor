@@ -1,6 +1,8 @@
 @page "/findings"
 @inject PostureService Posture
 @inject ConfigurationChangeRequestService Changes
+@inject FindingTrackingService Tracking
+@inject IUserContextAccessor Current
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
 
@@ -25,7 +27,7 @@ else
 {
     <MudPaper Class="sp-card pa-4 mb-4" Elevation="0" Outlined="true">
         <MudGrid Spacing="3">
-            <MudItem xs="12" md="4">
+            <MudItem xs="12" md="3">
                 <MudSelect T="Guid?" Label="Tenant" @bind-Value="TenantId" Clearable="true" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense">
                     @foreach (var t in _portfolio.Scanned)
                     {
@@ -49,12 +51,30 @@ else
                     }
                 </MudSelect>
             </MudItem>
-            <MudItem xs="12" md="4">
+            <MudItem xs="12" md="3">
+                <MudSelect T="TrackingFilter?" Label="Tracking" @bind-Value="_tracked" Clearable="true" Variant="Variant.Outlined" Dense="true" Margin="Margin.Dense"
+                           UserAttributes="@(new() { ["data-testid"] = "tracking-filter" })">
+                    <MudSelectItem T="TrackingFilter?" Value="@TrackingFilter.AwaitingDecision">Risk waiting for approval</MudSelectItem>
+                    <MudSelectItem T="TrackingFilter?" Value="@TrackingFilter.Accepted">Accepted risk</MudSelectItem>
+                    <MudSelectItem T="TrackingFilter?" Value="@TrackingFilter.Overdue">Overdue</MudSelectItem>
+                    <MudSelectItem T="TrackingFilter?" Value="@TrackingFilter.Assigned">Has an owner</MudSelectItem>
+                    <MudSelectItem T="TrackingFilter?" Value="@TrackingFilter.Unassigned">No owner</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="2">
                 <MudTextField T="string" @bind-Value="_search" Label="Search" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true"
                               Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Rounded.Search" Clearable="true" />
             </MudItem>
         </MudGrid>
     </MudPaper>
+
+    @if (_awaitingMe > 0 && _tracked != TrackingFilter.AwaitingDecision)
+    {
+        <MudAlert Severity="MudBlazor.Severity.Info" Variant="Variant.Text" Dense="true" Class="mb-4" data-testid="risk-awaiting-me">
+            @(_awaitingMe == 1 ? "1 risk acceptance is" : $"{_awaitingMe} risk acceptances are") waiting for your decision.
+            <MudLink Typo="Typo.body2" OnClick="ShowAwaiting" Class="ml-1">Show @(_awaitingMe == 1 ? "it" : "them")</MudLink>
+        </MudAlert>
+    }
 
     <MudGrid Spacing="4">
         <MudItem xs="12" lg="@(_selected is null ? 12 : 7)">
@@ -71,10 +91,27 @@ else
                         <MudTd DataLabel="Check">
                             <MudText Typo="Typo.body2" Style="font-weight:600">@context.Finding.Title</MudText>
                             <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Finding.Category · @context.Finding.Source</MudText>
+                            @if (TrackingOf(context) is { } tracked && (tracked.Owner is not null || tracked.DueDate is not null))
+                            {
+                                var overdue = IsOpen(context.Finding) && tracked.IsOverdue(Tracking.Today);
+                                <MudText Typo="Typo.caption" Class="d-block" data-testid="row-owner">
+                                    <span class="mud-text-secondary">@(tracked.Owner ?? "No owner")@(tracked.DueDate is { } due ? $" · due {FindingTrackingService.Day(due)}" : "")</span>
+                                    @if (overdue)
+                                    {
+                                        <span class="sp-overdue"><MudIcon Icon="@Icons.Material.Rounded.Schedule" Size="Size.Small" Color="Color.Error" /> Overdue</span>
+                                    }
+                                </MudText>
+                            }
                         </MudTd>
                         <MudTd DataLabel="Tenant">@context.Tenant.DisplayName</MudTd>
                         <MudTd DataLabel="Severity"><SeverityChip Severity="context.Finding.Severity" /></MudTd>
-                        <MudTd DataLabel="Status"><StatusChip Status="context.Finding.Status" /></MudTd>
+                        <MudTd DataLabel="Status">
+                            <StatusChip Status="context.Finding.Status" />
+                            @if (RiskLabel(context) is { } risk)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Rounded.Rule" data-testid="row-risk">@risk</MudChip>
+                            }
+                        </MudTd>
                     </RowTemplate>
                     <NoRecordsContent>
                         <MudText Class="mud-text-secondary pa-6">No findings match these filters.</MudText>
@@ -139,6 +176,99 @@ else
                         </MudStack>
                     }
 
+                    @{ var track = TrackingOf(sel); }
+                    @if (IsOpen(sel.Finding) || track is not null)
+                    {
+                        <MudText Typo="Typo.overline" Class="mud-text-secondary">Owner and due date</MudText>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4" data-testid="finding-tracking">
+                            <MudText Typo="Typo.body2">
+                                @if (track?.Owner is null && track?.DueDate is null)
+                                {
+                                    <span class="mud-text-secondary">Nobody is assigned yet.</span>
+                                }
+                                else
+                                {
+                                    <span>@(track.Owner ?? "No owner")@(track.DueDate is { } due ? $" · due {FindingTrackingService.Day(due)}" : " · no due date")</span>
+                                    @if (IsOpen(sel.Finding) && track.IsOverdue(Tracking.Today))
+                                    {
+                                        <span class="sp-overdue"><MudIcon Icon="@Icons.Material.Rounded.Schedule" Size="Size.Small" Color="Color.Error" /> Overdue</span>
+                                    }
+                                }
+                            </MudText>
+                            @if (_canEdit)
+                            {
+                                <MudButton Size="Size.Small" Color="Color.Primary" OnClick="@(() => EditOwnerAsync(sel))" data-testid="edit-owner">
+                                    @(track?.Owner is null && track?.DueDate is null ? "Assign" : "Change")
+                                </MudButton>
+                            }
+                        </MudStack>
+
+                        @if (track is { Acceptance: not RiskAcceptanceStatus.None } || (_canEdit && FindingTrackingPolicy.CanBeAccepted(sel.Finding.Status)))
+                        {
+                            <MudText Typo="Typo.overline" Class="mud-text-secondary">Risk acceptance</MudText>
+                            <div class="sp-note mb-4" data-testid="risk-acceptance">
+                                @if (track is { Acceptance: RiskAcceptanceStatus.Requested })
+                                {
+                                    <MudText Typo="Typo.body2"><b>Waiting for an Owner's approval.</b> @FindingTrackingService.Person(track.RequestedByName) asked to accept this risk until @Tracking.Day(track.AcceptanceExpiresAt).</MudText>
+                                    <MudText Typo="Typo.body2" Class="mt-1">@track.AcceptanceReason</MudText>
+                                    <MudStack Row="true" Spacing="1" Class="mt-2" Wrap="Wrap.Wrap">
+                                        @if (FindingTrackingPolicy.WhyCannotDecide(track, _user.UserId, _user.Role) is null)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => DecideAsync(sel, track, true))" data-testid="risk-approve">Accept risk</MudButton>
+                                            <MudButton Size="Size.Small" Color="Color.Error" OnClick="@(() => DecideAsync(sel, track, false))" data-testid="risk-reject">Reject</MudButton>
+                                        }
+                                        else if (_user.IsOwner)
+                                        {
+                                            <MudText Typo="Typo.caption" Class="mud-text-secondary align-self-center">@FindingTrackingPolicy.WhyCannotDecide(track, _user.UserId, _user.Role)</MudText>
+                                        }
+                                        @if (_canEdit)
+                                        {
+                                            <MudButton Size="Size.Small" OnClick="@(() => EndAsync(sel))" data-testid="risk-end">Withdraw request</MudButton>
+                                        }
+                                    </MudStack>
+                                }
+                                else if (track is { Acceptance: RiskAcceptanceStatus.Accepted })
+                                {
+                                    var expired = track.IsExpired(DateTimeOffset.UtcNow);
+                                    <MudText Typo="Typo.body2">
+                                        <b>@(expired ? "Acceptance expired" : "Accepted risk")</b> @(expired ? "on" : "until") @Tracking.Day(track.AcceptanceExpiresAt).
+                                        Approved by @FindingTrackingService.Person(track.DecidedByName)@(track.RequestedByName is { } asker ? $", requested by {FindingTrackingService.Person(asker)}" : "").
+                                    </MudText>
+                                    <MudText Typo="Typo.body2" Class="mt-1">@track.AcceptanceReason</MudText>
+                                    @if (!string.IsNullOrWhiteSpace(track.DecisionNote))
+                                    {
+                                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">Approver's note: @track.DecisionNote</MudText>
+                                    }
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">
+                                        @(expired ? "It needs fixing or a new decision." : "The check still counts against the score.")
+                                    </MudText>
+                                    @if (_canEdit)
+                                    {
+                                        <MudStack Row="true" Spacing="1" Class="mt-2">
+                                            @if (expired && FindingTrackingPolicy.CanBeAccepted(sel.Finding.Status))
+                                            {
+                                                <MudButton Size="Size.Small" Color="Color.Primary" OnClick="@(() => RequestRiskAsync(sel))" data-testid="risk-request">Ask again</MudButton>
+                                            }
+                                            <MudButton Size="Size.Small" OnClick="@(() => EndAsync(sel))" data-testid="risk-end">@(expired ? "Clear" : "End acceptance")</MudButton>
+                                        </MudStack>
+                                    }
+                                }
+                                else
+                                {
+                                    @if (track is { Acceptance: RiskAcceptanceStatus.Rejected })
+                                    {
+                                        <MudText Typo="Typo.body2" Class="mb-1"><b>Request rejected</b> by @FindingTrackingService.Person(track.DecidedByName)@(string.IsNullOrWhiteSpace(track.DecisionNote) ? "." : $": {track.DecisionNote}")</MudText>
+                                    }
+                                    @if (_canEdit && FindingTrackingPolicy.CanBeAccepted(sel.Finding.Status))
+                                    {
+                                        <MudText Typo="Typo.body2">Can't be fixed for now? An Owner can accept the risk until a date. It still counts against the score.</MudText>
+                                        <MudButton Variant="Variant.Text" Color="Color.Primary" Class="px-0 mt-1" OnClick="@(() => RequestRiskAsync(sel))" data-testid="risk-request">Ask to accept this risk</MudButton>
+                                    }
+                                }
+                            </div>
+                        }
+                    }
+
                     <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
                         Source: @sel.Finding.Source@(sel.Finding.SourceCheckId is { } id ? $" ({id})" : "")
                     </MudText>
@@ -162,7 +292,109 @@ else
 
     private ConfigurationFix? _fix;
 
-    protected override async Task OnInitializedAsync() => _portfolio = await Posture.GetPortfolioAsync();
+    private enum TrackingFilter { AwaitingDecision, Accepted, Overdue, Assigned, Unassigned }
+
+    private TrackingFilter? _tracked;
+    private IReadOnlyDictionary<(Guid TenantId, string FindingId), FindingTracking> _tracking = new Dictionary<(Guid, string), FindingTracking>();
+    private UserContext _user = UserContext.Anonymous;
+    private bool _canEdit;
+    private int _awaitingMe;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await Current.GetAsync();
+        _canEdit = FindingTrackingPolicy.CanEdit(_user.Role);
+        _portfolio = await Posture.GetPortfolioAsync();
+        await LoadTrackingAsync();
+    }
+
+    private async Task LoadTrackingAsync()
+    {
+        _tracking = await Tracking.GetAsync();
+        _awaitingMe = await Tracking.CountAwaitingMyDecisionAsync();
+    }
+
+    private FindingTracking? TrackingOf(Row row) => _tracking.GetValueOrDefault((row.Tenant.Id, row.Finding.Id));
+
+    /// <summary>A check that still needs someone: owners, due dates and overdue marks only matter for these.</summary>
+    private static bool IsOpen(Finding finding) => FindingTrackingPolicy.CanBeAccepted(finding.Status);
+
+    private string? RiskLabel(Row row) => TrackingOf(row) switch
+    {
+        null => null,
+        _ when !IsOpen(row.Finding) => null,
+        { Acceptance: RiskAcceptanceStatus.Requested } => "Risk: waiting for approval",
+        { Acceptance: RiskAcceptanceStatus.Accepted } t => t.IsExpired(DateTimeOffset.UtcNow) ? "Acceptance expired" : "Accepted risk",
+        _ => null
+    };
+
+    private bool Matches(Row row, TrackingFilter filter)
+    {
+        var t = TrackingOf(row);
+        return filter switch
+        {
+            TrackingFilter.AwaitingDecision => t is { Acceptance: RiskAcceptanceStatus.Requested },
+            TrackingFilter.Accepted => t is not null && t.IsAccepted(DateTimeOffset.UtcNow),
+            TrackingFilter.Overdue => IsOpen(row.Finding) && t is not null && t.IsOverdue(Tracking.Today),
+            TrackingFilter.Assigned => t?.Owner is not null,
+            _ => IsOpen(row.Finding) && t?.Owner is null
+        };
+    }
+
+    private void ShowAwaiting()
+    {
+        _tracked = TrackingFilter.AwaitingDecision;
+        _status = null;
+        _severity = null;
+        _search = null;
+    }
+
+    private async Task EditOwnerAsync(Row row)
+    {
+        var current = TrackingOf(row);
+        var dialog = await Dialogs.ShowAsync<FindingOwnerDialog>(null, new DialogParameters<FindingOwnerDialog>
+        {
+            { x => x.TenantName, row.Tenant.DisplayName }, { x => x.FindingTitle, row.Finding.Title },
+            { x => x.Owner, current?.Owner }, { x => x.DueDate, current?.DueDate }
+        }, DialogSize);
+        if ((await dialog.Result) is not { Canceled: false, Data: FindingOwnerChoice choice }) return;
+        await ShowAsync(await Tracking.SetOwnerAsync(row.Tenant.Id, row.Finding.Id, choice.Owner, choice.DueDate));
+    }
+
+    private async Task RequestRiskAsync(Row row)
+    {
+        var dialog = await Dialogs.ShowAsync<RiskAcceptanceDialog>(null, new DialogParameters<RiskAcceptanceDialog>
+        {
+            { x => x.TenantName, row.Tenant.DisplayName }, { x => x.FindingTitle, row.Finding.Title },
+            { x => x.Mode, RiskAcceptanceDialogMode.Request }, { x => x.Today, Tracking.Today }
+        }, DialogSize);
+        if ((await dialog.Result) is not { Canceled: false, Data: RiskAcceptanceChoice choice }) return;
+        await ShowAsync(await Tracking.RequestAcceptanceAsync(row.Tenant.Id, row.Finding.Id, choice.Text, choice.Until));
+    }
+
+    private async Task DecideAsync(Row row, FindingTracking request, bool approve)
+    {
+        var dialog = await Dialogs.ShowAsync<RiskAcceptanceDialog>(null, new DialogParameters<RiskAcceptanceDialog>
+        {
+            { x => x.TenantName, row.Tenant.DisplayName }, { x => x.FindingTitle, row.Finding.Title }, { x => x.Request, request },
+            { x => x.Until, Tracking.Day(request.AcceptanceExpiresAt) }, { x => x.Today, Tracking.Today },
+            { x => x.Mode, approve ? RiskAcceptanceDialogMode.Approve : RiskAcceptanceDialogMode.Reject }
+        }, DialogSize);
+        if ((await dialog.Result) is not { Canceled: false, Data: RiskAcceptanceChoice choice }) return;
+        await ShowAsync(approve
+            ? await Tracking.ApproveAsync(row.Tenant.Id, row.Finding.Id, choice.Text)
+            : await Tracking.RejectAsync(row.Tenant.Id, row.Finding.Id, choice.Text));
+    }
+
+    private async Task EndAsync(Row row) => await ShowAsync(await Tracking.EndAsync(row.Tenant.Id, row.Finding.Id));
+
+    private async Task ShowAsync(TrackingOutcome outcome)
+    {
+        Snackbar.Add(outcome.Message, outcome.Ok ? MudBlazor.Severity.Success : MudBlazor.Severity.Warning);
+        await LoadTrackingAsync();
+    }
+
+    private static readonly DialogOptions DialogSize = new() { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
 
     private async Task SelectAsync(Row row)
     {
@@ -187,6 +419,7 @@ else
             .SelectMany(t => t.Findings.Select(f => new Row(t.Tenant, f)))
             .Where(r => _severity is null || r.Finding.Severity == _severity)
             .Where(r => _status is null || r.Finding.Status == _status)
+            .Where(r => _tracked is not { } filter || Matches(r, filter))
             .Where(r => string.IsNullOrWhiteSpace(_search)
                         || r.Finding.Title.Contains(_search, StringComparison.OrdinalIgnoreCase)
                         || r.Finding.Category.Contains(_search, StringComparison.OrdinalIgnoreCase)

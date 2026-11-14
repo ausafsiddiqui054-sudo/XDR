@@ -137,6 +137,19 @@ public static class AuditActions
 
     public const string ReportDownloaded = "report.downloaded";
 
+    /// <summary>A finding's owner or due date was set, changed or cleared.</summary>
+    public const string FindingOwnerChanged = "finding.owner-changed";
+
+    public const string RiskAcceptanceRequested = "finding.risk-acceptance-requested";
+
+    /// <summary>Written before the approval is applied; if it can't be written, the risk isn't accepted.</summary>
+    public const string RiskAcceptanceApproved = "finding.risk-acceptance-approved";
+
+    public const string RiskAcceptanceRejected = "finding.risk-acceptance-rejected";
+
+    /// <summary>A waiting request was withdrawn, or an acceptance was ended before its end date.</summary>
+    public const string RiskAcceptanceEnded = "finding.risk-acceptance-ended";
+
     public static readonly IReadOnlyDictionary<string, string> Categories = new Dictionary<string, string>
     {
         ["auth"] = "Sign-in",
@@ -147,7 +160,8 @@ public static class AuditActions
         ["config"] = "Configuration changes",
         ["audit"] = "Audit log",
         ["scan"] = "Scans",
-        ["report"] = "Reports"
+        ["report"] = "Reports",
+        ["finding"] = "Findings"
     };
 
     public static string CategoryOf(string action) => action.Split('.', 2)[0];
@@ -202,6 +216,11 @@ public static class AuditActions
         AuditPurged => "Old audit events removed",
         ScanRequested => "Scan requested",
         ReportDownloaded => "Report downloaded",
+        FindingOwnerChanged => "Finding owner or due date changed",
+        RiskAcceptanceRequested => "Risk acceptance requested",
+        RiskAcceptanceApproved => "Risk acceptance approved",
+        RiskAcceptanceRejected => "Risk acceptance rejected",
+        RiskAcceptanceEnded => "Risk acceptance ended",
         _ => action
     };
 }

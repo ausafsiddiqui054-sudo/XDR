@@ -77,6 +77,9 @@ public sealed record PostureReportData
 
     public DeviceSummary? Devices { get; init; }
 
+    /// <summary>Owners, due dates and risk acceptances for this tenant's findings. They label findings; they never change the score.</summary>
+    public IReadOnlyList<FindingTracking> Tracking { get; init; } = [];
+
     /// <summary>Time zone for the dates printed in the report. UTC when null.</summary>
     public TimeZoneInfo? TimeZone { get; init; }
 }

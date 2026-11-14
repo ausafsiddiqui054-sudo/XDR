@@ -260,6 +260,26 @@ internal static class EntityMapping
         Error = e.Error
     };
 
+    public static FindingTracking ToModel(this FindingTrackingEntity e) => new()
+    {
+        TenantId = e.TenantId,
+        FindingId = e.FindingId,
+        FindingTitle = e.FindingTitle,
+        Owner = e.Owner,
+        DueDate = e.DueDate,
+        Acceptance = e.Acceptance,
+        AcceptanceReason = e.AcceptanceReason,
+        AcceptanceExpiresAt = e.AcceptanceExpiresAt,
+        RequestedByUserId = e.RequestedByUserId,
+        RequestedByName = e.RequestedByName,
+        RequestedAt = e.RequestedAt,
+        DecidedByUserId = e.DecidedByUserId,
+        DecidedByName = e.DecidedByName,
+        DecidedAt = e.DecidedAt,
+        DecisionNote = e.DecisionNote,
+        UpdatedAt = e.UpdatedAt
+    };
+
     public static ScoreSnapshot ToModel(this ScoreSnapshotEntity e) => new()
     {
         Id = e.Id,

@@ -60,6 +60,7 @@ public sealed class PostureReportDocument(PostureReportData data) : IDocument
                 col.Item().Element(FixFirst);
                 col.Item().Element(ByArea);
                 if (data.Devices is { Total: > 0 } devices) col.Item().Element(c => Devices(c, devices));
+                if (AcceptedRisks() is { Count: > 0 } accepted) col.Item().Element(c => Accepted(c, accepted));
                 col.Item().Element(FindingsToFix);
                 col.Item().Element(Passed);
                 col.Item().Element(Method);
@@ -356,6 +357,75 @@ public sealed class PostureReportDocument(PostureReportData data) : IDocument
         });
     });
 
+    private FindingTracking? TrackingOf(Finding f) => data.Tracking.FirstOrDefault(t => t.FindingId == f.Id);
+
+    /// <summary>Open findings whose risk is accepted on the report date, soonest end date first.</summary>
+    private List<(Finding Finding, FindingTracking Tracking)> AcceptedRisks() =>
+        data.Findings.Where(f => f.Status is FindingStatus.Failed or FindingStatus.Investigate)
+            .Select(f => (Finding: f, Tracking: TrackingOf(f)))
+            .Where(x => x.Tracking is not null && x.Tracking.IsAccepted(data.GeneratedAt))
+            .Select(x => (x.Finding, x.Tracking!))
+            .OrderBy(x => x.Item2.AcceptanceExpiresAt)
+            .ToList();
+
+    private void Accepted(IContainer container, List<(Finding Finding, FindingTracking Tracking)> accepted) => container.Column(col =>
+    {
+        col.Item().Element(c => Heading(c, $"Accepted risks ({accepted.Count})"));
+        col.Item().PaddingBottom(4).Text("These checks fail, and it was agreed to leave them as they are until the date shown. " +
+                                         "They still count against the score.").FontColor(Muted);
+        col.Item().Table(table =>
+        {
+            table.ColumnsDefinition(c =>
+            {
+                c.RelativeColumn(3);
+                c.RelativeColumn(1.5f);
+                c.RelativeColumn(3.6f);
+                c.RelativeColumn(1.7f);
+            });
+            table.Header(h =>
+            {
+                HeaderCell(h.Cell(), "Check");
+                HeaderCell(h.Cell(), "Accepted until");
+                HeaderCell(h.Cell(), "Reason");
+                HeaderCell(h.Cell(), "Approved by");
+            });
+            foreach (var (f, t) in accepted)
+            {
+                WholeRow(table, 4, [0, 0, 0, 0], [3, 1.5f, 3.6f, 1.7f],
+                    c => c.SectionLink(SectionOf(f)).Text(f.Title),
+                    c => c.Text(EndDate(t.AcceptanceExpiresAt)),
+                    c => c.Text(t.AcceptanceReason ?? "").FontColor(Muted),
+                    c => c.Text(PersonName(t.DecidedByName)).FontColor(Muted));
+            }
+        });
+    });
+
+    /// <summary>The last day an acceptance covers (it runs to the end of that day).</summary>
+    private string EndDate(DateTimeOffset? expiresAt) => expiresAt is { } at ? Local(at.AddTicks(-1)).ToString("d MMM yyyy", Culture) : "";
+
+    /// <summary>"Name &lt;sign-in name&gt;" as stored for the audit log; the report shows only the name.</summary>
+    private static string PersonName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "";
+        var bracket = name.IndexOf(" <", StringComparison.Ordinal);
+        return bracket > 0 ? name[..bracket] : name;
+    }
+
+    /// <summary>"Owner: Fatima · due 24 Nov 2026 (overdue) · Accepted risk until 13 Jan 2027", or null when nothing is tracked.</summary>
+    private string? TrackingLine(Finding f)
+    {
+        if (TrackingOf(f) is not { } t) return null;
+        var parts = new List<string>();
+        if (t.Owner is { Length: > 0 } owner) parts.Add($"Owner: {owner}");
+        if (t.DueDate is { } due)
+        {
+            var today = DateOnly.FromDateTime(Local(data.GeneratedAt).DateTime);
+            parts.Add($"due {due.ToString("d MMM yyyy", Culture)}{(due < today ? " (overdue)" : "")}");
+        }
+        if (t.IsAccepted(data.GeneratedAt)) parts.Add($"Accepted risk until {EndDate(t.AcceptanceExpiresAt)}");
+        return parts.Count == 0 ? null : string.Join(" · ", parts);
+    }
+
     private void FindingsToFix(IContainer container)
     {
         var open = data.Findings.Where(f => f.Status is FindingStatus.Failed or FindingStatus.Investigate)
@@ -399,6 +469,8 @@ public sealed class PostureReportDocument(PostureReportData data) : IDocument
                 if (f.Frameworks.Count > 0) text.Span($" · {string.Join(", ", f.Frameworks)}");
                 if (f.Tags.Contains("BOD 25-01")) text.Span(" · BOD 25-01");
             });
+            if (TrackingLine(f) is { } tracking)
+                col.Item().Text(tracking).FontSize(8.5f).SemiBold();
             if (Clip(f.Evidence) is { } evidence)
             {
                 col.Item().PaddingTop(2).Text("What we found").FontSize(8).SemiBold().FontColor(Muted);

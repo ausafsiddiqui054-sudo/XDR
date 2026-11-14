@@ -39,6 +39,7 @@ else
     builder.Services.AddSingleton<IAuditLog>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IScanRunRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IScoreHistory>(sp => sp.GetRequiredService<SampleDataStore>());
+    builder.Services.AddSingleton<IFindingTrackingRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IDeviceActionRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IPlaybookRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IConfigurationChangeRepository>(sp => sp.GetRequiredService<SampleDataStore>());
@@ -57,6 +58,7 @@ else
 builder.Services.AddSingleton(new PortalMode(useDatabase, simulated));
 builder.Services.AddScoped<PostureService>();
 builder.Services.AddScoped<ScoreTrendService>();
+builder.Services.AddScoped<FindingTrackingService>();
 builder.Services.AddScoped<EndpointService>();
 builder.Services.AddScoped<DeviceActionRequestService>();
 builder.Services.AddScoped<PlaybookService>();

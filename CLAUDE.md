@@ -122,6 +122,19 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
 - The Graph role check before a scan applies to Graph engines only (`ScanEngines.UsesGraph`); an engine that
   doesn't apply to a tenant (`ScanEngines.AppliesTo`) is neither scheduled nor queued for it.
 
+## Finding tracking invariants
+- Owners, due dates and risk acceptances live in `finding_tracking`, keyed by tenant and finding ID with no foreign key to
+  `findings`: every scan deletes and re-adds findings, and tracking must survive that. It relies on engines keeping finding
+  IDs stable across scans (a Maester test without an ID falls back to its position, which isn't stable).
+- Accepting a risk never changes a finding, its status or the score (owner's decision, 2026-11-14): `RiskScoreCalculator`
+  doesn't know about tracking. It only labels the finding and lists it under "Accepted risks" in the report.
+- Every acceptance has an end date (at most `FindingTrackingPolicy.MaxAcceptanceDays`); past it, it reads as expired
+  (`IsExpired`, computed, no job). Four eyes: operators request, an Owner other than the requester decides
+  (`WhyCannotDecide`). Approval is fail-closed on the audit entry, since the table keeps only the current state and the
+  audit log is the history. Any operator may withdraw or end one.
+- All rules are in `FindingTrackingService` (not the UI); changes are audited under `finding.*`. Client viewers read
+  their own tenant's tracking and change nothing. Names are stored as "Name <sign-in name>"; show `Person(...)` on screen.
+
 ## Wazuh invariants
 - One shared manager; a tenant's agents are its `Tenant.WazuhAgentGroup` (unique index, Owner-only, audited
   `onboarding.wazuh-group-changed`, `default` refused). The engine reads only agents whose own group list

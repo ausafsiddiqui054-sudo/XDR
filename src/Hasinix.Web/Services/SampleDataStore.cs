@@ -11,7 +11,7 @@ namespace Hasinix.Web.Services;
 /// repositories once the Worker starts writing real scan results.
 /// </summary>
 public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDeviceRepository, IOnboardingRepository, IPortalUserRepository, IAuditLog,
-    IScanRunRepository, IDeviceActionRepository, IAuditExportStore, IPlaybookRepository, IConfigurationChangeRepository, IFindingPlaybookRepository, IScoreHistory
+    IScanRunRepository, IDeviceActionRepository, IAuditExportStore, IPlaybookRepository, IConfigurationChangeRepository, IFindingPlaybookRepository, IScoreHistory, IFindingTrackingRepository
 {
     private readonly List<DeviceActionRequest> _actions = [];
     private readonly List<RemediationPlaybook> _playbooks = [];
@@ -19,6 +19,7 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
     private readonly List<FindingPlaybook> _findingPlaybooks = [];
     private readonly List<ScanRun> _scanRuns = [];
     private readonly List<ScoreSnapshot> _scores = [];
+    private readonly Dictionary<(Guid TenantId, string FindingId), FindingTracking> _tracking = [];
     private readonly List<AuditEvent> _audit = [];
     private readonly List<PortalUser> _users = [];
     private readonly Lock _gate = new();
@@ -141,6 +142,7 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
         ];
         SeedScoreHistory(tenant);
         if (_fullDemo) SeedScanRuns(tenant);
+        if (_fullDemo) SeedTracking(tenant);
         if (tenant.LastScanAt is not null)
         {
             _devices[tenant.Id] = GenerateDevices(tenant, passRate);
@@ -156,6 +158,43 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
 
     private static Random StableRandom(string seed, int salt = 0) =>
         new(seed.Aggregate(17 + salt, (h, c) => unchecked(h * 31 + c)) & 0x7fffffff);
+
+    /// <summary>
+    /// Demo only: a few tracked findings so the Findings page shows an owner with a due date, an overdue one,
+    /// an accepted risk and a request waiting for an Owner. The people named are made up.
+    /// </summary>
+    private void SeedTracking(Tenant tenant)
+    {
+        var failed = _findings[tenant.Id].Where(f => f.Status == FindingStatus.Failed)
+            .OrderByDescending(f => f.Severity).ThenBy(f => f.Id, StringComparer.Ordinal).ToList();
+        var now = DateTimeOffset.UtcNow;
+        var today = DateOnly.FromDateTime(now.UtcDateTime);
+        const string reason = "Fixing this needs a change window the client can't give before the end of the year. Agreed with the practice manager; planned for January.";
+
+        FindingTracking Track(Finding f) => new() { TenantId = tenant.Id, FindingId = f.Id, FindingTitle = f.Title, UpdatedAt = now.AddDays(-12) };
+        void Add(FindingTracking tracking) => _tracking[(tracking.TenantId, tracking.FindingId)] = tracking;
+
+        if (tenant.DisplayName == "Al Noor Family Clinic" && failed.Count >= 3)
+        {
+            Add(Track(failed[0]) with { Owner = "Fatima Al Mansoori (clinic IT)", DueDate = today.AddDays(10) });
+            Add(Track(failed[1]) with { Owner = "Omar Haddad (clinic manager)", DueDate = today.AddDays(-5) });
+            Add(Track(failed[^1]) with
+            {
+                Owner = "Fatima Al Mansoori (clinic IT)", DueDate = today.AddDays(60),
+                Acceptance = RiskAcceptanceStatus.Accepted, AcceptanceReason = reason, AcceptanceExpiresAt = now.AddDays(60),
+                RequestedByUserId = Guid.NewGuid(), RequestedByName = "Dev MSP Admin", RequestedAt = now.AddDays(-12),
+                DecidedByUserId = Guid.NewGuid(), DecidedByName = "Dev Owner", DecidedAt = now.AddDays(-11), DecisionNote = "Review again in January."
+            });
+        }
+        else if (tenant.DisplayName == "Palm Dental Studio" && failed.Count >= 1)
+        {
+            Add(Track(failed[^1]) with
+            {
+                Acceptance = RiskAcceptanceStatus.Requested, AcceptanceReason = reason, AcceptanceExpiresAt = now.AddDays(90),
+                RequestedByUserId = Guid.NewGuid(), RequestedByName = "Dev MSP Admin", RequestedAt = now.AddDays(-1), UpdatedAt = now.AddDays(-1)
+            });
+        }
+    }
 
     private const int ScoreHistoryDays = 90;
 
@@ -1021,6 +1060,78 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
             return Task.FromResult<IReadOnlyList<ScoreSnapshot>>(_scores
                 .Where(s => s.RecordedAt >= since && (tenantId is null || s.TenantId == tenantId))
                 .OrderBy(s => s.RecordedAt).ToList());
+    }
+
+    // --- Finding tracking (same rules as the database: acceptance changes depend on the current state) ---
+
+    Task<IReadOnlyList<FindingTracking>> IFindingTrackingRepository.GetAllAsync(Guid? tenantId, CancellationToken ct)
+    {
+        lock (_gate)
+            return Task.FromResult<IReadOnlyList<FindingTracking>>(_tracking.Values.Where(t => tenantId is null || t.TenantId == tenantId).ToList());
+    }
+
+    Task<FindingTracking?> IFindingTrackingRepository.GetAsync(Guid tenantId, string findingId, CancellationToken ct)
+    {
+        lock (_gate) return Task.FromResult(_tracking.GetValueOrDefault((tenantId, findingId)));
+    }
+
+    Task<FindingTracking> IFindingTrackingRepository.SetOwnerAsync(Guid tenantId, string findingId, string findingTitle, string? owner, DateOnly? dueDate,
+        DateTimeOffset at, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            var current = _tracking.GetValueOrDefault((tenantId, findingId))
+                          ?? new FindingTracking { TenantId = tenantId, FindingId = findingId, FindingTitle = findingTitle, UpdatedAt = at };
+            return Task.FromResult(_tracking[(tenantId, findingId)] = current with { FindingTitle = findingTitle, Owner = owner, DueDate = dueDate, UpdatedAt = at });
+        }
+    }
+
+    Task<FindingTracking?> IFindingTrackingRepository.RequestAcceptanceAsync(Guid tenantId, string findingId, string findingTitle, string reason,
+        DateTimeOffset expiresAt, Guid requestedByUserId, string requestedByName, DateTimeOffset at, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            var current = _tracking.GetValueOrDefault((tenantId, findingId))
+                          ?? new FindingTracking { TenantId = tenantId, FindingId = findingId, FindingTitle = findingTitle, UpdatedAt = at };
+            if (!current.CanRequest(at)) return Task.FromResult<FindingTracking?>(null);
+            return Task.FromResult<FindingTracking?>(_tracking[(tenantId, findingId)] = current with
+            {
+                FindingTitle = findingTitle, Acceptance = RiskAcceptanceStatus.Requested, AcceptanceReason = reason, AcceptanceExpiresAt = expiresAt,
+                RequestedByUserId = requestedByUserId, RequestedByName = requestedByName, RequestedAt = at,
+                DecidedByUserId = null, DecidedByName = null, DecidedAt = null, DecisionNote = null, UpdatedAt = at
+            });
+        }
+    }
+
+    Task<FindingTracking?> IFindingTrackingRepository.DecideAcceptanceAsync(Guid tenantId, string findingId, bool approve, Guid deciderId, string deciderName,
+        string? note, DateTimeOffset at, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            if (_tracking.GetValueOrDefault((tenantId, findingId)) is not { Acceptance: RiskAcceptanceStatus.Requested } current
+                || (approve && !(current.AcceptanceExpiresAt > at)))
+                return Task.FromResult<FindingTracking?>(null);
+            return Task.FromResult<FindingTracking?>(_tracking[(tenantId, findingId)] = current with
+            {
+                Acceptance = approve ? RiskAcceptanceStatus.Accepted : RiskAcceptanceStatus.Rejected,
+                DecidedByUserId = deciderId, DecidedByName = deciderName, DecidedAt = at, DecisionNote = note, UpdatedAt = at
+            });
+        }
+    }
+
+    Task<FindingTracking?> IFindingTrackingRepository.EndAcceptanceAsync(Guid tenantId, string findingId, DateTimeOffset at, CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            if (_tracking.GetValueOrDefault((tenantId, findingId)) is not { Acceptance: RiskAcceptanceStatus.Requested or RiskAcceptanceStatus.Accepted } current)
+                return Task.FromResult<FindingTracking?>(null);
+            return Task.FromResult<FindingTracking?>(_tracking[(tenantId, findingId)] = current with
+            {
+                Acceptance = RiskAcceptanceStatus.None, AcceptanceReason = null, AcceptanceExpiresAt = null,
+                RequestedByUserId = null, RequestedByName = null, RequestedAt = null,
+                DecidedByUserId = null, DecidedByName = null, DecidedAt = null, DecisionNote = null, UpdatedAt = at
+            });
+        }
     }
 
     /// <summary>The sample score history, for seeding a development database next to <see cref="Snapshot"/>.</summary>

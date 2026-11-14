@@ -94,6 +94,7 @@ public sealed class ReportService(
     ITenantRepository tenants,
     IFindingRepository findings,
     IDeviceRepository devices,
+    IFindingTrackingRepository tracking,
     AuditTrail audit,
     ReportSettings settings,
     TimeProvider time)
@@ -123,6 +124,7 @@ public sealed class ReportService(
             GeneratedAt = now,
             Branding = settings.Branding,
             Devices = inventory.Count > 0 ? DeviceSummary.From(inventory, sync?.LastSuccessAt) : null,
+            Tracking = await tracking.GetAllAsync(tenant.Id, ct),
             TimeZone = settings.TimeZone
         });
 
