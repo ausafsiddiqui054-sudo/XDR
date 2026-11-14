@@ -18,6 +18,7 @@
     <ProjectReference Include="..\Hasinix.Engines\Hasinix.Engines.csproj" />
     <ProjectReference Include="..\Hasinix.Intune\Hasinix.Intune.csproj" />
     <ProjectReference Include="..\Hasinix.Playbooks\Hasinix.Playbooks.csproj" />
+    <ProjectReference Include="..\Hasinix.Reporting\Hasinix.Reporting.csproj" />
   </ItemGroup>
 
 </Project>

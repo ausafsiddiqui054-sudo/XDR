@@ -260,6 +260,50 @@ internal static class EntityMapping
         Error = e.Error
     };
 
+    public static ScoreSnapshot ToModel(this ScoreSnapshotEntity e) => new()
+    {
+        Id = e.Id,
+        TenantId = e.TenantId,
+        RecordedAt = e.RecordedAt,
+        Engine = e.Engine,
+        Score = new RiskScore
+        {
+            Score = e.Score,
+            Grade = e.Grade,
+            Passed = e.Passed,
+            Failed = e.Failed,
+            Investigate = e.Investigate,
+            NotEvaluated = e.NotEvaluated,
+            FailedBySeverity = new Dictionary<Severity, int>
+            {
+                [Severity.Critical] = e.FailedCritical,
+                [Severity.High] = e.FailedHigh,
+                [Severity.Medium] = e.FailedMedium,
+                [Severity.Low] = e.FailedLow,
+                [Severity.Info] = e.FailedInfo
+            }
+        }
+    };
+
+    public static ScoreSnapshotEntity ToEntity(this ScoreSnapshot m) => new()
+    {
+        Id = m.Id,
+        TenantId = m.TenantId,
+        RecordedAt = m.RecordedAt,
+        Engine = m.Engine,
+        Score = m.Score.Score,
+        Grade = m.Score.Grade,
+        Passed = m.Score.Passed,
+        Failed = m.Score.Failed,
+        Investigate = m.Score.Investigate,
+        NotEvaluated = m.Score.NotEvaluated,
+        FailedCritical = m.Score.FailedBySeverity.GetValueOrDefault(Severity.Critical),
+        FailedHigh = m.Score.FailedBySeverity.GetValueOrDefault(Severity.High),
+        FailedMedium = m.Score.FailedBySeverity.GetValueOrDefault(Severity.Medium),
+        FailedLow = m.Score.FailedBySeverity.GetValueOrDefault(Severity.Low),
+        FailedInfo = m.Score.FailedBySeverity.GetValueOrDefault(Severity.Info)
+    };
+
     public static DeviceActionRequest ToModel(this DeviceActionEntity e) => new()
     {
         Id = e.Id,

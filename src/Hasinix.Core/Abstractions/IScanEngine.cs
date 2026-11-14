@@ -27,6 +27,15 @@ public interface IFindingRepository
     Task SaveScanAsync(ScanResult result, CancellationToken ct = default);
 }
 
+/// <summary>Past scores, one snapshot per successful scan. Append-only: there is deliberately no update.</summary>
+public interface IScoreHistory
+{
+    Task RecordAsync(ScoreSnapshot snapshot, CancellationToken ct = default);
+
+    /// <summary>Snapshots recorded at or after <paramref name="since"/>, oldest first; one tenant's when <paramref name="tenantId"/> is given.</summary>
+    Task<IReadOnlyList<ScoreSnapshot>> GetSinceAsync(DateTimeOffset since, Guid? tenantId = null, CancellationToken ct = default);
+}
+
 /// <summary>
 /// Reads a tenant's managed device inventory (e.g. Intune through Microsoft Graph).
 /// Implementations use read-only permissions and return normalized <see cref="ManagedDevice"/>s.

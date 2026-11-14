@@ -110,6 +110,8 @@ public class DemoSimulatorTests
         Assert.Equal(ScanRunStatus.Succeeded, done.Status);
         Assert.Equal((await ((IFindingRepository)h.Store).GetForTenantAsync(alNoor.Id)).Count(f => f.Source == ScanEngines.Maester), done.FindingCount);
         Assert.Equal(h.Time.Now, (await h.TenantAsync("Al Noor Family Clinic")).LastScanAt);
+        // As in the Worker: the finished scan adds a point to the score trend.
+        Assert.Equal(ScanEngines.Maester, Assert.Single(await ((IScoreHistory)h.Store).GetSinceAsync(h.Time.Now, alNoor.Id)).Engine);
 
         var proposal = Assert.Single(await ((IConfigurationChangeRepository)h.Store).QueryAsync(new ConfigurationChangeQuery { TenantId = alNoor.Id }));
         Assert.Equal((DeviceActionStatus.PendingApproval, "block-legacy-auth", Harness.Requester), (proposal.Status, proposal.FixId, proposal.RequestedByUserId));

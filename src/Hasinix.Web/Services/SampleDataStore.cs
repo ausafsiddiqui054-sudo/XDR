@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Hasinix.Core.Abstractions;
 using Hasinix.Core.Models;
+using Hasinix.Reporting;
 
 namespace Hasinix.Web.Services;
 
@@ -10,13 +11,14 @@ namespace Hasinix.Web.Services;
 /// repositories once the Worker starts writing real scan results.
 /// </summary>
 public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDeviceRepository, IOnboardingRepository, IPortalUserRepository, IAuditLog,
-    IScanRunRepository, IDeviceActionRepository, IAuditExportStore, IPlaybookRepository, IConfigurationChangeRepository, IFindingPlaybookRepository
+    IScanRunRepository, IDeviceActionRepository, IAuditExportStore, IPlaybookRepository, IConfigurationChangeRepository, IFindingPlaybookRepository, IScoreHistory
 {
     private readonly List<DeviceActionRequest> _actions = [];
     private readonly List<RemediationPlaybook> _playbooks = [];
     private readonly List<ConfigurationChangeRequest> _changes = [];
     private readonly List<FindingPlaybook> _findingPlaybooks = [];
     private readonly List<ScanRun> _scanRuns = [];
+    private readonly List<ScoreSnapshot> _scores = [];
     private readonly List<AuditEvent> _audit = [];
     private readonly List<PortalUser> _users = [];
     private readonly Lock _gate = new();
@@ -137,6 +139,7 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
             .. wazuhGroup is null ? [] : GenerateWazuh(tenant, passRate),
             .. goPhish ? GenerateGoPhish(tenant, passRate) : []
         ];
+        SeedScoreHistory(tenant);
         if (_fullDemo) SeedScanRuns(tenant);
         if (tenant.LastScanAt is not null)
         {
@@ -153,6 +156,65 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
 
     private static Random StableRandom(string seed, int salt = 0) =>
         new(seed.Aggregate(17 + salt, (h, c) => unchecked(h * 31 + c)) & 0x7fffffff);
+
+    private const int ScoreHistoryDays = 90;
+
+    /// <summary>
+    /// Ninety days of daily scores ending at the tenant's current one, so the trend isn't empty in a demo. Like a
+    /// real tenant's, the score stays level and moves on the few days something was fixed (or slipped). The same on every run.
+    /// </summary>
+    private void SeedScoreHistory(Tenant tenant)
+    {
+        if (tenant.LastScanAt is not { } last || _findings[tenant.Id] is not { Count: > 0 } findings) return;
+        var current = RiskScoreCalculator.Calculate(findings);
+        var random = StableRandom(tenant.DisplayName, salt: 7);
+
+        // Most tenants improved over the period: they started up to 16 points lower, a few slightly higher.
+        var start = Math.Clamp(current.Score - random.Next(-3, 17), 5, 98);
+        var changeDays = Enumerable.Range(0, random.Next(3, 6)).Select(_ => random.Next(4, ScoreHistoryDays - 2)).Distinct().Order().ToList();
+        var weights = changeDays.Select(_ => 0.3 + random.NextDouble()).ToList();
+        var deltas = weights.Select(w => (int)Math.Round((current.Score - start) * w / weights.Sum())).ToList();
+        deltas[^1] += current.Score - start - deltas.Sum();
+        // One slip that the next change makes up for.
+        if (deltas.Count >= 2)
+        {
+            var slip = random.Next(2, 5);
+            deltas[0] -= slip;
+            deltas[1] += slip;
+        }
+
+        var score = start;
+        for (var day = 0; day <= ScoreHistoryDays; day++)
+        {
+            var change = changeDays.IndexOf(day);
+            if (change >= 0) score = Math.Clamp(score + deltas[change], 0, 100);
+            var value = day == ScoreHistoryDays ? current.Score : score;
+            _scores.Add(new ScoreSnapshot
+            {
+                Id = Guid.NewGuid(), TenantId = tenant.Id, RecordedAt = last.AddDays(day - ScoreHistoryDays), Engine = ScanEngines.Maester,
+                Score = value == current.Score ? current : PastScore(current, value)
+            });
+        }
+    }
+
+    /// <summary>A sample earlier score: today's counts with enough checks moved between passed and failed to fit <paramref name="score"/>.</summary>
+    private static RiskScore PastScore(RiskScore current, int score)
+    {
+        var evaluated = current.Passed + current.Failed + current.Investigate;
+        var shift = Math.Clamp((int)Math.Round((current.Score - score) / 100.0 * evaluated), -current.Failed, current.Passed);
+        var failedBySeverity = new Dictionary<Severity, int>(current.FailedBySeverity);
+        failedBySeverity[Severity.Medium] = Math.Max(0, failedBySeverity.GetValueOrDefault(Severity.Medium) + shift);
+        return new RiskScore
+        {
+            Score = score,
+            Grade = RiskScoreCalculator.GradeFor(score, failedBySeverity.GetValueOrDefault(Severity.Critical) > 0),
+            Passed = current.Passed - shift,
+            Failed = current.Failed + shift,
+            Investigate = current.Investigate,
+            NotEvaluated = current.NotEvaluated,
+            FailedBySeverity = failedBySeverity
+        };
+    }
 
     private static IReadOnlyList<Finding> Generate(Tenant tenant, double passRate)
     {
@@ -945,9 +1007,31 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
         return Task.CompletedTask;
     }
 
+    // --- Score history ---
+
+    public Task RecordAsync(ScoreSnapshot snapshot, CancellationToken ct = default)
+    {
+        lock (_gate) _scores.Add(snapshot);
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<ScoreSnapshot>> GetSinceAsync(DateTimeOffset since, Guid? tenantId = null, CancellationToken ct = default)
+    {
+        lock (_gate)
+            return Task.FromResult<IReadOnlyList<ScoreSnapshot>>(_scores
+                .Where(s => s.RecordedAt >= since && (tenantId is null || s.TenantId == tenantId))
+                .OrderBy(s => s.RecordedAt).ToList());
+    }
+
+    /// <summary>The sample score history, for seeding a development database next to <see cref="Snapshot"/>.</summary>
+    public IReadOnlyList<ScoreSnapshot> ScoreHistory()
+    {
+        lock (_gate) return _scores.ToList();
+    }
+
     // --- Demo simulator support (sample data only) ---
 
-    /// <summary>A simulated scan: the engine's sample findings are re-dated and the tenant's last scan moves to <paramref name="at"/>.</summary>
+    /// <summary>A simulated scan: the engine's sample findings are re-dated, the tenant's last scan moves to <paramref name="at"/> and the score is recorded.</summary>
     internal int RecordSimulatedScan(Guid tenantId, string engine, DateTimeOffset at)
     {
         lock (_gate)
@@ -956,6 +1040,12 @@ public sealed class SampleDataStore : ITenantRepository, IFindingRepository, IDe
             _findings[tenantId] = current.Select(f => f.Source == engine ? f with { DetectedAt = at } : f).ToList();
             var index = _tenants.FindIndex(t => t.Id == tenantId);
             if (index >= 0) _tenants[index] = _tenants[index] with { LastScanAt = at };
+            // As in the Worker: the score after the scan is kept for the trend.
+            if (current.Count > 0)
+                _scores.Add(new ScoreSnapshot
+                {
+                    Id = Guid.NewGuid(), TenantId = tenantId, RecordedAt = at, Engine = engine, Score = RiskScoreCalculator.Calculate(current)
+                });
             return current.Count(f => f.Source == engine);
         }
     }

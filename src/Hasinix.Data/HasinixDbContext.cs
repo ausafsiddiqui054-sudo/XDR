@@ -16,6 +16,7 @@ public sealed class HasinixDbContext(DbContextOptions<HasinixDbContext> options)
     public DbSet<PortalUserEntity> PortalUsers => Set<PortalUserEntity>();
     public DbSet<AuditEventEntity> AuditEvents => Set<AuditEventEntity>();
     public DbSet<ScanRunEntity> ScanRuns => Set<ScanRunEntity>();
+    public DbSet<ScoreSnapshotEntity> ScoreSnapshots => Set<ScoreSnapshotEntity>();
     public DbSet<DeviceActionEntity> DeviceActions => Set<DeviceActionEntity>();
     public DbSet<PlaybookEntity> Playbooks => Set<PlaybookEntity>();
     public DbSet<ConfigurationChangeEntity> ConfigurationChanges => Set<ConfigurationChangeEntity>();
@@ -241,6 +242,17 @@ public sealed class HasinixDbContext(DbContextOptions<HasinixDbContext> options)
                 .HasDatabaseName("IX_scan_runs_active");
             e.HasIndex(x => new { x.Status, x.QueuedAt });
             e.HasIndex(x => new { x.TenantId, x.Engine, x.QueuedAt });
+            e.HasOne<TenantEntity>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<ScoreSnapshotEntity>(e =>
+        {
+            e.ToTable("score_snapshots");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Engine).HasMaxLength(64);
+            e.Property(x => x.Grade).HasMaxLength(2);
+            e.HasIndex(x => new { x.TenantId, x.RecordedAt });
+            e.HasIndex(x => x.RecordedAt);
             e.HasOne<TenantEntity>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
         });
     }

@@ -109,6 +109,11 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
   means existing tenants must re-consent; list it under the engine that needs it.
 - A failed scan never replaces stored findings; only `SaveScanAsync` on success does, and only that
   engine's (`Source`) findings. An engine that evaluated nothing must report failure, not success.
+- Past scores exist only as `score_snapshots` (`IScoreHistory`, append-only): after each successful scan the Worker
+  records `RiskScoreCalculator.Calculate` over all the tenant's stored findings. Findings are replaced by the next
+  scan, so a score can't be rebuilt later; there is no backfill. A snapshot failure is logged and never fails the scan.
+  Trends (`ScoreTrend` in `Hasinix.Reporting`, one point per day in `Reports:TimeZone`) carry the last score forward
+  and combine tenants the way the portfolio score does; `ScoreTrendService` filters by `CanSee`.
 - Each Worker runs the engines in its `Scans:Engines` (ScubaGear needs Windows PowerShell 5.1, so a
   Windows Worker); the portal's `Scans:Engines` must list every engine some Worker runs.
 - ScubaGear runs only `aad`: its other products need Exchange.ManageAsApp, Sites.FullControl.All or
@@ -199,6 +204,9 @@ Never edit an applied migration; add a new one. Enums are stored as strings.
 - `SampleDataStore(fullDemo: true)` is the portal's demo set (Wazuh/GoPhish findings, scan history, sample certificate
   references, a configuration tenant). Tests use the plain set. `Snapshot()` (the development database seed) strips the
   sample references so a real Worker never tries to use them.
+- Both sets seed 90 days of made-up score history per scanned tenant (`SeedScoreHistory`, ending at the tenant's real
+  current score; `ScoreHistory()` seeds it into a development database). It is sample data: never write invented
+  snapshots for a real tenant.
 
 ## Defender health invariants
 - Defender data comes through Graph with the assessment app's existing read-only permissions:

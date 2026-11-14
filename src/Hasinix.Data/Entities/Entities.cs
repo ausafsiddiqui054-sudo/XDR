@@ -217,6 +217,26 @@ public sealed class ScanRunEntity
     public string? Error { get; set; }
 }
 
+/// <summary>A tenant's score after one successful scan. Rows are only ever added.</summary>
+public sealed class ScoreSnapshotEntity
+{
+    public Guid Id { get; set; }
+    public Guid TenantId { get; set; }
+    public DateTimeOffset RecordedAt { get; set; }
+    public string Engine { get; set; } = "";
+    public int Score { get; set; }
+    public string Grade { get; set; } = "";
+    public int Passed { get; set; }
+    public int Failed { get; set; }
+    public int Investigate { get; set; }
+    public int NotEvaluated { get; set; }
+    public int FailedCritical { get; set; }
+    public int FailedHigh { get; set; }
+    public int FailedMedium { get; set; }
+    public int FailedLow { get; set; }
+    public int FailedInfo { get; set; }
+}
+
 public sealed class DeviceActionEntity
 {
     public Guid Id { get; set; }

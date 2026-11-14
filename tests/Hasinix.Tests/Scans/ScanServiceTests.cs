@@ -72,7 +72,7 @@ public class ScanServiceTests
 
         public bool WithFindingPlaybooks { get; init; }
 
-        public ScanService Service => new(Store, Store, Store, [Engine, .. OtherEngines], Tokens, Microsoft.Extensions.Options.Options.Create(Options), Time,
+        public ScanService Service => new(Store, Store, Store, Store, [Engine, .. OtherEngines], Tokens, Microsoft.Extensions.Options.Options.Create(Options), Time,
             NullLogger<ScanService>.Instance,
             WithFindingPlaybooks ? new FindingPlaybookRunner(Store, Store, Store, Store, Time, NullLogger<FindingPlaybookRunner>.Instance) : null);
 
@@ -157,6 +157,42 @@ public class ScanServiceTests
         var maester = (await h.Store.GetForTenantAsync(tenant.Id)).Where(f => f.Source == "Maester").ToList();
         Assert.Equal(3, maester.Count);
         Assert.All(maester, f => Assert.StartsWith("Test", f.Title));
+    }
+
+    [Fact]
+    public async Task ASuccessfulScanRecordsTheScoreOfTheStoredFindings()
+    {
+        var h = new Harness();
+        var tenant = (await h.OnboardAsync(1))[0];
+        IScoreHistory history = h.Store;
+        await h.Service.EnqueueDueAsync();
+
+        await h.Service.RunNextAsync();
+
+        // The sample store's seeded history is older than the scan; only the scan's snapshot is at the scan's time.
+        var snapshot = Assert.Single(await history.GetSinceAsync(h.Time.Now, tenant.Id));
+        Assert.Equal(ScanEngines.Maester, snapshot.Engine);
+        var expected = Hasinix.Reporting.RiskScoreCalculator.Calculate(await h.Store.GetForTenantAsync(tenant.Id));
+        Assert.Equal((expected.Score, expected.Grade, expected.Failed), (snapshot.Score.Score, snapshot.Score.Grade, snapshot.Score.Failed));
+        Assert.Equal(expected.FailedBySeverity, snapshot.Score.FailedBySeverity);
+    }
+
+    [Fact]
+    public async Task AFailedScanRecordsNoScore()
+    {
+        var h = new Harness
+        {
+            Engine = new FakeEngine((t, _) => Task.FromResult(new ScanResult
+            {
+                TenantId = t.Id, Source = "Maester", StartedAt = default, CompletedAt = default, Findings = [], Succeeded = false, Error = "pwsh exited 1"
+            }))
+        };
+        var tenant = (await h.OnboardAsync(1))[0];
+        await h.Service.EnqueueDueAsync();
+
+        await h.Service.RunNextAsync();
+
+        Assert.Empty(await ((IScoreHistory)h.Store).GetSinceAsync(h.Time.Now, tenant.Id));
     }
 
     [Fact]

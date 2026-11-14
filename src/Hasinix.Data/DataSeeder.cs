@@ -13,6 +13,7 @@ public static class DataSeeder
         IEnumerable<Tenant> tenants,
         IEnumerable<Finding> findings,
         IEnumerable<ManagedDevice> devices,
+        IEnumerable<ScoreSnapshot>? scores = null,
         CancellationToken ct = default)
     {
         var factory = services.GetRequiredService<IDbContextFactory<HasinixDbContext>>();
@@ -25,6 +26,7 @@ public static class DataSeeder
         db.Tenants.AddRange(tenants.Select(t => t.ToEntity()));
         db.Findings.AddRange(findings.Select(f => f.ToEntity()));
         db.Devices.AddRange(deviceList.Select(d => d.ToEntity()));
+        db.ScoreSnapshots.AddRange((scores ?? []).Select(s => s.ToEntity()));
         db.DeviceSyncStatuses.AddRange(deviceList.GroupBy(d => d.TenantId).Select(g => new Entities.DeviceSyncStatusEntity
         {
             TenantId = g.Key, LastAttemptAt = now, LastSuccessAt = now, Succeeded = true, DeviceCount = g.Count()

@@ -72,6 +72,13 @@ public static class RiskScoreCalculator
         return hasOpenCritical && (grade is "A" or "B") ? "C" : grade;
     }
 
+    /// <summary>The score for several tenants together: the rounded mean of their scores, 0 for none.</summary>
+    public static int AverageOf(IEnumerable<int> scores)
+    {
+        var list = scores.ToList();
+        return list.Count == 0 ? 0 : (int)Math.Round(list.Average());
+    }
+
     /// <summary>Failed findings ordered by impact: severity first, then category.</summary>
     public static IReadOnlyList<Finding> TopRisks(IEnumerable<Finding> findings, int take = 10) =>
         findings.Where(f => f.Status is FindingStatus.Failed or FindingStatus.Investigate)

@@ -14,7 +14,7 @@ public sealed record PortfolioPosture(IReadOnlyList<TenantPosture> Tenants)
 {
     public IEnumerable<TenantPosture> Scanned => Tenants.Where(t => t.HasScan);
 
-    public int AverageScore => Scanned.Any() ? (int)Math.Round(Scanned.Average(t => t.Score!.Score)) : 0;
+    public int AverageScore => RiskScoreCalculator.AverageOf(Scanned.Select(t => t.Score!.Score));
 
     /// <summary>The average score's grade, capped like a tenant's when any scanned tenant has an open critical.</summary>
     public string AverageGrade => RiskScoreCalculator.GradeFor(AverageScore, OpenOf(Severity.Critical) > 0);

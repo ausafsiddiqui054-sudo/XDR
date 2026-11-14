@@ -1,5 +1,6 @@
 @page "/"
 @inject PostureService Posture
+@inject ScoreTrendService Trends
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject IUserContextAccessor Current
@@ -76,6 +77,25 @@ else
         </MudItem>
 
         <MudItem xs="12">
+            <MudPaper Class="sp-card pa-5" Elevation="0" Outlined="true" data-testid="score-trend-card">
+                <div class="sp-exposure-heading">
+                    <div>
+                        <h2>Score trend</h2>
+                        <p>@(_isViewer ? "Your score after each scan" : "Average score of your tenants"), last @ScoreTrendService.DefaultDays days</p>
+                    </div>
+                    @if (ScoreTrend.Change(_trends.Combined, 30) is { } change)
+                    {
+                        <span class="sp-trend-change" data-testid="score-trend-change">
+                            <MudIcon Size="Size.Small" Icon="@ChangeIcon(change.Delta)" Color="@ChangeColor(change.Delta)" />
+                            <span>@ChangeText(change)</span>
+                        </span>
+                    }
+                </div>
+                <ScoreTrendChart Points="_trends.Combined" Combined="!_isViewer" />
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12">
             <MudPaper Class="sp-card sp-exposure-card pa-5" Elevation="0" Outlined="true">
                 <div class="sp-exposure-heading"><div><h2>Open findings by severity</h2><p>Failed checks across assessed tenants</p></div><MudButton Href="findings" Color="Color.Primary" EndIcon="@Icons.Material.Rounded.ArrowForward" Size="Size.Small">Explore findings</MudButton></div>
                 <div class="sp-severity-grid">
@@ -112,7 +132,15 @@ else
                             {
                                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
                                     <MudProgressLinear Value="@s.Score" Color="@HasinixTheme.ColorOfScore(s.Score)" Rounded="true" Size="Size.Small" Style="width:64px" />
-                                    <MudText Typo="Typo.body2"><b>@s.Score</b> · @s.Grade</MudText>
+                                    <MudText Typo="Typo.body2" Style="white-space:nowrap"><b>@s.Score</b> · @s.Grade</MudText>
+                                    @* The score's move over the last 30 days; nothing is shown while it hasn't moved. *@
+                                    @if (_trends.ByTenant.TryGetValue(context.Tenant.Id, out var points) && ScoreTrend.Change(points, 30) is { Delta: not 0 } moved)
+                                    {
+                                        <span class="sp-trend-change" title="@ChangeText(moved)" aria-label="@ChangeText(moved)" data-testid="tenant-score-change">
+                                            <MudIcon Size="Size.Small" Icon="@ChangeIcon(moved.Delta)" Color="@ChangeColor(moved.Delta)" />
+                                            <span>@Math.Abs(moved.Delta)</span>
+                                        </span>
+                                    }
                                 </MudStack>
                             }
                             else
@@ -179,7 +207,27 @@ else
     protected override async Task OnInitializedAsync()
     {
         _isViewer = (await Current.GetAsync()).Role == PortalRole.ClientViewer;
+        _trends = await Trends.GetAsync();
         _portfolio = await Posture.GetPortfolioAsync();
+    }
+
+    private ScoreTrends _trends = ScoreTrends.Empty;
+
+    private static string ChangeIcon(int delta) => delta > 0 ? Icons.Material.Rounded.TrendingUp
+        : delta < 0 ? Icons.Material.Rounded.TrendingDown : Icons.Material.Rounded.TrendingFlat;
+
+    private static Color ChangeColor(int delta) => delta > 0 ? Color.Success : delta < 0 ? Color.Error : Color.Default;
+
+    private static string ChangeText(ScoreChange change)
+    {
+        var since = change.Since.ToString("d MMM", System.Globalization.CultureInfo.InvariantCulture);
+        var points = Math.Abs(change.Delta) == 1 ? "point" : "points";
+        return change.Delta switch
+        {
+            > 0 => $"Up {change.Delta} {points} since {since}",
+            < 0 => $"Down {-change.Delta} {points} since {since}",
+            _ => $"No change since {since}"
+        };
     }
 
     private void OpenTenant(TenantPosture t) => Nav.NavigateTo($"findings?tenant={t.Tenant.Id}");

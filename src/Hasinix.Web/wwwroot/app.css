@@ -485,6 +485,31 @@
 .sp-severity-medium { background: var(--mud-palette-info); }
 .sp-severity-low { background: var(--mud-palette-text-secondary); }
 .sp-panel-heading { padding: 8px 8px 20px; }
+/* Score trend. The SVG stretches with the card, so only the line and grid live in it; labels, dots and tooltips are HTML placed by percentage. */
+.sp-trend { display: grid; grid-template-columns: 30px minmax(0, 1fr); grid-template-rows: 190px auto; column-gap: 8px; margin-top: 22px; padding-right: 12px; }
+.sp-trend-y, .sp-trend-plot, .sp-trend-x { position: relative; }
+.sp-trend-y span, .sp-trend-x span { position: absolute; font-size: var(--sp-text-min); color: var(--mud-palette-text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sp-trend-y span { right: 0; transform: translateY(-50%); }
+.sp-trend-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.sp-trend-grid { stroke: var(--mud-palette-lines-default); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.sp-trend-line { fill: none; stroke: var(--mud-palette-primary); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.sp-trend-end, .sp-trend-dot { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--mud-palette-primary); box-shadow: 0 0 0 2px var(--mud-palette-surface); pointer-events: none; }
+.sp-trend-hit { position: absolute; top: 0; bottom: 0; }
+.sp-trend-hit > * { visibility: hidden; }
+.sp-trend-hit:hover > * { visibility: visible; }
+.sp-trend-cross { position: absolute; left: 50%; top: 0; bottom: 0; border-left: 1px solid var(--mud-palette-text-secondary); opacity: .45; }
+.sp-trend-dot { left: 50%; }
+.sp-trend-tip { position: absolute; left: calc(50% + 14px); transform: translateY(-50%); z-index: 3; padding: 8px 12px; border: 1px solid var(--mud-palette-lines-default); border-radius: var(--sp-shape-small); background: var(--mud-palette-surface); box-shadow: 0 6px 20px rgba(0, 0, 0, .16); white-space: nowrap; pointer-events: none; }
+.sp-trend-tip-left { left: auto; right: calc(50% + 14px); }
+.sp-trend-tip span { display: block; font-size: var(--sp-text-min); color: var(--mud-palette-text-secondary); }
+.sp-trend-tip b { display: block; margin: 2px 0; font-size: .85rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.sp-trend-x { grid-column: 2; height: 18px; margin-top: 8px; }
+.sp-trend-x span { transform: translateX(-50%); }
+.sp-trend-x span:first-child { transform: none; }
+.sp-trend-x span:last-child { transform: translateX(-100%); }
+@media (max-width: 600px) { .sp-trend-x .sp-trend-x-minor { display: none; } }
+.sp-trend-change { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sp-trend-table { max-height: 260px; margin-top: 8px; overflow: auto; border: 1px solid var(--mud-palette-lines-default); border-radius: var(--sp-shape-small); }
 .sp-tenant-search { max-width: 320px; }
 .sp-tenant-search .mud-input { font-size: .85rem; border-radius: var(--sp-shape-full); background: var(--mud-palette-background-gray); }
 .sp-tenant-search .mud-input-outlined-border { border-color: transparent; }

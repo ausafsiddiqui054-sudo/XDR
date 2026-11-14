@@ -256,6 +256,59 @@ public class RepositoryTests(PostgresDatabase db) : IClassFixture<PostgresDataba
     }
 }
 
+public class ScoreHistoryTests(PostgresDatabase db) : IClassFixture<PostgresDatabase>
+{
+    private static readonly DateTimeOffset T0 = new(2026, 10, 1, 6, 0, 0, TimeSpan.Zero);
+
+    private async Task<Guid> NewTenantAsync()
+    {
+        var id = Guid.NewGuid();
+        var factory = db.Services.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<HasinixDbContext>>();
+        await using var ctx = await factory.CreateDbContextAsync();
+        ctx.Tenants.Add(new Hasinix.Data.Entities.TenantEntity
+        {
+            Id = id, EntraTenantId = Guid.NewGuid(), DisplayName = "Trend Clinic", PrimaryDomain = "trend.example",
+            ConsentState = TenantConsentState.ReadOnlyGranted
+        });
+        await ctx.SaveChangesAsync();
+        return id;
+    }
+
+    private static ScoreSnapshot Snap(Guid tenant, DateTimeOffset at, int score) => new()
+    {
+        Id = Guid.NewGuid(), TenantId = tenant, RecordedAt = at, Engine = ScanEngines.Wazuh,
+        Score = new RiskScore
+        {
+            Score = score, Grade = "C", Passed = 40, Failed = 9, Investigate = 2, NotEvaluated = 5,
+            FailedBySeverity = new Dictionary<Severity, int>
+            {
+                [Severity.Critical] = 1, [Severity.High] = 2, [Severity.Medium] = 3, [Severity.Low] = 2, [Severity.Info] = 1
+            }
+        }
+    };
+
+    [PostgresFact]
+    public async Task SnapshotsRoundTripOldestFirstAndByTenant()
+    {
+        var history = db.Services.GetRequiredService<IScoreHistory>();
+        var mine = await NewTenantAsync();
+        var other = await NewTenantAsync();
+        await history.RecordAsync(Snap(mine, T0.AddDays(2), 74));
+        await history.RecordAsync(Snap(mine, T0.AddDays(1), 71));
+        await history.RecordAsync(Snap(mine, T0.AddDays(-5), 60));
+        await history.RecordAsync(Snap(other, T0.AddDays(1), 88));
+
+        var stored = await history.GetSinceAsync(T0, mine);
+
+        Assert.Equal([71, 74], stored.Select(s => s.Score.Score));
+        var first = stored[0];
+        Assert.Equal((T0.AddDays(1), ScanEngines.Wazuh, "C", 40, 9, 2, 5),
+            (first.RecordedAt, first.Engine, first.Score.Grade, first.Score.Passed, first.Score.Failed, first.Score.Investigate, first.Score.NotEvaluated));
+        Assert.Equal([1, 2, 3, 2, 1], new[] { Severity.Critical, Severity.High, Severity.Medium, Severity.Low, Severity.Info }.Select(s => first.Score.FailedBySeverity[s]));
+        Assert.Contains(await history.GetSinceAsync(T0), s => s.TenantId == other);
+    }
+}
+
 public class SeederTests(PostgresDatabase db) : IClassFixture<PostgresDatabase>
 {
     [PostgresFact]

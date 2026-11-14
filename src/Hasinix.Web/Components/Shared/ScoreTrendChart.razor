@@ -1,0 +1,143 @@
+@using System.Globalization
+@* One line, one series: the card heading names it, so there is no legend. Hover is pure CSS (no round trip per
+   point); the table underneath is the keyboard and screen-reader route to the same numbers. *@
+@if (Points.Count < 2)
+{
+    <div class="sp-empty-state" data-testid="score-trend-empty">
+        <MudIcon Icon="@Icons.Material.Rounded.Timeline" Color="Color.Primary" />
+        <p>@(Points.Count == 0
+               ? "No scores recorded yet. Each finished scan adds a point here."
+               : $"Score recording started on {Long(Points[0].Day)}. The trend appears as more scans finish.")</p>
+    </div>
+}
+else
+{
+    <div class="sp-trend" data-testid="score-trend">
+        <div class="sp-trend-y" aria-hidden="true">
+            @foreach (var tick in Ticks)
+            {
+                <span style="top:@Pct(Y(tick))">@tick</span>
+            }
+        </div>
+        <div class="sp-trend-plot" role="img" aria-label="@Summary">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                @foreach (var tick in Ticks)
+                {
+                    <line class="sp-trend-grid" x1="0" x2="100" y1="@Num(Y(tick))" y2="@Num(Y(tick))" />
+                }
+                <polyline class="sp-trend-line" points="@Line" />
+            </svg>
+            <span class="sp-trend-end" style="left:100%;top:@Pct(Y(Points[^1].Score))"></span>
+            @for (var i = 0; i < Points.Count; i++)
+            {
+                var p = Points[i];
+                var y = Y(p.Score);
+                <div class="sp-trend-hit" style="left:@Pct(X(i) - Step / 2);width:@Pct(Step)">
+                    <i class="sp-trend-cross"></i>
+                    <i class="sp-trend-dot" style="top:@Pct(y)"></i>
+                    <div class="sp-trend-tip @(i > Points.Count / 2 ? "sp-trend-tip-left" : "")" style="top:@Pct(Math.Clamp(y, 18, 82))">
+                        <span>@Long(p.Day)</span>
+                        <b>@p.Score · Grade @p.Grade</b>
+                        @if (Combined)
+                        {
+                            <span>Average of @p.Tenants tenant@(p.Tenants == 1 ? "" : "s")</span>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+        <div class="sp-trend-x" aria-hidden="true">
+            @{ var labels = LabelIndexes.ToList(); }
+            @for (var j = 0; j < labels.Count; j++)
+            {
+                // On a phone five dates collide, so the second and fourth step aside.
+                <span class="@(labels.Count == 5 && j % 2 == 1 ? "sp-trend-x-minor" : null)" style="left:@Pct(X(labels[j]))">@Points[labels[j]].Day.ToString("d MMM", CultureInfo.InvariantCulture)</span>
+            }
+        </div>
+    </div>
+
+    <MudButton Size="Size.Small" Color="Color.Primary" Class="mt-2" OnClick="@(() => _table = !_table)" aria-expanded="@(_table ? "true" : "false")"
+               StartIcon="@(_table ? Icons.Material.Rounded.ExpandLess : Icons.Material.Rounded.TableRows)" data-testid="score-trend-table-toggle">
+        @(_table ? "Hide table" : "View as table")
+    </MudButton>
+    @if (_table)
+    {
+        <div class="sp-trend-table" tabindex="0" role="region" aria-label="Score by day, newest first">
+            <MudSimpleTable Dense="true" Elevation="0" FixedHeader="true">
+                <thead>
+                    <tr><th>Day</th><th>Score</th><th>Grade</th>@if (Combined) { <th>Tenants</th> }</tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in Points.Reverse())
+                    {
+                        <tr><td>@Long(p.Day)</td><td>@p.Score</td><td>@p.Grade</td>@if (Combined) { <td>@p.Tenants</td> }</tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </div>
+    }
+}
+
+@code {
+    /// <summary>One point per day, oldest first (from <see cref="ScoreTrend.Daily"/>).</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<ScoreTrendPoint> Points { get; set; } = [];
+
+    /// <summary>The points average several tenants, so the tooltip and table say how many.</summary>
+    [Parameter] public bool Combined { get; set; }
+
+    private bool _table;
+    private int _min, _max;
+
+    protected override void OnParametersSet()
+    {
+        if (Points.Count == 0) return;
+        // The axis follows the data (a line needn't start at zero): the nearest tens around it, at least 20 points tall.
+        _min = Math.Max(0, (Points.Min(p => p.Score) - 3) / 10 * 10);
+        _max = Math.Min(100, (Points.Max(p => p.Score) + 12) / 10 * 10);
+        while (_max - _min < 20)
+        {
+            if (_min > 0) _min -= 10;
+            else _max += 10;
+        }
+    }
+
+    private IEnumerable<int> Ticks
+    {
+        get
+        {
+            var step = _max - _min > 40 ? 20 : 10;
+            for (var t = _min; t <= _max; t += step) yield return t;
+        }
+    }
+
+    /// <summary>Up to five evenly spaced date labels, always including the first and last day.</summary>
+    private IEnumerable<int> LabelIndexes
+    {
+        get
+        {
+            var count = Math.Min(5, Points.Count);
+            return Enumerable.Range(0, count).Select(j => (int)Math.Round(j * (Points.Count - 1) / (double)(count - 1))).Distinct();
+        }
+    }
+
+    private double Step => 100.0 / (Points.Count - 1);
+    private double X(int index) => index * Step;
+    private double Y(int score) => 100.0 * (_max - score) / (_max - _min);
+
+    private string Line => string.Join(' ', Points.Select((p, i) => $"{Num(X(i))},{Num(Y(p.Score))}"));
+
+    private string Summary
+    {
+        get
+        {
+            var first = Points[0];
+            var last = Points[^1];
+            return $"Score from {Long(first.Day)} to {Long(last.Day)}: started at {first.Score}, now {last.Score}, " +
+                   $"lowest {Points.Min(p => p.Score)}, highest {Points.Max(p => p.Score)}.";
+        }
+    }
+
+    private static string Num(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+    private static string Pct(double value) => Num(value) + "%";
+    private static string Long(DateOnly day) => day.ToString("d MMM yyyy", CultureInfo.InvariantCulture);
+}

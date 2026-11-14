@@ -61,6 +61,27 @@ public sealed class EfFindingRepository(IDbContextFactory<HasinixDbContext> fact
     }
 }
 
+public sealed class EfScoreHistory(IDbContextFactory<HasinixDbContext> factory) : IScoreHistory
+{
+    public async Task RecordAsync(ScoreSnapshot snapshot, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        db.ScoreSnapshots.Add(snapshot.ToEntity());
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<IReadOnlyList<ScoreSnapshot>> GetSinceAsync(DateTimeOffset since, Guid? tenantId = null, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var sinceUtc = since.ToUniversalTime();
+        var rows = await db.ScoreSnapshots.AsNoTracking()
+            .Where(s => s.RecordedAt >= sinceUtc && (tenantId == null || s.TenantId == tenantId))
+            .OrderBy(s => s.RecordedAt)
+            .ToListAsync(ct);
+        return rows.Select(r => r.ToModel()).ToList();
+    }
+}
+
 public sealed class EfDeviceRepository(IDbContextFactory<HasinixDbContext> factory) : IDeviceRepository
 {
     private const int MaxErrorLength = 2000;

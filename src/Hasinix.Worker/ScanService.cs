@@ -3,6 +3,7 @@ using Hasinix.Core.Abstractions;
 using Hasinix.Core.Models;
 using Hasinix.Intune;
 using Hasinix.Playbooks;
+using Hasinix.Reporting;
 
 namespace Hasinix.Worker;
 
@@ -15,6 +16,7 @@ public sealed class ScanService(
     ITenantRepository tenants,
     IScanRunRepository runs,
     IFindingRepository findings,
+    IScoreHistory scores,
     IEnumerable<IScanEngine> engines,
     IGraphTokenProvider tokens,
     IOptions<ScanOptions> options,
@@ -123,6 +125,7 @@ public sealed class ScanService(
             return (null, result.Error ?? "The scan failed without an error message.");
 
         await findings.SaveScanAsync(result, ct);
+        await RecordScoreAsync(tenant, engine.Name, ct);
 
         // Finding playbooks look at the stored findings only after a successful scan replaced them.
         if (findingPlaybooks is not null)
@@ -137,6 +140,28 @@ public sealed class ScanService(
             }
         }
         return (result.Findings.Count, null);
+    }
+
+    /// <summary>
+    /// Keeps the tenant's score as it stands after this scan (all engines' stored findings), because the next
+    /// scan replaces the findings it was worked out from. A failure here is logged and doesn't fail the scan.
+    /// </summary>
+    private async Task RecordScoreAsync(Tenant tenant, string engine, CancellationToken ct)
+    {
+        try
+        {
+            var stored = await findings.GetForTenantAsync(tenant.Id, ct);
+            if (stored.Count == 0) return;
+            await scores.RecordAsync(new ScoreSnapshot
+            {
+                Id = Guid.NewGuid(), TenantId = tenant.Id, RecordedAt = time.GetUtcNow(), Engine = engine,
+                Score = RiskScoreCalculator.Calculate(stored)
+            }, ct);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            logger.LogError(ex, "Couldn't record the score for {Tenant} after its {Engine} scan; the scan itself succeeded", tenant.DisplayName, engine);
+        }
     }
 
     /// <summary>

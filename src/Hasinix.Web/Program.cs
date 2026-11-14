@@ -38,6 +38,7 @@ else
     builder.Services.AddSingleton<IPortalUserRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IAuditLog>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IScanRunRepository>(sp => sp.GetRequiredService<SampleDataStore>());
+    builder.Services.AddSingleton<IScoreHistory>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IDeviceActionRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IPlaybookRepository>(sp => sp.GetRequiredService<SampleDataStore>());
     builder.Services.AddSingleton<IConfigurationChangeRepository>(sp => sp.GetRequiredService<SampleDataStore>());
@@ -55,6 +56,7 @@ else
 }
 builder.Services.AddSingleton(new PortalMode(useDatabase, simulated));
 builder.Services.AddScoped<PostureService>();
+builder.Services.AddScoped<ScoreTrendService>();
 builder.Services.AddScoped<EndpointService>();
 builder.Services.AddScoped<DeviceActionRequestService>();
 builder.Services.AddScoped<PlaybookService>();
@@ -94,9 +96,10 @@ if (useDatabase && app.Environment.IsDevelopment())
     await app.Services.MigrateHasinixDatabaseAsync();
     if (app.Configuration.GetValue("Database:SeedSampleData", true))
     {
-        var (tenants, findings, devices) = new SampleDataStore().Snapshot();
-        if (await app.Services.SeedIfEmptyAsync(tenants, findings, devices))
-            app.Logger.LogInformation("Seeded an empty database with sample tenants, findings and devices");
+        var sample = new SampleDataStore();
+        var (tenants, findings, devices) = sample.Snapshot();
+        if (await app.Services.SeedIfEmptyAsync(tenants, findings, devices, sample.ScoreHistory()))
+            app.Logger.LogInformation("Seeded an empty database with sample tenants, findings, devices and score history");
     }
 }
 
