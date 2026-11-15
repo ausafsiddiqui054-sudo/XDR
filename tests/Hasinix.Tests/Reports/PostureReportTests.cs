@@ -160,12 +160,12 @@ public class PostureReportTests
         var text = ReportPdf.Text(Render(Data() with
         {
             Tenant = Tenant with { PartnerName = null },
-            Branding = new ReportBranding { CompanyName = "Novomed Security", ContactLine = "security@novomed.example" }
+            Branding = new ReportBranding { CompanyName = "Northwind Security", ContactLine = "security@northwind.example" }
         }));
 
-        Assert.Contains("by Novomed Security", text);
-        Assert.Contains("security@novomed.example", text);
-        Assert.Contains("Novomed Security · Confidential", text);
+        Assert.Contains("by Northwind Security", text);
+        Assert.Contains("security@northwind.example", text);
+        Assert.Contains("Northwind Security · Confidential", text);
     }
 
     [Fact]
